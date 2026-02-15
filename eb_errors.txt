@@ -1,0 +1,8 @@
+﻿  • electron-builder  version=26.0.12 os=10.0.26200
+  • loaded configuration  file=D:\Project\.15_PROJECT_WAVETERM\electron-builder.config.cjs
+  • skipped dependencies rebuild  reason=npmRebuild is set to false
+  • packaging       platform=win32 arch=x64 electron=38.5.0 appOutDir=make\win-unpacked
+(node:1528) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  ⨯ EACCES: permission denied, lstat 'D:\Project\.15_PROJECT_WAVETERM\dist\tsunamiscaffold\nm\.bin\jiti'  failedTask=build stackTrace=Error: EACCES: permission denied, lstat 'D:\Project\.15_PROJECT_WAVETERM\dist\tsunamiscaffold\nm\.bin\jiti'
+    at lstat (node:internal/fs/promises:1031:18)

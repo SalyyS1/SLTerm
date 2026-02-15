@@ -1,0 +1,17 @@
+﻿  • electron-builder  version=26.0.12 os=10.0.26200
+  • loaded configuration  file=D:\Project\.15_PROJECT_WAVETERM\electron-builder.config.cjs
+  • skipped dependencies rebuild  reason=npmRebuild is set to false
+  • packaging       platform=win32 arch=x64 electron=38.5.0 appOutDir=make\win-unpacked
+(node:2516) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  • updating asar integrity executable resource  executablePath=make\win-unpacked\SLTerm.exe
+  • signing with signtool.exe  path=make\win-unpacked\SLTerm.exe
+  • signing with signtool.exe  path=make\win-unpacked\resources\app.asar.unpacked\dist\bin\wavesrv.x64.exe
+  • signing with signtool.exe  path=make\win-unpacked\resources\app.asar.unpacked\dist\bin\wsh-0.14.0-windows.arm64.exe
+  • signing with signtool.exe  path=make\win-unpacked\resources\app.asar.unpacked\dist\bin\wsh-0.14.0-windows.x64.exe
+  • building        target=zip arch=x64 file=make\SLTerm-win32-x64-0.14.0.zip
+  • building        target=nsis file=make\SLTerm-win32-x64-0.14.0.exe archs=x64 oneClick=true perMachine=false
+  • signing with signtool.exe  path=make\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=make\__uninstaller-nsis-slterm.exe
+  • signing with signtool.exe  path=make\SLTerm-win32-x64-0.14.0.exe
+  • building block map  blockMapFile=make\SLTerm-win32-x64-0.14.0.exe.blockmap

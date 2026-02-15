@@ -1,0 +1,67 @@
+module github.com/SalyyS1/SLTerm
+
+go 1.25.6
+
+require (
+	github.com/Microsoft/go-winio v0.6.2
+	github.com/SalyyS1/SLTerm/tsunami v0.12.3
+	github.com/alexflint/go-filemutex v1.3.0
+	github.com/creack/pty v1.1.24
+	github.com/emirpasic/gods v1.18.1
+	github.com/fsnotify/fsnotify v1.9.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/golang-migrate/migrate/v4 v4.19.1
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/mux v1.8.1
+	github.com/gorilla/websocket v1.5.3
+	github.com/invopop/jsonschema v0.13.0
+	github.com/jmoiron/sqlx v1.4.0
+	github.com/joho/godotenv v1.5.1
+	github.com/junegunn/fzf v0.65.2
+	github.com/kevinburke/ssh_config v1.2.0
+	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/mitchellh/mapstructure v1.5.0
+	github.com/sawka/txwrap v0.2.0
+	github.com/shirou/gopsutil/v4 v4.26.1
+	github.com/skeema/knownhosts v1.3.1
+	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
+	github.com/spf13/cobra v1.10.2
+	github.com/ubuntu/gowsl v0.0.0-20240906163211-049fd49bd93b
+	github.com/wavetermdev/htmltoken v0.2.0
+	golang.org/x/crypto v0.47.0
+	golang.org/x/mod v0.32.0
+	golang.org/x/sync v0.19.0
+	golang.org/x/sys v0.40.0
+	golang.org/x/term v0.39.0
+)
+
+require (
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/ebitengine/purego v0.9.1 // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/tklauser/go-sysconf v0.3.16 // indirect
+	github.com/tklauser/numcpus v0.11.0 // indirect
+	github.com/ubuntu/decorate v0.0.0-20230125165522-2d5b0a9bb117 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+	golang.org/x/net v0.49.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
+
+replace github.com/kevinburke/ssh_config => github.com/wavetermdev/ssh_config v0.0.0-20241219203747-6409e4292f34
+
+replace github.com/creack/pty => github.com/photostorm/pty v1.1.19-0.20230903182454-31354506054b
+
+replace github.com/SalyyS1/SLTerm/tsunami => ./tsunami

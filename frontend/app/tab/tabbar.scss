@@ -1,0 +1,64 @@
+// Copyright 2024, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.tab-bar-wrapper {
+    padding-top: 6px;
+    position: relative;
+    user-select: none;
+    display: flex;
+    flex-direction: row;
+    align-items: end;
+    width: 100vw;
+    -webkit-app-region: drag;
+    height: max(33px, calc(33px * var(--zoomfactor-inv)));
+
+    button {
+        -webkit-app-region: no-drag;
+    }
+
+    .tabs-wrapper {
+        transition: var(--tabs-wrapper-transition);
+        height: 26px;
+    }
+
+    .tab-bar {
+        position: relative; // Needed for absolute positioning of child tabs
+        display: flex;
+        flex-direction: row;
+        height: 27px;
+        -webkit-app-region: no-drag;
+    }
+
+    .pinned-tab-spacer {
+        display: block;
+        height: 100%;
+        margin: 2px;
+        border: 1px solid var(--border-color);
+    }
+
+    .tab-bar-right {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        height: 100%;
+        align-items: center;
+        margin-left: auto;
+    }
+
+    .add-tab {
+        padding: 0 10px;
+        height: 27px;
+    }
+
+    // Customize scrollbar styles
+    .os-theme-dark,
+    .os-theme-light {
+        box-sizing: border-box;
+        --os-size: 2px;
+        --os-padding-perpendicular: 0px;
+        --os-padding-axis: 0px;
+        --os-track-border-radius: 2px;
+        --os-handle-interactive-area-offset: 0px;
+        --os-handle-border-radius: 2px;
+    }
+}

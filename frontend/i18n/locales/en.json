@@ -1,0 +1,144 @@
+{
+    "sidebar": {
+        "settings": "Settings",
+        "tips": "Tips",
+        "help": "Help",
+        "apps": "Apps",
+        "localApps": "Local Apps",
+        "settingsAndHelp": "Settings & Help",
+        "editWidgets": "Edit widgets.json",
+        "devBuild": "Running SL Dev Build"
+    },
+    "settings": {
+        "categories": {
+            "terminalTheme": "Terminal Theme",
+            "font": "Font",
+            "tabBackground": "Tab Background",
+            "appearance": "Appearance",
+            "terminal": "Terminal",
+            "editor": "Editor",
+            "app": "App",
+            "web": "Web",
+            "language": "Language"
+        },
+        "labels": {
+            "transparency": "Transparency",
+            "blur": "Blur",
+            "windowOpacity": "Window Opacity",
+            "backgroundColor": "Background Color",
+            "tileGapSize": "Tile Gap Size",
+            "magnifiedBlockOpacity": "Magnified Block Opacity",
+            "reducedMotion": "Reduced Motion",
+            "copyOnSelect": "Copy on Select",
+            "disableWebGL": "Disable WebGL",
+            "terminalTransparency": "Terminal Transparency",
+            "scrollbackLines": "Scrollback Lines",
+            "bracketedPaste": "Bracketed Paste",
+            "bellSound": "Bell Sound",
+            "bellIndicator": "Bell Indicator",
+            "minimap": "Minimap",
+            "stickyScroll": "Sticky Scroll",
+            "wordWrap": "Word Wrap",
+            "fontSize": "Font Size",
+            "confirmQuit": "Confirm Quit",
+            "hideAIButton": "Hide AI Button",
+            "globalHotkey": "Global Hotkey",
+            "defaultUrl": "Default URL",
+            "defaultSearch": "Default Search",
+            "language": "Language"
+        }
+    },
+    "editors": {
+        "connections": {
+            "title": "Connections",
+            "addConnection": "Add Connection",
+            "noConnections": "No connections configured",
+            "noConnectionsHint": "Click \"Add Connection\" to create your first connection.",
+            "newConnection": "new-connection",
+            "rename": "Rename",
+            "delete": "Delete",
+            "confirmDelete": "Delete connection \"{{name}}\"?",
+            "ssh": "SSH",
+            "terminal": "Terminal",
+            "shell": "Shell",
+            "options": "Options",
+            "fields": {
+                "host": "Host",
+                "port": "Port",
+                "user": "User",
+                "password": "Password",
+                "identity": "Identity File",
+                "jumpHost": "Jump Host",
+                "termType": "Term Type",
+                "termRows": "Term Rows",
+                "termCols": "Term Cols",
+                "shellPath": "Shell Path",
+                "shellArgs": "Shell Args",
+                "connectTimeout": "Connect Timeout",
+                "keepAlive": "Keep Alive",
+                "x11Forward": "X11 Forward",
+                "agentForward": "Agent Forward"
+            }
+        },
+        "widgets": {
+            "title": "Widgets",
+            "addWidget": "Add Widget",
+            "addCustom": "Add Custom",
+            "noWidgets": "No widgets configured",
+            "noWidgetsHint": "Add a widget using the presets below or create a custom one.",
+            "quickAdd": "Quick Add Presets:",
+            "newWidget": "new-widget",
+            "delete": "Delete",
+            "fields": {
+                "icon": "Icon",
+                "label": "Label",
+                "description": "Description",
+                "color": "Color",
+                "order": "Order",
+                "hidden": "Hidden"
+            },
+            "presets": {
+                "terminal": "Terminal",
+                "files": "Files",
+                "web": "Web",
+                "sysinfo": "Sysinfo"
+            }
+        },
+        "bgPresets": {
+            "title": "Tab Backgrounds",
+            "addPreset": "Add Preset",
+            "noPresets": "No background presets configured",
+            "noPresetsHint": "Click \"Add Preset\" to create a background.",
+            "delete": "Delete",
+            "fields": {
+                "background": "Background CSS",
+                "opacity": "Opacity",
+                "blendMode": "Blend Mode"
+            }
+        }
+    },
+    "modals": {
+        "about": {
+            "title": "SLTerm",
+            "subtitle": "Open-Source Modern Terminal",
+            "description": "Built for Seamless Workflows",
+            "clientVersion": "Client Version",
+            "updateChannel": "Update Channel",
+            "github": "Github",
+            "website": "Website",
+            "acknowledgements": "Acknowledgements"
+        }
+    },
+    "common": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "close": "Close",
+        "add": "Add",
+        "edit": "Edit",
+        "loading": "Loading...",
+        "noResults": "No results found",
+        "search": "Search",
+        "confirm": "Confirm"
+    }
+}

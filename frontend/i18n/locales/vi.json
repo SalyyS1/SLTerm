@@ -1,0 +1,144 @@
+{
+    "sidebar": {
+        "settings": "Cài đặt",
+        "tips": "Mẹo vặt",
+        "help": "Trợ giúp",
+        "apps": "Ứng dụng",
+        "localApps": "Ứng dụng cục bộ",
+        "settingsAndHelp": "Cài đặt & Trợ giúp",
+        "editWidgets": "Chỉnh sửa widgets.json",
+        "devBuild": "Đang chạy bản Dev SL"
+    },
+    "settings": {
+        "categories": {
+            "terminalTheme": "Chủ đề Terminal",
+            "font": "Phông chữ",
+            "tabBackground": "Hình nền Tab",
+            "appearance": "Giao diện",
+            "terminal": "Terminal",
+            "editor": "Trình soạn thảo",
+            "app": "Ứng dụng",
+            "web": "Web",
+            "language": "Ngôn ngữ"
+        },
+        "labels": {
+            "transparency": "Độ trong suốt",
+            "blur": "Làm mờ",
+            "windowOpacity": "Độ mờ cửa sổ",
+            "backgroundColor": "Màu nền",
+            "tileGapSize": "Khoảng cách ô",
+            "magnifiedBlockOpacity": "Độ mờ khối phóng to",
+            "reducedMotion": "Giảm chuyển động",
+            "copyOnSelect": "Sao chép khi chọn",
+            "disableWebGL": "Tắt WebGL",
+            "terminalTransparency": "Độ trong suốt Terminal",
+            "scrollbackLines": "Số dòng cuộn lại",
+            "bracketedPaste": "Dán có ngoặc",
+            "bellSound": "Âm thanh chuông",
+            "bellIndicator": "Chỉ báo chuông",
+            "minimap": "Bản đồ nhỏ",
+            "stickyScroll": "Cuộn dính",
+            "wordWrap": "Ngắt dòng",
+            "fontSize": "Cỡ chữ",
+            "confirmQuit": "Xác nhận thoát",
+            "hideAIButton": "Ẩn nút AI",
+            "globalHotkey": "Phím tắt toàn cục",
+            "defaultUrl": "URL mặc định",
+            "defaultSearch": "Tìm kiếm mặc định",
+            "language": "Ngôn ngữ"
+        }
+    },
+    "editors": {
+        "connections": {
+            "title": "Kết nối",
+            "addConnection": "Thêm kết nối",
+            "noConnections": "Chưa có kết nối nào",
+            "noConnectionsHint": "Nhấn \"Thêm kết nối\" để tạo kết nối đầu tiên.",
+            "newConnection": "ket-noi-moi",
+            "rename": "Đổi tên",
+            "delete": "Xóa",
+            "confirmDelete": "Xóa kết nối \"{{name}}\"?",
+            "ssh": "SSH",
+            "terminal": "Terminal",
+            "shell": "Shell",
+            "options": "Tùy chọn",
+            "fields": {
+                "host": "Máy chủ",
+                "port": "Cổng",
+                "user": "Tên người dùng",
+                "password": "Mật khẩu",
+                "identity": "Tệp khóa",
+                "jumpHost": "Máy chủ trung gian",
+                "termType": "Loại Terminal",
+                "termRows": "Số hàng",
+                "termCols": "Số cột",
+                "shellPath": "Đường dẫn Shell",
+                "shellArgs": "Tham số Shell",
+                "connectTimeout": "Thời gian chờ kết nối",
+                "keepAlive": "Duy trì kết nối",
+                "x11Forward": "Chuyển tiếp X11",
+                "agentForward": "Chuyển tiếp Agent"
+            }
+        },
+        "widgets": {
+            "title": "Widget",
+            "addWidget": "Thêm Widget",
+            "addCustom": "Tùy chỉnh",
+            "noWidgets": "Chưa có widget nào",
+            "noWidgetsHint": "Thêm widget từ danh sách có sẵn hoặc tạo widget tùy chỉnh.",
+            "quickAdd": "Thêm nhanh:",
+            "newWidget": "widget-moi",
+            "delete": "Xóa",
+            "fields": {
+                "icon": "Biểu tượng",
+                "label": "Nhãn",
+                "description": "Mô tả",
+                "color": "Màu sắc",
+                "order": "Thứ tự",
+                "hidden": "Ẩn"
+            },
+            "presets": {
+                "terminal": "Terminal",
+                "files": "Tệp",
+                "web": "Web",
+                "sysinfo": "Thông tin hệ thống"
+            }
+        },
+        "bgPresets": {
+            "title": "Hình nền Tab",
+            "addPreset": "Thêm hình nền",
+            "noPresets": "Chưa có hình nền nào",
+            "noPresetsHint": "Nhấn \"Thêm hình nền\" để tạo hình nền mới.",
+            "delete": "Xóa",
+            "fields": {
+                "background": "CSS Nền",
+                "opacity": "Độ mờ",
+                "blendMode": "Chế độ hòa trộn"
+            }
+        }
+    },
+    "modals": {
+        "about": {
+            "title": "SLTerm",
+            "subtitle": "Terminal Mã Nguồn Mở Hiện Đại",
+            "description": "Được xây dựng cho quy trình làm việc liền mạch",
+            "clientVersion": "Phiên bản",
+            "updateChannel": "Kênh cập nhật",
+            "github": "Github",
+            "website": "Trang web",
+            "acknowledgements": "Lời cảm ơn"
+        }
+    },
+    "common": {
+        "save": "Lưu",
+        "cancel": "Hủy",
+        "delete": "Xóa",
+        "close": "Đóng",
+        "add": "Thêm",
+        "edit": "Chỉnh sửa",
+        "loading": "Đang tải...",
+        "noResults": "Không tìm thấy kết quả",
+        "search": "Tìm kiếm",
+        "confirm": "Xác nhận"
+    }
+}
