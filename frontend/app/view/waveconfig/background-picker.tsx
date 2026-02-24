@@ -3,8 +3,11 @@
 
 // Background preset picker with live CSS previews + custom image support
 
-import { atoms } from "@/app/store/global";
+import { atoms, getApi } from "@/app/store/global";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useSettingValue, writeSetting } from "@/app/view/waveconfig/setting-controls";
+import { base64ToString, stringToBase64 } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 
@@ -13,13 +16,18 @@ const BgPresetCard = memo(
         presetKey,
         preset,
         isActive,
+        isCustom,
         onSelect,
+        onDelete,
     }: {
         presetKey: string;
         preset: MetaType;
         isActive: boolean;
+        isCustom?: boolean;
         onSelect: () => void;
+        onDelete?: () => void;
     }) => {
+        const [hovered, setHovered] = useState(false);
         const bgStyle: React.CSSProperties = {};
         if (preset["bg"]) {
             bgStyle.background = preset["bg"] as string;
@@ -48,20 +56,49 @@ const BgPresetCard = memo(
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     outline: "none",
+                    position: "relative",
                 }}
                 onMouseEnter={(e) => {
+                    setHovered(true);
                     if (!isActive) {
                         (e.currentTarget as HTMLElement).style.borderColor = "var(--accent-color)";
                         (e.currentTarget as HTMLElement).style.transform = "scale(1.03)";
                     }
                 }}
                 onMouseLeave={(e) => {
+                    setHovered(false);
                     if (!isActive) {
                         (e.currentTarget as HTMLElement).style.borderColor = "var(--border-color)";
                         (e.currentTarget as HTMLElement).style.transform = "scale(1)";
                     }
                 }}
             >
+                {isCustom && hovered && onDelete && (
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete();
+                        }}
+                        style={{
+                            position: "absolute",
+                            top: "2px",
+                            right: "2px",
+                            width: "16px",
+                            height: "16px",
+                            borderRadius: "50%",
+                            background: "rgba(229, 77, 46, 0.85)",
+                            color: "#fff",
+                            fontSize: "9px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            zIndex: 1,
+                        }}
+                    >
+                        ✕
+                    </div>
+                )}
                 <div
                     style={{
                         width: "100%",
@@ -183,15 +220,77 @@ const BackgroundPicker = memo(() => {
     }, [presets]);
 
     const tabPreset = useSettingValue("tab:preset") ?? "";
-    const [customBg, setCustomBg] = useState<string | null>(null);
 
-    const handleCustomImage = useCallback((cssUrl: string) => {
-        setCustomBg(cssUrl);
-        // Write the bg value directly as a custom setting
-        writeSetting("bg", cssUrl);
-        writeSetting("bg:opacity", 0.3);
-        writeSetting("tab:preset", null);
+    const handleCustomImage = useCallback(async (cssUrl: string) => {
+        const configDir = getApi().getConfigDir();
+        const filePath = `${configDir}/presets/bg.json`;
+
+        // Read existing presets
+        let userPresets: Record<string, any> = {};
+        try {
+            const fileData = await RpcApi.FileReadCommand(TabRpcClient, {
+                info: { path: filePath },
+            });
+            const content = fileData?.data64 ? base64ToString(fileData.data64) : "";
+            if (content.trim()) {
+                userPresets = JSON.parse(content);
+            }
+        } catch {
+            // File may not exist yet
+        }
+
+        // Create unique preset key and add entry
+        const key = `bg@custom-${Date.now()}`;
+        userPresets[key] = {
+            "bg:*": true,
+            bg: cssUrl,
+            "bg:opacity": 0.3,
+            "display:name": "Custom Image",
+            "display:order": 100,
+        };
+
+        // Write back
+        await RpcApi.FileWriteCommand(TabRpcClient, {
+            info: { path: filePath },
+            data64: stringToBase64(JSON.stringify(userPresets, null, 2)),
+        });
+
+        // Activate the preset
+        writeSetting("tab:preset", key);
     }, []);
+
+    const handleDeleteCustomPreset = useCallback(
+        async (presetKey: string) => {
+            const configDir = getApi().getConfigDir();
+            const filePath = `${configDir}/presets/bg.json`;
+
+            let userPresets: Record<string, any> = {};
+            try {
+                const fileData = await RpcApi.FileReadCommand(TabRpcClient, {
+                    info: { path: filePath },
+                });
+                const content = fileData?.data64 ? base64ToString(fileData.data64) : "";
+                if (content.trim()) {
+                    userPresets = JSON.parse(content);
+                }
+            } catch {
+                return;
+            }
+
+            delete userPresets[presetKey];
+
+            await RpcApi.FileWriteCommand(TabRpcClient, {
+                info: { path: filePath },
+                data64: stringToBase64(JSON.stringify(userPresets, null, 2)),
+            });
+
+            // If deleted preset was active, clear it
+            if (tabPreset === presetKey) {
+                writeSetting("tab:preset", null);
+            }
+        },
+        [tabPreset]
+    );
 
     return (
         <div className="flex flex-col gap-3">
@@ -202,7 +301,9 @@ const BackgroundPicker = memo(() => {
                         presetKey={key}
                         preset={preset}
                         isActive={tabPreset === key}
+                        isCustom={key.startsWith("bg@custom-")}
                         onSelect={() => writeSetting("tab:preset", key)}
+                        onDelete={() => handleDeleteCustomPreset(key)}
                     />
                 ))}
                 <CustomImageButton onImageSelected={handleCustomImage} />
