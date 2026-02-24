@@ -7,7 +7,7 @@
     "productName": "SLTerm",
     "description": "Open-Source Modern Terminal by Salyvn",
     "license": "Apache-2.0",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "homepage": "https://github.com/SalyyS1/SLTerm",
     "build": {
         "appId": "dev.salyvn.slterm"
@@ -76,6 +76,7 @@
         "@floating-ui/react": "^0.27.16",
         "@observablehq/plot": "^0.6.17",
         "@react-hook/resize-observer": "^2.0.2",
+        "@rollup/rollup-linux-x64-gnu": "^4.59.0",
         "@table-nav/core": "^0.0.7",
         "@table-nav/react": "^0.0.7",
         "@tanstack/react-table": "^8.21.3",

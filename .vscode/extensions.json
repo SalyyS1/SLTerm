@@ -4,6 +4,7 @@
         "golang.go",
         "dbaeumer.vscode-eslint",
         "vitest.explorer",
-        "task.vscode-task"
+        "task.vscode-task",
+        "golang.go"
     ]
 }
