@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SalyyS1/SLTerm/pkg/authkey"
@@ -121,12 +122,14 @@ func handleService(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(bodyData, &webCall)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
 	}
 
 	rtn := service.CallService(r.Context(), webCall)
 	jsonRtn, err := json.Marshal(rtn)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error serializing response: %v", err), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set(ContentTypeHeaderKey, ContentTypeJson)
 	w.Header().Set(ContentLengthHeaderKey, fmt.Sprintf("%d", len(jsonRtn)))
@@ -159,6 +162,7 @@ func handleWaveFile(w http.ResponseWriter, r *http.Request) {
 		offset, err = strconv.ParseInt(offsetStr, 10, 64)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("invalid offset: %v", err), http.StatusBadRequest)
+			return
 		}
 	}
 	if _, err := uuid.Parse(zoneId); err != nil {
@@ -182,6 +186,7 @@ func handleWaveFile(w http.ResponseWriter, r *http.Request) {
 	jsonFileBArr, err := json.Marshal(file)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("error serializing file info: %v", err), http.StatusInternalServerError)
+		return
 	}
 	// can make more efficient by checking modtime + If-Modified-Since headers to allow caching
 	dataStartIdx := file.DataStartIdx()
@@ -240,6 +245,7 @@ func handleLocalStreamFile(w http.ResponseWriter, r *http.Request, path string, 
 		path, err := wavebase.ExpandHomeDir(path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		http.ServeFile(w, r, path)
 	}
@@ -323,6 +329,27 @@ func handleStreamLocalFile(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+	cleanPath := filepath.Clean(path)
+	if !filepath.IsAbs(cleanPath) {
+		http.Error(w, "invalid path: must be absolute", http.StatusBadRequest)
+		return
+	}
+	waveHome := wavebase.GetWaveHomeDir()
+	allowedPrefixes := []string{waveHome}
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		allowedPrefixes = append(allowedPrefixes, homeDir)
+	}
+	allowed := false
+	for _, prefix := range allowedPrefixes {
+		if strings.HasPrefix(cleanPath, filepath.Clean(prefix)+string(filepath.Separator)) || cleanPath == filepath.Clean(prefix) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		http.Error(w, "access denied: path outside allowed directories", http.StatusForbidden)
 		return
 	}
 	no404 := r.URL.Query().Get("no404")

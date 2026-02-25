@@ -64,7 +64,7 @@ function waveEventSubscribe(...subscriptions: WaveEventSubscription[]): () => vo
     for (const subscription of subscriptions) {
         // console.log("waveEventSubscribe", subscription);
         if (subscription.handler == null) {
-            return;
+            continue;
         }
         const id: string = crypto.randomUUID();
         let subjects = waveEventSubjects.get(subscription.eventType);

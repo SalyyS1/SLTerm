@@ -110,7 +110,12 @@ func (sc *ShellController) Stop(graceful bool, newStatus string, destroy bool) {
 	if graceful {
 		doneCh := sc.ShellProc.DoneCh
 		sc.Lock.Unlock() // Unlock before waiting
-		<-doneCh
+		select {
+		case <-doneCh:
+			// normal completion
+		case <-time.After(5 * time.Second):
+			log.Printf("warning: ShellController.Stop() timed out waiting for doneCh (blockId=%s)\n", sc.BlockId)
+		}
 		sc.Lock.Lock() // Re-lock after waiting
 	}
 
@@ -524,7 +529,9 @@ func (bc *ShellController) setupAndStartShellProcess(logCtx context.Context, rc 
 
 func (bc *ShellController) manageRunningShellProcess(shellProc *shellexec.ShellProc, rc *RunShellOpts, blockMeta waveobj.MetaMapType) error {
 	shellInputCh := make(chan *BlockInputUnion, 32)
-	bc.ShellInputCh = shellInputCh
+	bc.WithLock(func() {
+		bc.ShellInputCh = shellInputCh
+	})
 
 	go func() {
 		// handles regular output from the pty (goes to the blockfile and xterm)
@@ -538,7 +545,6 @@ func (bc *ShellController) manageRunningShellProcess(shellProc *shellexec.ShellP
 				// so no other events are sent
 				bc.ShellInputCh = nil
 			})
-			shellProc.Cmd.Wait()
 			exitCode := shellProc.Cmd.ExitCode()
 			blockData := bc.getBlockData_noErr()
 			if blockData != nil && blockData.Meta.GetString(waveobj.MetaKey_Controller, "") == BlockController_Cmd {

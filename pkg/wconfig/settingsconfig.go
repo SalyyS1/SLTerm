@@ -791,12 +791,15 @@ func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 			}
 			if rtype != ctype {
 				if ctype == reflect.PointerTo(rtype) {
-					m[configKey] = &val
+					ptr := reflect.New(rtype)
+					ptr.Elem().Set(reflect.ValueOf(val))
+					m[configKey] = ptr.Interface()
 				} else {
 					return fmt.Errorf("invalid value type for %s: %T", configKey, val)
 				}
+			} else {
+				m[configKey] = val
 			}
-			m[configKey] = val
 		}
 	}
 	return WriteWaveHomeConfigFile(SettingsFile, m)

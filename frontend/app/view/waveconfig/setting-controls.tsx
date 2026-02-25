@@ -14,8 +14,12 @@ export function useSettingValue<T extends keyof SettingsType>(key: T): SettingsT
     return useAtomValue(getSettingsKeyAtom(key));
 }
 
-export function writeSetting(key: string, value: any) {
-    RpcApi.SetConfigCommand(TabRpcClient, { [key]: value } as any);
+export async function writeSetting(key: string, value: any): Promise<void> {
+    try {
+        await RpcApi.SetConfigCommand(TabRpcClient, { [key]: value } as any);
+    } catch (e) {
+        console.error(`writeSetting failed for key="${key}":`, e);
+    }
 }
 
 export const ToggleSetting = memo(({ settingKey, label }: { settingKey: string; label: string }) => {

@@ -48,7 +48,7 @@ export function blockViewToName(view: string): string {
         return "Web";
     }
     if (view == "waveai") {
-        return "WaveAI";
+        return "SLTerm AI";
     }
     if (view == "help") {
         return "Help";

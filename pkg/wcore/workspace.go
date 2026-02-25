@@ -107,7 +107,9 @@ func UpdateWorkspace(ctx context.Context, workspaceId string, name string, icon 
 		updated = true
 	}
 	if updated {
-		wstore.DBUpdate(ctx, ws)
+		if err := wstore.DBUpdate(ctx, ws); err != nil {
+			return nil, false, fmt.Errorf("error updating workspace: %w", err)
+		}
 	}
 	return ws, updated, nil
 }
@@ -254,9 +256,15 @@ func createTabObj(ctx context.Context, workspaceId string, name string, meta wav
 		OID: layoutStateId,
 	}
 	ws.TabIds = append(ws.TabIds, tab.OID)
-	wstore.DBInsert(ctx, tab)
-	wstore.DBInsert(ctx, layoutState)
-	wstore.DBUpdate(ctx, ws)
+	if err := wstore.DBInsert(ctx, tab); err != nil {
+		return nil, fmt.Errorf("error inserting tab: %w", err)
+	}
+	if err := wstore.DBInsert(ctx, layoutState); err != nil {
+		return nil, fmt.Errorf("error inserting layout state: %w", err)
+	}
+	if err := wstore.DBUpdate(ctx, ws); err != nil {
+		return nil, fmt.Errorf("error updating workspace: %w", err)
+	}
 	return tab, nil
 }
 
@@ -299,7 +307,9 @@ func DeleteTab(ctx context.Context, workspaceId string, tabId string, recursive 
 	}
 	ws.ActiveTabId = newActiveTabId
 
-	wstore.DBUpdate(ctx, ws)
+	if err := wstore.DBUpdate(ctx, ws); err != nil {
+		return "", fmt.Errorf("error updating workspace: %w", err)
+	}
 	wstore.DBDelete(ctx, waveobj.OType_Tab, tabId)
 	if tab != nil {
 		wstore.DBDelete(ctx, waveobj.OType_LayoutState, tab.LayoutState)
@@ -331,7 +341,9 @@ func SetActiveTab(ctx context.Context, workspaceId string, tabId string) error {
 			return fmt.Errorf("tab not found: %q", tabId)
 		}
 		workspace.ActiveTabId = tabId
-		wstore.DBUpdate(ctx, workspace)
+		if err := wstore.DBUpdate(ctx, workspace); err != nil {
+			return fmt.Errorf("error updating workspace: %w", err)
+		}
 	}
 	return nil
 }
@@ -349,7 +361,9 @@ func UpdateWorkspaceTabIds(ctx context.Context, workspaceId string, tabIds []str
 		return fmt.Errorf("workspace not found: %q", workspaceId)
 	}
 	ws.TabIds = tabIds
-	wstore.DBUpdate(ctx, ws)
+	if err := wstore.DBUpdate(ctx, ws); err != nil {
+		return fmt.Errorf("error updating workspace: %w", err)
+	}
 	return nil
 }
 
@@ -395,7 +409,9 @@ func SetIcon(workspaceId string, icon string) error {
 		return fmt.Errorf("workspace not found: %q", workspaceId)
 	}
 	ws.Icon = icon
-	wstore.DBUpdate(ctx, ws)
+	if err := wstore.DBUpdate(ctx, ws); err != nil {
+		return fmt.Errorf("error updating workspace: %w", err)
+	}
 	return nil
 }
 
@@ -410,7 +426,9 @@ func SetColor(workspaceId string, color string) error {
 		return fmt.Errorf("workspace not found: %q", workspaceId)
 	}
 	ws.Color = color
-	wstore.DBUpdate(ctx, ws)
+	if err := wstore.DBUpdate(ctx, ws); err != nil {
+		return fmt.Errorf("error updating workspace: %w", err)
+	}
 	return nil
 }
 
@@ -425,6 +443,8 @@ func SetName(workspaceId string, name string) error {
 		return fmt.Errorf("workspace not found: %q", workspaceId)
 	}
 	ws.Name = name
-	wstore.DBUpdate(ctx, ws)
+	if err := wstore.DBUpdate(ctx, ws); err != nil {
+		return fmt.Errorf("error updating workspace: %w", err)
+	}
 	return nil
 }

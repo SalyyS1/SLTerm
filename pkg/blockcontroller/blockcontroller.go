@@ -287,7 +287,12 @@ func DestroyBlockController(blockId string) {
 	}
 	controller.Stop(true, Status_Done, true)
 	wstore.DeleteRTInfo(waveobj.MakeORef(waveobj.OType_Block, blockId))
-	deleteController(blockId)
+	// Re-check: only delete if the same controller instance is still registered
+	registryLock.Lock()
+	if currentCtrl, ok := controllerRegistry[blockId]; ok && currentCtrl == controller {
+		delete(controllerRegistry, blockId)
+	}
+	registryLock.Unlock()
 }
 
 func sendConnMonitorInputNotification(controller Controller) {
@@ -321,14 +326,28 @@ func SendInput(blockId string, inputUnion *BlockInputUnion) error {
 // only call this on shutdown
 func StopAllBlockControllersForShutdown() {
 	controllers := getAllControllers()
+	var wg sync.WaitGroup
 	for blockId, controller := range controllers {
 		status := controller.GetRuntimeStatus()
 		if status != nil && status.ShellProcStatus == Status_Running {
+			wg.Add(1)
 			go func(id string, c Controller) {
+				defer wg.Done()
 				c.Stop(true, Status_Done, false)
 				wstore.DeleteRTInfo(waveobj.MakeORef(waveobj.OType_Block, id))
 			}(blockId, controller)
 		}
+	}
+	doneCh := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(doneCh)
+	}()
+	select {
+	case <-doneCh:
+		// all controllers stopped
+	case <-time.After(10 * time.Second):
+		log.Printf("warning: shutdown timed out waiting for block controllers\n")
 	}
 }
 

@@ -35,10 +35,20 @@ export function getWaveVersion(): { version: string; buildTime: number } {
     return { version: WaveVersion, buildTime: WaveBuildTime };
 }
 
+const WAVESRV_READY_TIMEOUT_MS = 30000;
+
 let waveSrvReadyResolve = (value: boolean) => {};
-const waveSrvReady: Promise<boolean> = new Promise((resolve, _) => {
+const waveSrvReadyInner: Promise<boolean> = new Promise((resolve, _) => {
     waveSrvReadyResolve = resolve;
 });
+
+const waveSrvReadyTimeout: Promise<boolean> = new Promise((_, reject) => {
+    setTimeout(() => {
+        reject(new Error("wavesrv failed to start within 30s"));
+    }, WAVESRV_READY_TIMEOUT_MS);
+});
+
+const waveSrvReady: Promise<boolean> = Promise.race([waveSrvReadyInner, waveSrvReadyTimeout]);
 
 export function getWaveSrvReady(): Promise<boolean> {
     return waveSrvReady;

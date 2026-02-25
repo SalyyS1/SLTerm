@@ -808,7 +808,7 @@ func (conn *SSHConn) Connect(ctx context.Context, connFlags *wconfig.ConnKeyword
 			if utilfn.ContainsStr(identityFiles, identityFile) {
 				continue
 			}
-			identityFiles = append(identityFiles, connFlags.SshIdentityFile...)
+			identityFiles = append(identityFiles, identityFile)
 		}
 		meta["ssh:identityfile"] = identityFiles
 	}
@@ -1160,11 +1160,11 @@ func resolveSshConfigPatterns(configFiles []string) ([]string, error) {
 	var errs []error
 	for _, configFile := range configFiles {
 		fd, openErr := os.Open(configFile)
-		openedFiles = append(openedFiles, fd)
-		if fd == nil {
+		if openErr != nil {
 			errs = append(errs, openErr)
 			continue
 		}
+		openedFiles = append(openedFiles, fd)
 
 		cfg, _ := ssh_config.Decode(fd, true)
 		for _, host := range cfg.Hosts {

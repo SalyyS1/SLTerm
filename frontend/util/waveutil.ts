@@ -40,7 +40,8 @@ export function processBackgroundUrls(cssText: string): string {
             // allow file:/// urls (if they are absolute)
             if (originalUrl.startsWith("file://")) {
                 const path = originalUrl.slice(7);
-                if (!path.startsWith("/")) {
+                // Unix absolute paths start with /, Windows absolute paths start with drive letter (e.g. C:/)
+                if (!path.startsWith("/") && !/^[a-zA-Z]:(\/|\\)/.test(path)) {
                     console.log(`Invalid background, contains a non-absolute file URL: ${originalUrl}`);
                     hasUnsafeUrl = true;
                     return;

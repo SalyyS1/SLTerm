@@ -389,7 +389,14 @@ async function appMain() {
     } catch (e) {
         console.log(e.toString());
     }
-    const ready = await getWaveSrvReady();
+    const ready = await getWaveSrvReady().catch((e) => {
+        electron.dialog.showErrorBox("Startup Error", `Wave server did not respond: ${e.message}`);
+        electron.app.quit();
+        return false;
+    });
+    if (!ready) {
+        return;
+    }
     console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
     await electronApp.whenReady();
     configureAuthKeyRequestInjection(electron.session.defaultSession);

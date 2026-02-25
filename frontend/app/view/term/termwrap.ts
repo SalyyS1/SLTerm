@@ -99,6 +99,10 @@ export class TermWrap {
     lastComposedText: string = "";
     firstDataAfterCompositionSent: boolean = false;
 
+    // Idle timeout tracking
+    private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    private disposed: boolean = false;
+
     // Paste deduplication
     // xterm.js paste() method triggers onData event, which can cause duplicate sends
     lastPasteData: string = "";
@@ -312,6 +316,11 @@ export class TermWrap {
     }
 
     dispose() {
+        this.disposed = true;
+        if (this.idleTimeoutId != null) {
+            clearTimeout(this.idleTimeoutId);
+            this.idleTimeoutId = null;
+        }
         this.promptMarkers.forEach((marker) => {
             try {
                 marker.dispose();
@@ -491,8 +500,10 @@ export class TermWrap {
     }
 
     runProcessIdleTimeout() {
-        setTimeout(() => {
+        this.idleTimeoutId = setTimeout(() => {
+            if (this.disposed) return;
             window.requestIdleCallback(() => {
+                if (this.disposed) return;
                 this.processAndCacheData();
                 this.runProcessIdleTimeout();
             });

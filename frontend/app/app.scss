@@ -17,9 +17,15 @@ body {
     font: var(--base-font);
     overflow: hidden;
     background: rgb(from var(--main-bg-color) r g b / var(--window-opacity));
-    -webkit-font-smoothing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     backface-visibility: hidden;
     transform: translateZ(0);
+}
+
+*:focus-visible {
+    outline: 2px solid var(--accent-color, #4a9eff);
+    outline-offset: 2px;
 }
 
 #main {

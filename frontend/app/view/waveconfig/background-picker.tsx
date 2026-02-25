@@ -153,8 +153,9 @@ const CustomImageButton = memo(({ onImageSelected }: { onImageSelected: (path: s
         (e: React.ChangeEvent<HTMLInputElement>) => {
             const file = e.target.files?.[0];
             if (file) {
-                // Use file:// protocol for local images
-                const filePath = `url('file://${file.path?.replace(/\\/g, "/")}')`;
+                // Use electron webUtils API to get actual file path
+                const nativePath = getApi().getPathForFile(file);
+                const filePath = `url('${nativePath.replace(/\\/g, "/")}')`;
                 onImageSelected(filePath);
             }
         },
@@ -206,9 +207,32 @@ const CustomImageButton = memo(({ onImageSelected }: { onImageSelected: (path: s
 });
 CustomImageButton.displayName = "CustomImageButton";
 
+// Apply preset meta (bg keys) to the current tab for immediate effect
+function applyPresetToCurrentTab(tabId: string, preset: MetaType | null) {
+    // Extract only bg-related keys from preset
+    const bgMeta: MetaType = {};
+    if (preset) {
+        for (const [k, v] of Object.entries(preset)) {
+            if (k === "bg" || k.startsWith("bg:")) {
+                bgMeta[k] = v;
+            }
+        }
+    } else {
+        // Clear bg keys
+        bgMeta["bg"] = null;
+        bgMeta["bg:opacity"] = null;
+        bgMeta["bg:blendmode"] = null;
+    }
+    RpcApi.SetMetaCommand(TabRpcClient, {
+        oref: `tab:${tabId}`,
+        meta: bgMeta,
+    });
+}
+
 const BackgroundPicker = memo(() => {
     const fullConfig = useAtomValue(atoms.fullConfigAtom);
     const presets = fullConfig?.presets ?? {};
+    const tabId = useAtomValue(atoms.staticTabId);
     const bgPresets = useMemo(() => {
         return Object.entries(presets)
             .filter(([k]) => k.startsWith("bg@"))
@@ -220,6 +244,19 @@ const BackgroundPicker = memo(() => {
     }, [presets]);
 
     const tabPreset = useSettingValue("tab:preset") ?? "";
+
+    const selectPreset = useCallback(
+        (key: string, preset: MetaType) => {
+            writeSetting("tab:preset", key);
+            applyPresetToCurrentTab(tabId, preset);
+        },
+        [tabId]
+    );
+
+    const clearPreset = useCallback(() => {
+        writeSetting("tab:preset", null);
+        applyPresetToCurrentTab(tabId, null);
+    }, [tabId]);
 
     const handleCustomImage = useCallback(async (cssUrl: string) => {
         const configDir = getApi().getConfigDir();
@@ -241,13 +278,14 @@ const BackgroundPicker = memo(() => {
 
         // Create unique preset key and add entry
         const key = `bg@custom-${Date.now()}`;
-        userPresets[key] = {
+        const preset: MetaType = {
             "bg:*": true,
             bg: cssUrl,
             "bg:opacity": 0.3,
             "display:name": "Custom Image",
             "display:order": 100,
         };
+        userPresets[key] = preset;
 
         // Write back
         await RpcApi.FileWriteCommand(TabRpcClient, {
@@ -255,9 +293,10 @@ const BackgroundPicker = memo(() => {
             data64: stringToBase64(JSON.stringify(userPresets, null, 2)),
         });
 
-        // Activate the preset
+        // Activate the preset and apply to current tab
         writeSetting("tab:preset", key);
-    }, []);
+        applyPresetToCurrentTab(tabId, preset);
+    }, [tabId]);
 
     const handleDeleteCustomPreset = useCallback(
         async (presetKey: string) => {
@@ -286,10 +325,10 @@ const BackgroundPicker = memo(() => {
 
             // If deleted preset was active, clear it
             if (tabPreset === presetKey) {
-                writeSetting("tab:preset", null);
+                clearPreset();
             }
         },
-        [tabPreset]
+        [tabPreset, clearPreset]
     );
 
     return (
@@ -302,7 +341,7 @@ const BackgroundPicker = memo(() => {
                         preset={preset}
                         isActive={tabPreset === key}
                         isCustom={key.startsWith("bg@custom-")}
-                        onSelect={() => writeSetting("tab:preset", key)}
+                        onSelect={() => selectPreset(key, preset)}
                         onDelete={() => handleDeleteCustomPreset(key)}
                     />
                 ))}
@@ -310,7 +349,7 @@ const BackgroundPicker = memo(() => {
             </div>
             {tabPreset && tabPreset !== "bg@default" && (
                 <button
-                    onClick={() => writeSetting("tab:preset", null)}
+                    onClick={clearPreset}
                     style={{
                         alignSelf: "flex-start",
                         padding: "4px 12px",

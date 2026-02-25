@@ -532,7 +532,7 @@ export class WaveBrowserWindow extends BaseWindow {
                                 this.workspaceId,
                                 this.waveWindowId
                             );
-                            return;
+                            continue;
                         }
                         this.removeTabViewLater(tabId, 1000);
                         if (rtn.closewindow) {
@@ -540,14 +540,14 @@ export class WaveBrowserWindow extends BaseWindow {
                             return;
                         }
                         if (!rtn.newactivetabid) {
-                            return;
+                            continue;
                         }
                         tabId = rtn.newactivetabid;
                         break;
                     case "switchworkspace":
                         const newWs = await WindowService.SwitchWorkspace(this.waveWindowId, entry.workspaceId);
                         if (!newWs) {
-                            return;
+                            continue;
                         }
                         console.log("processActionQueue switchworkspace newWs", newWs);
                         this.removeAllChildViews();
@@ -558,7 +558,7 @@ export class WaveBrowserWindow extends BaseWindow {
                         break;
                 }
                 if (tabId == null) {
-                    return;
+                    continue;
                 }
                 const [tabView, tabInitialized] = await getOrCreateWebViewForTab(this.waveWindowId, tabId);
                 const primaryStartupTabFlag = entry.op === "switchtab" ? (entry.primaryStartupTab ?? false) : false;
@@ -645,7 +645,7 @@ export function getAllWaveWindows(): WaveBrowserWindow[] {
 export async function createWindowForWorkspace(workspaceId: string) {
     const newWin = await WindowService.CreateWindow(null, workspaceId);
     if (!newWin) {
-        console.log("error creating new window", this.waveWindowId);
+        console.log("error creating new window for workspace:", workspaceId);
     }
     const newBwin = await createBrowserWindow(newWin, await RpcApi.GetFullConfigCommand(ElectronWshClient), {
         unamePlatform,
@@ -750,7 +750,8 @@ ipcMain.on("delete-workspace", (event, workspaceId) => {
 
         const workspaceHasWindow = !!workspaceList.find((wse) => wse.workspaceid === workspaceId)?.windowid;
 
-        const choice = dialog.showMessageBoxSync(this, {
+        const parentWindow = ww ?? null;
+        const choice = dialog.showMessageBoxSync(parentWindow, {
             type: "question",
             buttons: ["Cancel", "Delete Workspace"],
             title: "Confirm",
@@ -857,16 +858,21 @@ export function registerGlobalHotkey(rawGlobalHotKey: string) {
     try {
         const electronHotKey = waveKeyToElectronKey(rawGlobalHotKey);
         console.log("registering globalhotkey of ", electronHotKey);
+        if (globalShortcut.isRegistered(electronHotKey)) {
+            globalShortcut.unregister(electronHotKey);
+        }
         globalShortcut.register(electronHotKey, () => {
-            const selectedWindow = focusedWaveWindow;
-            const firstWaveWindow = getAllWaveWindows()[0];
-            if (focusedWaveWindow) {
-                selectedWindow.focus();
-            } else if (firstWaveWindow) {
-                firstWaveWindow.focus();
-            } else {
+            const allWindows = getAllWaveWindows().filter((w) => !w.isDestroyed());
+            if (allWindows.length === 0) {
                 fireAndForget(createNewWaveWindow);
+                return;
             }
+            const targetWin = allWindows[0];
+            if (targetWin.isMinimized()) {
+                targetWin.restore();
+            }
+            targetWin.show();
+            targetWin.focus();
         });
     } catch (e) {
         console.log("error registering global hotkey: ", e);
