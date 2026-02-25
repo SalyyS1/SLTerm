@@ -336,7 +336,7 @@ func handleStreamLocalFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid path: must be absolute", http.StatusBadRequest)
 		return
 	}
-	waveHome := wavebase.GetWaveHomeDir()
+	waveHome := wavebase.GetWaveDataDir()
 	allowedPrefixes := []string{waveHome}
 	if homeDir, err := os.UserHomeDir(); err == nil {
 		allowedPrefixes = append(allowedPrefixes, homeDir)

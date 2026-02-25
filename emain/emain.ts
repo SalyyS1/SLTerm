@@ -370,6 +370,7 @@ globalEvents.on("windows-updated", () => {
 });
 
 async function appMain() {
+    performance.mark("app-main-start");
     // Set disableHardwareAcceleration as early as possible, if required.
     const launchSettings = getLaunchSettings();
     if (launchSettings?.["window:disablehardwareacceleration"]) {
@@ -398,7 +399,9 @@ async function appMain() {
         return;
     }
     console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
+    performance.mark("wavesrv-ready");
     await electronApp.whenReady();
+    performance.mark("electron-app-ready");
     configureAuthKeyRequestInjection(electron.session.defaultSession);
     initIpcHandlers();
 
@@ -417,6 +420,15 @@ async function appMain() {
     }
     ensureHotSpareTab(fullConfig);
     await relaunchBrowserWindows();
+    performance.mark("windows-relaunched");
+    performance.measure("startup-total", "app-main-start", "windows-relaunched");
+    performance.measure("wavesrv-init", "app-main-start", "wavesrv-ready");
+    performance.measure("electron-ready", "wavesrv-ready", "electron-app-ready");
+    performance.measure("windows-init", "electron-app-ready", "windows-relaunched");
+    const measures = performance.getEntriesByType("measure");
+    for (const m of measures) {
+        console.log(`[perf] ${m.name}: ${m.duration.toFixed(1)}ms`);
+    }
     setTimeout(runActiveTimer, 5000); // start active timer, wait 5s just to be safe
     setTimeout(sendDisplaysTDataEvent, 5000);
 
@@ -424,6 +436,7 @@ async function appMain() {
     makeDockTaskbar();
     await configureAutoUpdater();
     setGlobalIsStarting(false);
+    performance.mark("app-main-complete");
     if (fullConfig?.settings?.["window:maxtabcachesize"] != null) {
         setMaxTabCacheSize(fullConfig.settings["window:maxtabcachesize"]);
     }

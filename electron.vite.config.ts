@@ -132,14 +132,27 @@ export default defineConfig({
                 output: {
                     manualChunks(id) {
                         const p = id.replace(/\\/g, "/");
+                        // Heavy lazy-loaded editors/viz — keep as separate chunks
                         if (p.includes("node_modules/monaco") || p.includes("node_modules/@monaco")) return "monaco";
                         if (p.includes("node_modules/mermaid") || p.includes("node_modules/@mermaid")) return "mermaid";
                         if (p.includes("node_modules/katex") || p.includes("node_modules/@katex")) return "katex";
-                        if (p.includes("node_modules/shiki") || p.includes("node_modules/@shiki")) {
-                            return "shiki";
-                        }
+                        if (p.includes("node_modules/shiki") || p.includes("node_modules/@shiki")) return "shiki";
                         if (p.includes("node_modules/cytoscape") || p.includes("node_modules/@cytoscape"))
                             return "cytoscape";
+                        // xterm addons — lazy-loaded after terminal activates
+                        if (
+                            p.includes("node_modules/@xterm/addon-webgl") ||
+                            p.includes("node_modules/@xterm/addon-search") ||
+                            p.includes("node_modules/@xterm/addon-serialize") ||
+                            p.includes("node_modules/@xterm/addon-web-links")
+                        )
+                            return "xterm-addons";
+                        // xterm core — loaded with terminal view
+                        if (p.includes("node_modules/@xterm/xterm")) return "xterm-core";
+                        // State management
+                        if (p.includes("node_modules/jotai")) return "jotai";
+                        // React runtime — always needed, cache-friendly separate chunk
+                        if (p.includes("node_modules/react-dom") || p.includes("node_modules/react/")) return "react-core";
                         return undefined;
                     },
                 },

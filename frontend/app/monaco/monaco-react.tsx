@@ -1,23 +1,20 @@
 // Copyright 2025, Salyvn.
 // SPDX-License-Identifier: Apache-2.0
 
+// React components that host Monaco editor instances.
+// Monaco is loaded lazily via loadMonaco() — no eager import of monaco-editor at startup.
+
 import { loadMonaco } from "@/app/monaco/monaco-env";
 import type * as MonacoTypes from "monaco-editor";
-import * as monaco from "monaco-editor";
 import { useEffect, useRef } from "react";
 import { debounce } from "throttle-debounce";
-
-function createModel(value: string, path: string, language?: string) {
-    const uri = monaco.Uri.parse(`wave://editor/${encodeURIComponent(path)}`);
-    return monaco.editor.createModel(value, language, uri);
-}
 
 type CodeEditorProps = {
     text: string;
     readonly: boolean;
     language?: string;
     onChange?: (text: string) => void;
-    onMount?: (editor: MonacoTypes.editor.IStandaloneCodeEditor, monacoApi: typeof monaco) => () => void;
+    onMount?: (editor: MonacoTypes.editor.IStandaloneCodeEditor, monacoApi: typeof MonacoTypes) => () => void;
     path: string;
     options: MonacoTypes.editor.IEditorOptions;
 };
@@ -37,36 +34,40 @@ export function MonacoCodeEditor({
     const applyingFromProps = useRef(false);
 
     useEffect(() => {
-        loadMonaco();
+        let cancelled = false;
 
-        const el = divRef.current;
-        if (!el) return;
+        (async () => {
+            const monaco = await loadMonaco();
+            if (cancelled) return;
 
-        const model = createModel(text, path, language);
-        console.log("[monaco] CREATE MODEL", path, model);
+            const el = divRef.current;
+            if (!el) return;
 
-        const editor = monaco.editor.create(el, {
-            ...options,
-            readOnly: readonly,
-            model,
-        });
-        editorRef.current = editor;
+            const uri = monaco.Uri.parse(`wave://editor/${encodeURIComponent(path)}`);
+            const model = monaco.editor.createModel(text, language, uri);
+            console.log("[monaco] CREATE MODEL", path, model);
 
-        const sub = model.onDidChangeContent(() => {
-            if (applyingFromProps.current) return;
-            onChange?.(model.getValue());
-        });
+            const editor = monaco.editor.create(el, {
+                ...options,
+                readOnly: readonly,
+                model,
+            });
+            editorRef.current = editor;
 
-        if (onMount) {
-            onUnmountRef.current = onMount(editor, monaco);
-        }
+            const sub = model.onDidChangeContent(() => {
+                if (applyingFromProps.current) return;
+                onChange?.(model.getValue());
+            });
+
+            if (onMount) {
+                onUnmountRef.current = onMount(editor, monaco);
+            }
+        })();
 
         return () => {
-            sub.dispose();
+            cancelled = true;
             if (onUnmountRef.current) onUnmountRef.current();
-            editor.dispose();
-            model.dispose();
-            console.log("[monaco] dispose model");
+            editorRef.current?.dispose();
             editorRef.current = null;
         };
         // mount/unmount only
@@ -90,7 +91,7 @@ export function MonacoCodeEditor({
         };
     }, []);
 
-    // Keep model value in sync with props
+    // Keep model value in sync with props.
     useEffect(() => {
         const editor = editorRef.current;
         if (!editor) return;
@@ -105,20 +106,23 @@ export function MonacoCodeEditor({
         applyingFromProps.current = false;
     }, [text]);
 
-    // Keep options in sync
+    // Keep options in sync.
     useEffect(() => {
         const editor = editorRef.current;
         if (!editor) return;
         editor.updateOptions({ ...options, readOnly: readonly });
     }, [options, readonly]);
 
-    // Keep language in sync
+    // Keep language in sync.
     useEffect(() => {
-        const editor = editorRef.current;
-        if (!editor) return;
-        const model = editor.getModel();
-        if (!model || !language) return;
-        monaco.editor.setModelLanguage(model, language);
+        (async () => {
+            const editor = editorRef.current;
+            if (!editor || !language) return;
+            const model = editor.getModel();
+            if (!model) return;
+            const monaco = await loadMonaco();
+            monaco.editor.setModelLanguage(model, language);
+        })();
     }, [language]);
 
     return <div className="flex flex-col h-full w-full" ref={divRef} />;
@@ -136,28 +140,32 @@ export function MonacoDiffViewer({ original, modified, language, path, options }
     const divRef = useRef<HTMLDivElement>(null);
     const diffRef = useRef<MonacoTypes.editor.IStandaloneDiffEditor | null>(null);
 
-    // Create once
+    // Create once.
     useEffect(() => {
-        loadMonaco();
+        let cancelled = false;
 
-        const el = divRef.current;
-        if (!el) return;
+        (async () => {
+            const monaco = await loadMonaco();
+            if (cancelled) return;
 
-        const origUri = monaco.Uri.parse(`wave://diff/${encodeURIComponent(path)}.orig`);
-        const modUri = monaco.Uri.parse(`wave://diff/${encodeURIComponent(path)}.mod`);
+            const el = divRef.current;
+            if (!el) return;
 
-        const originalModel = monaco.editor.createModel(original, language, origUri);
-        const modifiedModel = monaco.editor.createModel(modified, language, modUri);
+            const origUri = monaco.Uri.parse(`wave://diff/${encodeURIComponent(path)}.orig`);
+            const modUri = monaco.Uri.parse(`wave://diff/${encodeURIComponent(path)}.mod`);
 
-        const diff = monaco.editor.createDiffEditor(el, options);
-        diffRef.current = diff;
+            const originalModel = monaco.editor.createModel(original, language, origUri);
+            const modifiedModel = monaco.editor.createModel(modified, language, modUri);
 
-        diff.setModel({ original: originalModel, modified: modifiedModel });
+            const diff = monaco.editor.createDiffEditor(el, options);
+            diffRef.current = diff;
+
+            diff.setModel({ original: originalModel, modified: modifiedModel });
+        })();
 
         return () => {
-            diff.dispose();
-            originalModel.dispose();
-            modifiedModel.dispose();
+            cancelled = true;
+            diffRef.current?.dispose();
             diffRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,7 +188,7 @@ export function MonacoDiffViewer({ original, modified, language, path, options }
         };
     }, []);
 
-    // Update models on prop change
+    // Update models on prop change.
     useEffect(() => {
         const diff = diffRef.current;
         if (!diff) return;
@@ -191,8 +199,11 @@ export function MonacoDiffViewer({ original, modified, language, path, options }
         if (model.modified.getValue() !== modified) model.modified.setValue(modified);
 
         if (language) {
-            monaco.editor.setModelLanguage(model.original, language);
-            monaco.editor.setModelLanguage(model.modified, language);
+            (async () => {
+                const monaco = await loadMonaco();
+                monaco.editor.setModelLanguage(model.original, language);
+                monaco.editor.setModelLanguage(model.modified, language);
+            })();
         }
     }, [original, modified, language]);
 

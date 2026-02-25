@@ -10,6 +10,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/SalyyS1/SLTerm/pkg/util/bufferpool"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc"
 )
 
@@ -398,9 +399,10 @@ func (sm *StreamManager) prepareNextPacket() (done bool, pkt *wshrpc.CommandStre
 		peekSize = available
 	}
 
-	data := make([]byte, peekSize)
+	data := bufferpool.GetLen(peekSize)
 	n := sm.buf.PeekDataAt(int(sm.sentNotAcked), data)
 	if n == 0 {
+		bufferpool.Put(data)
 		sm.drainCond.Wait()
 		return false, nil, nil
 	}
@@ -409,10 +411,14 @@ func (sm *StreamManager) prepareNextPacket() (done bool, pkt *wshrpc.CommandStre
 	seq := sm.buf.HeadPos() + sm.sentNotAcked
 	sm.sentNotAcked += int64(n)
 
+	// base64.EncodeToString copies data internally — safe to return buf to pool after
+	data64 := base64.StdEncoding.EncodeToString(data)
+	bufferpool.Put(data)
+
 	return false, &wshrpc.CommandStreamData{
 		Id:     sm.streamId,
 		Seq:    seq,
-		Data64: base64.StdEncoding.EncodeToString(data),
+		Data64: data64,
 	}, sm.dataSender
 }
 

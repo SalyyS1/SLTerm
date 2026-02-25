@@ -18,11 +18,23 @@ const config = {
     npmRebuild: false,
     nodeGypRebuild: false,
     electronCompile: false,
+    asar: true, // compress app files for smaller distribution
     files: [
         {
             from: "./dist",
             to: "./dist",
-            filter: ["**/*", "!bin/*", "bin/wavesrv.${arch}*", "bin/wsh*", "!tsunamiscaffold/**/*"],
+            filter: [
+                "**/*",
+                "!bin/*",
+                "bin/wavesrv.${arch}*",
+                "bin/wsh*",
+                "!tsunamiscaffold/**/*",
+                "!**/*.map",  // exclude source maps from production
+                "!**/*.d.ts", // exclude TypeScript declarations
+                "!**/test/**",
+                "!**/*.test.*",
+                "!**/*.spec.*",
+            ],
         },
         {
             from: ".",

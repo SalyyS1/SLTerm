@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WshClient } from "@/app/store/wshclient";
+import { ipcBatcher } from "@/app/store/ipc-batcher";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { isBlank } from "@/util/util";
 import { Subject } from "rxjs";
@@ -10,6 +11,7 @@ let WpsRpcClient: WshClient;
 
 function setWpsRpcClient(client: WshClient) {
     WpsRpcClient = client;
+    ipcBatcher.setClient(client);
 }
 
 type WaveEventSubject = {
@@ -43,6 +45,7 @@ function wpsReconnectHandler() {
 function updateWaveEventSub(eventType: string) {
     const subjects = waveEventSubjects.get(eventType);
     if (subjects == null) {
+        // Unsub is critical — send immediately to avoid stale server-side subscriptions.
         RpcApi.EventUnsubCommand(WpsRpcClient, eventType, { noresponse: true });
         return;
     }
@@ -55,7 +58,8 @@ function updateWaveEventSub(eventType: string) {
         }
         subreq.scopes.push(scont.scope);
     }
-    RpcApi.EventSubCommand(WpsRpcClient, subreq, { noresponse: true });
+    // Coalesce sub updates per eventType within 16ms — latest scope state wins.
+    ipcBatcher.send("eventsub:" + eventType, "eventsub", subreq);
 }
 
 function waveEventSubscribe(...subscriptions: WaveEventSubscription[]): () => void {

@@ -221,11 +221,11 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     const executeSearch = React.useCallback(
         (searchText: string, direction: "next" | "previous") => {
             if (searchText === "") {
-                model.termRef.current?.searchAddon.clearDecorations();
+                model.termRef.current?.searchAddon?.clearDecorations();
                 return;
             }
             try {
-                model.termRef.current?.searchAddon[direction === "next" ? "findNext" : "findPrevious"](
+                model.termRef.current?.searchAddon?.[direction === "next" ? "findNext" : "findPrevious"](
                     searchText,
                     searchOpts
                 );
@@ -249,7 +249,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     }, [searchIsOpen]);
     // rerun search when the searchOpts change
     React.useEffect(() => {
-        model.termRef.current?.searchAddon.clearDecorations();
+        model.termRef.current?.searchAddon?.clearDecorations();
         searchProps.onSearch(searchVal);
     }, [searchOpts]);
     // end search
@@ -260,7 +260,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         const termTransparency = globalStore.get(model.termTransparencyAtom);
         const termMacOptionIsMetaAtom = getOverrideConfigAtom(blockId, "term:macoptionismeta");
         const [termTheme, _] = computeTheme(fullConfig, termThemeName, termTransparency);
-        let termScrollback = 2000;
+        let termScrollback = 500; // reduced from 2000; configurable via term:scrollback setting
         if (termSettings?.["term:scrollback"]) {
             termScrollback = Math.floor(termSettings["term:scrollback"]);
         }

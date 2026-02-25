@@ -4,6 +4,7 @@
 package web
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -76,6 +77,18 @@ func getMessageType(jmsg map[string]any) string {
 		return str
 	}
 	return ""
+}
+
+// getMessageTypeFromBytes extracts the "type" field from a raw JSON message without
+// full unmarshalling — used by the write path to detect control messages quickly.
+func getMessageTypeFromBytes(barr []byte) string {
+	var quick struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(barr, &quick); err != nil {
+		return ""
+	}
+	return quick.Type
 }
 
 func getStringFromMap(jmsg map[string]any, key string) string {
@@ -176,10 +189,100 @@ func WritePing(conn *websocket.Conn) error {
 	return nil
 }
 
+// wsBatchWindow is the maximum delay before flushing a batch of WebSocket messages.
+// 16ms matches a single animation frame — imperceptible latency, high throughput gain.
+const wsBatchWindow = 16 * time.Millisecond
+
+// WSBatcher coalesces outbound JSON WebSocket messages within a 16ms window.
+// Wire format: [count uint32 LE][len1 uint32 LE][msg1 bytes][len2 uint32 LE][msg2 bytes]...
+// Control messages (ping/pong/error type) bypass batching and are sent immediately.
+// Thread-safe: Send() may be called from multiple goroutines.
+type WSBatcher struct {
+	conn    *websocket.Conn
+	mu      sync.Mutex
+	batch   [][]byte
+	timer   *time.Timer
+	maxWait time.Duration
+}
+
+func newWSBatcher(conn *websocket.Conn) *WSBatcher {
+	return &WSBatcher{conn: conn, maxWait: wsBatchWindow}
+}
+
+// Send queues msg for batched delivery. If this is the first message in a new
+// batch window, a flush timer is started. Thread-safe.
+func (b *WSBatcher) Send(msg []byte) error {
+	b.mu.Lock()
+	b.batch = append(b.batch, msg)
+	if b.timer == nil {
+		b.timer = time.AfterFunc(b.maxWait, func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			b.flushLocked()
+		})
+	}
+	b.mu.Unlock()
+	return nil
+}
+
+// SendImmediate bypasses batching — used for ping/pong and close frames.
+func (b *WSBatcher) SendImmediate(msg []byte) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	// flush any pending batch first so ordering is preserved
+	b.flushLocked()
+	_ = b.conn.SetWriteDeadline(time.Now().Add(wsWriteWaitTimeout))
+	return b.conn.WriteMessage(websocket.TextMessage, msg)
+}
+
+// flushLocked must be called with b.mu held. Sends all queued messages as a
+// single binary batch frame, or as individual text frames if only one queued.
+func (b *WSBatcher) flushLocked() {
+	if len(b.batch) == 0 {
+		return
+	}
+	if b.timer != nil {
+		b.timer.Stop()
+		b.timer = nil
+	}
+	msgs := b.batch
+	b.batch = nil
+
+	_ = b.conn.SetWriteDeadline(time.Now().Add(wsWriteWaitTimeout))
+	if len(msgs) == 1 {
+		// single message — send as plain text frame (no envelope overhead)
+		b.conn.WriteMessage(websocket.TextMessage, msgs[0]) //nolint:errcheck
+		return
+	}
+	// multi-message: encode batch envelope and send as one binary frame
+	frame := combineBatch(msgs)
+	b.conn.WriteMessage(websocket.BinaryMessage, frame) //nolint:errcheck
+}
+
+// combineBatch encodes messages into the batch envelope:
+// [count:4B LE][len0:4B LE][msg0][len1:4B LE][msg1]...
+func combineBatch(msgs [][]byte) []byte {
+	total := 4 // count field
+	for _, m := range msgs {
+		total += 4 + len(m) // length prefix + payload
+	}
+	frame := make([]byte, total)
+	binary.LittleEndian.PutUint32(frame[0:4], uint32(len(msgs)))
+	offset := 4
+	for _, m := range msgs {
+		binary.LittleEndian.PutUint32(frame[offset:offset+4], uint32(len(m)))
+		offset += 4
+		copy(frame[offset:], m)
+		offset += len(m)
+	}
+	return frame
+}
+
 func WriteLoop(conn *websocket.Conn, outputCh chan any, closeCh chan any, routeId string) {
 	ticker := time.NewTicker(wsInitialPingTime)
 	defer ticker.Stop()
 	initialPing := true
+	batcher := newWSBatcher(conn)
 	for {
 		select {
 		case msg := <-outputCh:
@@ -191,15 +294,22 @@ func WriteLoop(conn *websocket.Conn, outputCh chan any, closeCh chan any, routeI
 				barr, err = json.Marshal(msg)
 				if err != nil {
 					log.Printf("[websocket] cannot marshal websocket message: %v\n", err)
-					// just loop again
 					break
 				}
 			}
-			err = conn.WriteMessage(websocket.TextMessage, barr)
-			if err != nil {
-				conn.Close()
-				log.Printf("[websocket] WritePump error (%s): %v\n", routeId, err)
-				return
+			// control messages (ping/pong/error) bypass batching for immediacy
+			if msgType := getMessageTypeFromBytes(barr); msgType == "ping" || msgType == "pong" || msgType == "error" {
+				if err := batcher.SendImmediate(barr); err != nil {
+					conn.Close()
+					log.Printf("[websocket] WritePump error (%s): %v\n", routeId, err)
+					return
+				}
+			} else {
+				if err := batcher.Send(barr); err != nil {
+					conn.Close()
+					log.Printf("[websocket] WritePump error (%s): %v\n", routeId, err)
+					return
+				}
 			}
 
 		case <-ticker.C:

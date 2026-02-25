@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -455,6 +456,11 @@ func maybeStartPprofServer() {
 func main() {
 	log.SetFlags(0) // disable timestamp since electron's winston logger already wraps with timestamp
 	log.SetPrefix("[wavesrv] ")
+
+	// GC tuning: reduce GC frequency for better throughput; GOMEMLIMIT caps memory
+	debug.SetGCPercent(200)
+	debug.SetMemoryLimit(512 * 1024 * 1024) // 512MB
+
 	wavebase.WaveVersion = WaveVersion
 	wavebase.BuildTime = BuildTime
 	wshutil.DefaultRouter = wshutil.NewWshRouter()

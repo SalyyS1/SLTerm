@@ -10,7 +10,7 @@ import { isMacOS, isWindows } from "@/util/platformutil";
 import { fireAndForget } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { OverlayScrollbars } from "overlayscrollbars";
-import { createRef, memo, useCallback, useEffect, useRef, useState } from "react";
+import { createRef, memo, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { debounce } from "throttle-debounce";
 import { IconButton } from "../element/iconbutton";
 import { WorkspaceService } from "../store/services";
@@ -143,6 +143,7 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
     const [draggingTab, setDraggingTab] = useState<string>();
     const [tabsLoaded, setTabsLoaded] = useState({});
     const [newTabId, setNewTabId] = useState<string | null>(null);
+    const [, startTabTransition] = useTransition();
 
     const tabbarWrapperRef = useRef<HTMLDivElement>(null);
     const tabBarRef = useRef<HTMLDivElement>(null);
@@ -531,7 +532,9 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
 
     const handleSelectTab = (tabId: string) => {
         if (!draggingTabDataRef.current.dragged) {
-            setActiveTab(tabId);
+            startTabTransition(() => {
+                setActiveTab(tabId);
+            });
         }
     };
 

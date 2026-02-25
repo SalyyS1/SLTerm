@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import { useCallback, useState } from "react";
-import { debounce } from "throttle-debounce";
+import { debounce, throttle } from "throttle-debounce";
 
 // returns a callback ref, a ref object (that is set from the callback), and the width
 // pass debounceMs of null to not debounce
@@ -28,6 +28,11 @@ export function useDimensionsWithCallbackRef<T extends HTMLElement>(
         debounceMs,
         setDomRect,
     ]);
+    // Throttle at 30fps (33ms, trailing edge) so ResizeObserver doesn't fire on every pixel change.
+    const setDomRectThrottled = React.useMemo(
+        () => throttle(33, setDomRectDebounced, { noLeading: false, noTrailing: false }),
+        [setDomRectDebounced]
+    );
     React.useEffect(() => {
         if (!rszObjRef.current) {
             rszObjRef.current = new ResizeObserver((entries) => {
@@ -35,7 +40,7 @@ export function useDimensionsWithCallbackRef<T extends HTMLElement>(
                     if (domRect == null) {
                         setDomRect(entry.contentRect);
                     } else {
-                        setDomRectDebounced(entry.contentRect);
+                        setDomRectThrottled(entry.contentRect);
                     }
                 }
             });
@@ -71,6 +76,11 @@ export function useOnResize<T extends HTMLElement>(
         debounceMs,
         callback,
     ]);
+    // Throttle at 30fps (33ms, trailing edge) to avoid firing on every pixel change.
+    const setDomRectThrottled = React.useMemo(
+        () => throttle(33, setDomRectDebounced, { noLeading: false, noTrailing: false }),
+        [setDomRectDebounced]
+    );
     React.useEffect(() => {
         if (!rszObjRef.current) {
             rszObjRef.current = new ResizeObserver((entries) => {
@@ -79,7 +89,7 @@ export function useOnResize<T extends HTMLElement>(
                         isFirst.current = false;
                         callback(entry.contentRect);
                     } else {
-                        setDomRectDebounced(entry.contentRect);
+                        setDomRectThrottled(entry.contentRect);
                     }
                 }
             });
@@ -115,6 +125,11 @@ export function useDimensionsWithExistingRef<T extends HTMLElement>(
         debounceMs,
         setDomRect,
     ]);
+    // Throttle at 30fps (33ms, trailing edge) to reduce layout recalculations.
+    const setDomRectThrottled = React.useMemo(
+        () => throttle(33, setDomRectDebounced, { noLeading: false, noTrailing: false }),
+        [setDomRectDebounced]
+    );
     React.useEffect(() => {
         if (!rszObjRef.current) {
             rszObjRef.current = new ResizeObserver((entries) => {
@@ -122,7 +137,7 @@ export function useDimensionsWithExistingRef<T extends HTMLElement>(
                     if (domRect == null) {
                         setDomRect(entry.contentRect);
                     } else {
-                        setDomRectDebounced(entry.contentRect);
+                        setDomRectThrottled(entry.contentRect);
                     }
                 }
             });

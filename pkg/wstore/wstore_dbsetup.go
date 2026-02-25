@@ -46,14 +46,39 @@ func GetDBName() string {
 	return filepath.Join(waveHome, wavebase.WaveDBDir, WStoreDBName)
 }
 
+// sqlitePragmas contains additional PRAGMAs applied after open.
+// WAL and busy_timeout are already set via DSN params; these cover the remaining tuning.
+var sqlitePragmas = []string{
+	"PRAGMA synchronous=NORMAL",        // WAL + NORMAL is safe and faster than FULL
+	"PRAGMA cache_size=-64000",         // 64MB page cache (negative = KB)
+	"PRAGMA mmap_size=268435456",       // 256MB memory-mapped I/O
+	"PRAGMA wal_autocheckpoint=1000",   // checkpoint every 1000 WAL pages
+	"PRAGMA temp_store=MEMORY",         // keep temp tables in RAM
+}
+
 func MakeDB(ctx context.Context) (*sqlx.DB, error) {
 	dbName := GetDBName()
+	// WAL mode and busy_timeout are set via DSN to apply before any connection use.
 	rtn, err := sqlx.Open("sqlite3", fmt.Sprintf("file:%s?mode=rwc&_journal_mode=WAL&_busy_timeout=5000", dbName))
 	if err != nil {
 		return nil, err
 	}
 	rtn.DB.SetMaxOpenConns(1)
+	if err := applyPragmas(rtn); err != nil {
+		rtn.DB.Close()
+		return nil, err
+	}
 	return rtn, nil
+}
+
+// applyPragmas executes the additional SQLite PRAGMAs after the connection is established.
+func applyPragmas(db *sqlx.DB) error {
+	for _, pragma := range sqlitePragmas {
+		if _, err := db.Exec(pragma); err != nil {
+			return fmt.Errorf("sqlite pragma error (%s): %w", pragma, err)
+		}
+	}
+	return nil
 }
 
 func WithTx(ctx context.Context, fn func(tx *TxWrap) error) (rtnErr error) {

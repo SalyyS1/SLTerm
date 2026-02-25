@@ -22,6 +22,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/streamclient"
 	"github.com/SalyyS1/SLTerm/pkg/telemetry"
 	"github.com/SalyyS1/SLTerm/pkg/telemetry/telemetrydata"
+	"github.com/SalyyS1/SLTerm/pkg/util/bufferpool"
 	"github.com/SalyyS1/SLTerm/pkg/util/ds"
 	"github.com/SalyyS1/SLTerm/pkg/util/envutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/shellutil"
@@ -818,7 +819,8 @@ func runOutputLoop(ctx context.Context, jobId string, streamId string, reader *s
 	}()
 
 	log.Printf("[job:%s] [stream:%s] output loop started", jobId, streamId)
-	buf := make([]byte, 4096)
+	buf := bufferpool.GetLen(4096)
+	defer bufferpool.Put(buf)
 	for {
 		n, err := reader.Read(buf)
 		currentStreamId, _ := jobStreamIds.GetEx(jobId)

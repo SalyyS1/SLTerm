@@ -5,7 +5,7 @@ import { MonacoCodeEditor } from "@/app/monaco/monaco-react";
 import { useOverrideConfigAtom } from "@/app/store/global";
 import { boundNumber } from "@/util/util";
 import type * as MonacoTypes from "monaco-editor";
-import * as MonacoModule from "monaco-editor";
+import type * as MonacoModule from "monaco-editor";
 import React, { useMemo, useRef } from "react";
 
 function defaultEditorOptions(): MonacoTypes.editor.IEditorOptions {

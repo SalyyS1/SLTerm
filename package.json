@@ -7,12 +7,13 @@
     "productName": "SLTerm",
     "description": "Open-Source Modern Terminal by Salyvn",
     "license": "Apache-2.0",
-    "version": "0.15.0",
+    "version": "0.16.0",
     "homepage": "https://github.com/SalyyS1/SLTerm",
     "build": {
         "appId": "dev.salyvn.slterm"
     },
     "private": true,
+    "sideEffects": ["**/*.css", "**/*.scss"],
     "main": "./dist/main/index.js",
     "type": "module",
     "browserslist": [

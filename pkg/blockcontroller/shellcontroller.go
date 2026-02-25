@@ -22,6 +22,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/remote"
 	"github.com/SalyyS1/SLTerm/pkg/remote/conncontroller"
 	"github.com/SalyyS1/SLTerm/pkg/shellexec"
+	"github.com/SalyyS1/SLTerm/pkg/util/bufferpool"
 	"github.com/SalyyS1/SLTerm/pkg/util/envutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/fileutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/shellutil"
@@ -555,7 +556,8 @@ func (bc *ShellController) manageRunningShellProcess(shellProc *shellexec.ShellP
 			time.Sleep(100 * time.Millisecond)
 			close(shellInputCh) // don't use bc.ShellInputCh (it's nil)
 		}()
-		buf := make([]byte, 4096)
+		buf := bufferpool.GetLen(4096)
+		defer bufferpool.Put(buf)
 		for {
 			nr, err := shellProc.Cmd.Read(buf)
 			if nr > 0 {

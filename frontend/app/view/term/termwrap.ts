@@ -18,10 +18,7 @@ import {
 import * as services from "@/store/services";
 import { PLATFORM, PlatformMacOS } from "@/util/platformutil";
 import { base64ToArray, fireAndForget } from "@/util/util";
-import { SearchAddon } from "@xterm/addon-search";
-import { SerializeAddon } from "@xterm/addon-serialize";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { WebglAddon } from "@xterm/addon-webgl";
 import * as TermTypes from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
 import debug from "debug";
@@ -64,6 +61,63 @@ type TermWrapOptions = {
     nodeModel?: BlockNodeModel;
 };
 
+// BatchedWriter coalesces terminal output writes at 16ms (one frame) intervals
+// to reduce render calls under high-throughput scenarios.
+// Only OUTPUT writes go through this — input (sendDataHandler) is never batched.
+class BatchedWriter {
+    private buffer: (string | Uint8Array)[] = [];
+    private timer: ReturnType<typeof setTimeout> | null = null;
+    private readonly BATCH_DELAY_MS = 16;
+    private readonly MAX_BATCH_SIZE = 100;
+
+    constructor(private terminal: Terminal) {}
+
+    write(data: string | Uint8Array): void {
+        this.buffer.push(data);
+        if (this.buffer.length >= this.MAX_BATCH_SIZE) {
+            this.flush();
+        } else if (!this.timer) {
+            this.timer = setTimeout(() => this.flush(), this.BATCH_DELAY_MS);
+        }
+    }
+
+    flush(): void {
+        if (this.buffer.length > 0) {
+            // Join strings; pass Uint8Arrays individually since terminal.write handles both
+            const chunks = this.buffer;
+            this.buffer = [];
+            if (chunks.length === 1) {
+                this.terminal.write(chunks[0] as any);
+            } else {
+                // Merge all chunks: strings joined, Uint8Arrays concatenated separately
+                let strBuf = "";
+                for (const chunk of chunks) {
+                    if (typeof chunk === "string") {
+                        strBuf += chunk;
+                    } else {
+                        if (strBuf) {
+                            this.terminal.write(strBuf);
+                            strBuf = "";
+                        }
+                        this.terminal.write(chunk);
+                    }
+                }
+                if (strBuf) {
+                    this.terminal.write(strBuf);
+                }
+            }
+        }
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+    }
+
+    dispose(): void {
+        this.flush();
+    }
+}
+
 export class TermWrap {
     tabId: string;
     blockId: string;
@@ -72,8 +126,11 @@ export class TermWrap {
     terminal: Terminal;
     connectElem: HTMLDivElement;
     fitAddon: FitAddon;
-    searchAddon: SearchAddon;
-    serializeAddon: SerializeAddon;
+    // Lazy-loaded addons (null until first use)
+    searchAddon: import("@xterm/addon-search").SearchAddon | null;
+    serializeAddon: import("@xterm/addon-serialize").SerializeAddon | null;
+    webglAddon: import("@xterm/addon-webgl").WebglAddon | null;
+    batchedWriter: BatchedWriter;
     mainFileSubject: SubjectWithRef<WSFileEventData>;
     loaded: boolean;
     heldData: Uint8Array[];
@@ -130,11 +187,12 @@ export class TermWrap {
         this.terminal = new Terminal(options);
         this.fitAddon = new FitAddon();
         this.fitAddon.noScrollbar = PLATFORM === PlatformMacOS;
-        this.serializeAddon = new SerializeAddon();
-        this.searchAddon = new SearchAddon();
-        this.terminal.loadAddon(this.searchAddon);
+        // Lazy addons — loaded on demand
+        this.searchAddon = null;
+        this.serializeAddon = null;
+        this.webglAddon = null;
+        this.batchedWriter = new BatchedWriter(this.terminal);
         this.terminal.loadAddon(this.fitAddon);
-        this.terminal.loadAddon(this.serializeAddon);
         this.terminal.loadAddon(
             new WebLinksAddon((e, uri) => {
                 e.preventDefault();
@@ -153,17 +211,8 @@ export class TermWrap {
             })
         );
         if (WebGLSupported && waveOptions.useWebGl) {
-            const webglAddon = new WebglAddon();
-            this.toDispose.push(
-                webglAddon.onContextLoss(() => {
-                    webglAddon.dispose();
-                })
-            );
-            this.terminal.loadAddon(webglAddon);
-            if (!loggedWebGL) {
-                console.log("loaded webgl!");
-                loggedWebGL = true;
-            }
+            // attachWebGL is async — fire-and-forget; canvas renderer active until it resolves
+            fireAndForget(() => this.attachWebGL());
         }
         // Register OSC handlers
         this.terminal.parser.registerOscHandler(7, (data: string) => {
@@ -240,6 +289,8 @@ export class TermWrap {
     };
 
     async initTerminal() {
+        const perfId = `terminal-init-${this.blockId}`;
+        performance.mark(`${perfId}-start`);
         const copyOnSelectAtom = getSettingsKeyAtom("term:copyonselect");
         this.toDispose.push(this.terminal.onData(this.handleTermData.bind(this)));
         this.toDispose.push(this.terminal.onKey(this.onKeyHandler.bind(this)));
@@ -257,6 +308,7 @@ export class TermWrap {
             )
         );
         if (this.onSearchResultsDidChange != null) {
+            await this.loadSearchAddon();
             this.toDispose.push(this.searchAddon.onDidChangeResults(this.onSearchResultsDidChange.bind(this)));
         }
 
@@ -312,6 +364,12 @@ export class TermWrap {
         } finally {
             this.loaded = true;
         }
+        performance.mark(`${perfId}-end`);
+        performance.measure(`terminal-init-${this.blockId}`, `${perfId}-start`, `${perfId}-end`);
+        const measure = performance.getEntriesByName(`terminal-init-${this.blockId}`, "measure")[0];
+        if (measure) {
+            dlog(`[perf] terminal init ${this.blockId}: ${measure.duration.toFixed(1)}ms`);
+        }
         this.runProcessIdleTimeout();
     }
 
@@ -321,6 +379,8 @@ export class TermWrap {
             clearTimeout(this.idleTimeoutId);
             this.idleTimeoutId = null;
         }
+        this.batchedWriter.dispose();
+        this.detachWebGL();
         this.promptMarkers.forEach((marker) => {
             try {
                 marker.dispose();
@@ -410,6 +470,7 @@ export class TermWrap {
         let prtn = new Promise<void>((presolve, _) => {
             resolve = presolve;
         });
+        // Use batched writer for output; callback runs after the batch flushes
         this.terminal.write(data, () => {
             if (setPtyOffset != null) {
                 this.ptyOffset = setPtyOffset;
@@ -424,7 +485,8 @@ export class TermWrap {
     }
 
     async loadInitialTerminalData(): Promise<void> {
-        const startTs = Date.now();
+        const loadPerfId = `terminal-load-${this.blockId}`;
+        performance.mark(`${loadPerfId}-start`);
         const zoneId = this.getZoneId();
         const { data: cacheData, fileInfo: cacheFile } = await fetchWaveFile(zoneId, TermCacheFileName);
         let ptyOffset = 0;
@@ -450,8 +512,10 @@ export class TermWrap {
         }
         const { data: mainData, fileInfo: mainFile } = await fetchWaveFile(zoneId, TermFileName, ptyOffset);
         console.log(
-            `terminal loaded cachefile:${cacheData?.byteLength ?? 0} main:${mainData?.byteLength ?? 0} bytes, ${Date.now() - startTs}ms`
+            `terminal loaded cachefile:${cacheData?.byteLength ?? 0} main:${mainData?.byteLength ?? 0} bytes`
         );
+        performance.mark(`${loadPerfId}-end`);
+        performance.measure(`terminal-load-${this.blockId}`, `${loadPerfId}-start`, `${loadPerfId}-end`);
         if (mainFile != null) {
             await this.doTerminalWrite(mainData, null);
         }
@@ -469,6 +533,50 @@ export class TermWrap {
         } catch (e) {
             console.log(`error controller resync (${reason})`, this.blockId, e);
         }
+    }
+
+    // --- Lazy addon lifecycle methods ---
+
+    async attachWebGL(): Promise<void> {
+        if (this.webglAddon) return;
+        try {
+            const { WebglAddon } = await import("@xterm/addon-webgl");
+            this.webglAddon = new WebglAddon();
+            this.webglAddon.onContextLoss(() => {
+                // On GPU context loss, dispose and null so next attach re-creates it
+                this.webglAddon?.dispose();
+                this.webglAddon = null;
+            });
+            this.terminal.loadAddon(this.webglAddon);
+            if (!loggedWebGL) {
+                console.log("loaded webgl!");
+                loggedWebGL = true;
+            }
+        } catch (e) {
+            console.warn("WebGL attach failed, using canvas:", e);
+            this.webglAddon = null;
+        }
+    }
+
+    detachWebGL(): void {
+        if (this.webglAddon) {
+            this.webglAddon.dispose();
+            this.webglAddon = null;
+        }
+    }
+
+    async loadSearchAddon(): Promise<void> {
+        if (this.searchAddon) return;
+        const { SearchAddon } = await import("@xterm/addon-search");
+        this.searchAddon = new SearchAddon();
+        this.terminal.loadAddon(this.searchAddon);
+    }
+
+    async loadSerializeAddon(): Promise<void> {
+        if (this.serializeAddon) return;
+        const { SerializeAddon } = await import("@xterm/addon-serialize");
+        this.serializeAddon = new SerializeAddon();
+        this.terminal.loadAddon(this.serializeAddon);
     }
 
     handleResize() {
@@ -490,12 +598,19 @@ export class TermWrap {
         if (this.dataBytesProcessed < MinDataProcessedForCache) {
             return;
         }
-        const serializedOutput = this.serializeAddon.serialize();
-        const termSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
-        console.log("idle timeout term", this.dataBytesProcessed, serializedOutput.length, termSize);
-        fireAndForget(() =>
-            services.BlockService.SaveTerminalState(this.blockId, serializedOutput, "full", this.ptyOffset, termSize)
-        );
+        fireAndForget(async () => {
+            await this.loadSerializeAddon();
+            const serializedOutput = this.serializeAddon.serialize();
+            const termSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
+            console.log("idle timeout term", this.dataBytesProcessed, serializedOutput.length, termSize);
+            await services.BlockService.SaveTerminalState(
+                this.blockId,
+                serializedOutput,
+                "full",
+                this.ptyOffset,
+                termSize
+            );
+        });
         this.dataBytesProcessed = 0;
     }
 

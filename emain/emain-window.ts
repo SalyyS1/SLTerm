@@ -7,7 +7,7 @@ import { fireAndForget } from "@/util/util";
 import { BaseWindow, BaseWindowConstructorOptions, dialog, globalShortcut, ipcMain, screen } from "electron";
 import { globalEvents } from "emain/emain-events";
 import path from "path";
-import { debounce } from "throttle-debounce";
+import { debounce, throttle } from "throttle-debounce";
 import {
     getGlobalIsQuitting,
     getGlobalIsRelaunching,
@@ -207,12 +207,14 @@ export class WaveBrowserWindow extends BaseWindow {
             "resize",
             debounce(400, (e) => this.mainResizeHandler(e))
         );
-        this.on("resize", () => {
+        // Throttle immediate resize to 30fps so positionTabOnScreen doesn't run on every pixel.
+        const throttledPosition = throttle(33, () => {
             if (this.isDestroyed()) {
                 return;
             }
             this.activeTabView?.positionTabOnScreen(this.getContentBounds());
-        });
+        }, { noLeading: false, noTrailing: true });
+        this.on("resize", throttledPosition);
         this.on(
             // @ts-expect-error
             "move",
