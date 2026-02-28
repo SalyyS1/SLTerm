@@ -120,16 +120,34 @@ const PetOverlay: React.FC = () => {
         return () => clearInterval(t);
     }, [petEnabled]);
 
-    // Terminal watching
+    // Terminal watching — THROTTLED to avoid perf issues during high-throughput AI output
+    // MutationObserver fires for every DOM change xterm.js makes; we batch and sample
     React.useEffect(() => {
         if (!petEnabled) return;
+        let pendingText: string | null = null;
+        let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+        const THROTTLE_MS = 500; // only check terminal output every 500ms
+
         const observer = new MutationObserver((mutations) => {
-            for (const m of mutations) {
-                for (const node of m.addedNodes) {
+            // Just capture the last added text node — don't process immediately
+            for (let i = mutations.length - 1; i >= 0; i--) {
+                const m = mutations[i];
+                for (let j = m.addedNodes.length - 1; j >= 0; j--) {
+                    const node = m.addedNodes[j];
                     if (!(node instanceof HTMLElement)) continue;
                     const text = node.textContent || "";
                     if (text.length >= 3 && text.length <= 500) {
-                        tryReact(text);
+                        pendingText = text;
+                        // Schedule throttled processing
+                        if (!throttleTimer) {
+                            throttleTimer = setTimeout(() => {
+                                throttleTimer = null;
+                                if (pendingText) {
+                                    tryReact(pendingText);
+                                    pendingText = null;
+                                }
+                            }, THROTTLE_MS);
+                        }
                         return;
                     }
                 }
@@ -137,14 +155,15 @@ const PetOverlay: React.FC = () => {
         });
         const watch = () => {
             document.querySelectorAll(".xterm-rows").forEach((el) => {
-                observer.observe(el, { childList: true, subtree: true });
+                observer.observe(el, { childList: true }); // removed subtree:true — only direct children
             });
         };
         watch();
-        const r = setInterval(watch, 5000);
+        const r = setInterval(watch, 10000); // reduced re-watch frequency from 5s to 10s
         return () => {
             observer.disconnect();
             clearInterval(r);
+            if (throttleTimer) clearTimeout(throttleTimer);
         };
     }, [petEnabled]);
 
@@ -177,7 +196,8 @@ const PetOverlay: React.FC = () => {
     }, [droppedFood.length > 0]);
 
     // ============================================================
-    // Main animation loop — movement + physics
+    // Main animation loop — movement + physics (OPTIMIZED)
+    // Skips frames when document hidden; skips position update for stationary behaviors
     // ============================================================
     React.useEffect(() => {
         if (!petEnabled || !petInstance || isGrabbed) return;
@@ -185,8 +205,17 @@ const PetOverlay: React.FC = () => {
         const GRAVITY = 1200;
         const BOUNCE = 0.5;
         const FRICTION = 0.98;
+        // Stationary behaviors that don't need position updates every frame
+        const STATIONARY = new Set(["IDLE", "SIT", "SLEEP", "SNOOZE", "CELEBRATE", "HAPPY", "SAD", "CRY"]);
 
         const animate = (time: number) => {
+            // Skip frames when document is hidden (tab in background)
+            if (document.hidden) {
+                lastTimeRef.current = 0;
+                animFrameRef.current = requestAnimationFrame(animate);
+                return;
+            }
+
             if (!lastTimeRef.current) lastTimeRef.current = time;
             const dt = Math.min((time - lastTimeRef.current) / 1000, 0.05); // cap dt
             lastTimeRef.current = time;
@@ -209,6 +238,14 @@ const PetOverlay: React.FC = () => {
                         }));
                     }
                 }
+            }
+
+            // Skip position update for stationary behaviors with no velocity
+            // This eliminates ~60 unnecessary React state updates/second when pet is idle
+            const hasVelocity = Math.abs(position.velocityX || 0) > 1 || Math.abs(position.velocityY || 0) > 1;
+            if (STATIONARY.has(curBehavior) && !hasVelocity) {
+                animFrameRef.current = requestAnimationFrame(animate);
+                return;
             }
 
             setPosition((prev: PetPosition) => {

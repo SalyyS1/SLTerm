@@ -64,50 +64,118 @@ type TermWrapOptions = {
     nodeModel?: BlockNodeModel;
 };
 
-// BatchedWriter coalesces terminal output writes at 16ms (one frame) intervals
-// to reduce render calls under high-throughput scenarios.
+// BatchedWriter coalesces terminal output writes using requestAnimationFrame
+// to align with display refresh and reduce render calls under high-throughput scenarios.
+// Caps each flush at MAX_BATCH_BYTES (128KB) to prevent huge merged writes from blocking.
+// Applies backpressure: if xterm is still processing a previous write, defers the next flush.
 // Only OUTPUT writes go through this — input (sendDataHandler) is never batched.
 class BatchedWriter {
     private buffer: (string | Uint8Array)[] = [];
-    private timer: ReturnType<typeof setTimeout> | null = null;
-    private readonly BATCH_DELAY_MS = 16;
+    private bufferBytes: number = 0;
+    private rafId: number | null = null;
     private readonly MAX_BATCH_SIZE = 100;
+    private readonly MAX_BATCH_BYTES = 128 * 1024; // 128KB max per flush — keeps terminal.write() responsive
+    private pendingWrites: number = 0;
+    private readonly MAX_PENDING_WRITES = 3; // backpressure: max concurrent xterm.write() in flight
 
     constructor(private terminal: Terminal) {}
 
     write(data: string | Uint8Array): void {
         this.buffer.push(data);
-        if (this.buffer.length >= this.MAX_BATCH_SIZE) {
+        this.bufferBytes += data.length;
+        if (this.buffer.length >= this.MAX_BATCH_SIZE || this.bufferBytes >= this.MAX_BATCH_BYTES) {
+            // Immediate flush when size thresholds exceeded
             this.flush();
-        } else if (!this.timer) {
-            this.timer = setTimeout(() => this.flush(), this.BATCH_DELAY_MS);
+        } else if (this.rafId == null) {
+            // Schedule flush aligned with display refresh (typically ~16ms)
+            this.rafId = requestAnimationFrame(() => {
+                this.rafId = null;
+                this.flush();
+            });
         }
     }
 
     flush(): void {
-        if (this.buffer.length > 0) {
-            const chunks = this.buffer;
-            this.buffer = [];
-            if (chunks.length === 1) {
-                this.terminal.write(chunks[0] as any);
-            } else {
-                // Consolidate all chunks into a single string for one terminal.write() call
-                const decoder = new TextDecoder();
-                let merged = "";
-                for (const chunk of chunks) {
-                    merged += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
-                }
-                this.terminal.write(merged);
+        if (this.buffer.length === 0) {
+            if (this.rafId != null) {
+                cancelAnimationFrame(this.rafId);
+                this.rafId = null;
             }
+            return;
         }
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
+
+        // Backpressure: if xterm is still processing previous writes, defer
+        if (this.pendingWrites >= this.MAX_PENDING_WRITES) {
+            dlog("backpressure — deferring flush, pending:", this.pendingWrites);
+            // Re-schedule for next frame
+            if (this.rafId == null) {
+                this.rafId = requestAnimationFrame(() => {
+                    this.rafId = null;
+                    this.flush();
+                });
+            }
+            return;
+        }
+
+        const chunks = this.buffer;
+        const bytesFlushed = this.bufferBytes;
+        this.buffer = [];
+        this.bufferBytes = 0;
+
+        let merged: string | Uint8Array;
+        if (chunks.length === 1) {
+            merged = chunks[0];
+        } else {
+            // Consolidate all chunks into a single string for one terminal.write() call
+            const decoder = new TextDecoder();
+            let str = "";
+            for (const chunk of chunks) {
+                str += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+            }
+            merged = str;
+        }
+
+        this.pendingWrites++;
+        this.terminal.write(merged as any, () => {
+            this.pendingWrites--;
+            // If data accumulated during backpressure, flush now
+            if (this.buffer.length > 0 && this.rafId == null) {
+                this.rafId = requestAnimationFrame(() => {
+                    this.rafId = null;
+                    this.flush();
+                });
+            }
+        });
+
+        dlog("flush", chunks.length, "chunks", bytesFlushed, "bytes, pending:", this.pendingWrites);
+
+        if (this.rafId != null) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
         }
     }
 
     dispose(): void {
-        this.flush();
+        if (this.rafId != null) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+        }
+        // Final synchronous flush — ignore backpressure on dispose
+        if (this.buffer.length > 0) {
+            const chunks = this.buffer;
+            this.buffer = [];
+            this.bufferBytes = 0;
+            if (chunks.length === 1) {
+                this.terminal.write(chunks[0] as any);
+            } else {
+                const decoder = new TextDecoder();
+                let str = "";
+                for (const chunk of chunks) {
+                    str += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+                }
+                this.terminal.write(str);
+            }
+        }
     }
 }
 
@@ -241,7 +309,7 @@ export class TermWrap {
         this.connectElem = connectElem;
         this.mainFileSubject = null;
         this.heldData = [];
-        this.handleResize_debounced = debounce(50, this.handleResize.bind(this));
+        this.handleResize_debounced = debounce(150, this.handleResize.bind(this));
         this.terminal.open(this.connectElem);
         this.handleResize();
         const pasteHandler = this.pasteHandler.bind(this);
@@ -370,6 +438,9 @@ export class TermWrap {
             clearTimeout(this.idleTimeoutId);
             this.idleTimeoutId = null;
         }
+        // Clear coalescing buffer to prevent orphaned microtask writes after dispose
+        this._wsCoalesceBuffer = [];
+        this._wsCoalesceScheduled = false;
         this.batchedWriter.dispose();
         this.detachWebGL();
         this.promptMarkers.forEach((marker) => {
@@ -438,14 +509,43 @@ export class TermWrap {
         this.terminal.textarea.addEventListener("focus", focusFn);
     }
 
+    // Coalescing buffer for rapid WebSocket messages — merges multiple base64 chunks
+    // into a single write per microtask instead of one write per message
+    private _wsCoalesceBuffer: Uint8Array[] = [];
+    private _wsCoalesceScheduled: boolean = false;
+
     handleNewFileSubjectData(msg: WSFileEventData) {
         if (msg.fileop == "truncate") {
             this.terminal.clear();
             this.heldData = [];
+            this._wsCoalesceBuffer = [];
         } else if (msg.fileop == "append") {
             const decodedData = base64ToArray(msg.data64);
             if (this.loaded) {
-                this.doTerminalWrite(decodedData, null);
+                // Coalesce: buffer decoded chunks and flush once per microtask
+                this._wsCoalesceBuffer.push(decodedData);
+                if (!this._wsCoalesceScheduled) {
+                    this._wsCoalesceScheduled = true;
+                    queueMicrotask(() => {
+                        this._wsCoalesceScheduled = false;
+                        const chunks = this._wsCoalesceBuffer;
+                        this._wsCoalesceBuffer = [];
+                        if (chunks.length === 1) {
+                            this.doTerminalWrite(chunks[0], null);
+                        } else if (chunks.length > 1) {
+                            // Merge all chunks into one Uint8Array
+                            let totalLen = 0;
+                            for (const c of chunks) totalLen += c.length;
+                            const merged = new Uint8Array(totalLen);
+                            let offset = 0;
+                            for (const c of chunks) {
+                                merged.set(c, offset);
+                                offset += c.length;
+                            }
+                            this.doTerminalWrite(merged, null);
+                        }
+                    });
+                }
             } else {
                 this.heldData.push(decodedData);
             }
@@ -574,7 +674,13 @@ export class TermWrap {
         this.fitAddon.fit();
         if (oldRows !== this.terminal.rows || oldCols !== this.terminal.cols) {
             const termSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
-            RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, termsize: termSize });
+            // Skip resize RPC if terminal is actively receiving heavy output — the backend
+            // will get the correct size on the next idle resize or controller resync
+            if (Date.now() - this.lastUpdated > 500) {
+                RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, termsize: termSize });
+            } else {
+                dlog("resize RPC deferred — terminal active", this.blockId);
+            }
         }
         dlog("resize", `${this.terminal.rows}x${this.terminal.cols}`, `${oldRows}x${oldCols}`, this.hasResized);
         if (!this.hasResized) {
@@ -584,14 +690,23 @@ export class TermWrap {
     }
 
     processAndCacheData() {
+        // Skip serialization if terminal is actively receiving data (< 2s since last write)
+        // This prevents expensive serialize() calls from blocking the main thread during AI output floods
+        const now = Date.now();
+        if (now - this.lastUpdated < 2000) {
+            dlog("skipping cache — terminal still active", this.blockId);
+            return;
+        }
         if (this.dataBytesProcessed < MinDataProcessedForCache) {
             return;
         }
+        const bytesToCache = this.dataBytesProcessed;
+        this.dataBytesProcessed = 0;
         fireAndForget(async () => {
             await this.loadSerializeAddon();
             const serializedOutput = this.serializeAddon.serialize();
             const termSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
-            console.log("idle timeout term", this.dataBytesProcessed, serializedOutput.length, termSize);
+            dlog("cache term", bytesToCache, "processed →", serializedOutput.length, "serialized", termSize);
             await services.BlockService.SaveTerminalState(
                 this.blockId,
                 serializedOutput,
@@ -600,10 +715,11 @@ export class TermWrap {
                 termSize
             );
         });
-        this.dataBytesProcessed = 0;
     }
 
     runProcessIdleTimeout() {
+        // Use longer interval when heavy output is being processed to reduce serialization pressure
+        const interval = this.dataBytesProcessed > MinDataProcessedForCache ? 15000 : 5000;
         this.idleTimeoutId = setTimeout(() => {
             if (this.disposed) return;
             window.requestIdleCallback(() => {
@@ -611,7 +727,7 @@ export class TermWrap {
                 this.processAndCacheData();
                 this.runProcessIdleTimeout();
             });
-        }, 5000);
+        }, interval);
     }
 
     async pasteHandler(e?: ClipboardEvent): Promise<void> {
