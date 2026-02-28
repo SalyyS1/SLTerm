@@ -3,15 +3,15 @@
 
 import { getWebServerEndpoint } from "@/util/endpoints";
 import { boundNumber, isBlank } from "@/util/util";
-import { generate as generateCSS, parse as parseCSS, walk as walkCSS } from "css-tree";
 
 function encodeFileURL(file: string) {
     const webEndpoint = getWebServerEndpoint();
     const fileUri = formatRemoteUri(file, "local");
-    const rtn = webEndpoint + `/wave/stream-file?path=${encodeURIComponent(fileUri)}&no404=1`;
-    return rtn;
+    return webEndpoint + `/wave/stream-file?path=${encodeURIComponent(fileUri)}&no404=1`;
 }
 
+// Allow CSS color values, gradients, and local file url() backgrounds
+// Blocks http/https/data URLs for security — only local paths allowed
 export function processBackgroundUrls(cssText: string): string {
     if (isBlank(cssText)) {
         return null;
@@ -22,52 +22,33 @@ export function processBackgroundUrls(cssText: string): string {
     }
     const attrRe = /^background(-image)?\s*:\s*/i;
     cssText = cssText.replace(attrRe, "");
-    const ast = parseCSS("background: " + cssText, {
-        context: "declaration",
+
+    // Process url() references — only allow local file paths
+    cssText = cssText.replace(/url\(\s*['"]?(.*?)['"]?\s*\)/gi, (_match, rawUrl: string) => {
+        const url = rawUrl.trim();
+        // Block remote URLs
+        if (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("data:")) {
+            return "none";
+        }
+        // Allow app-relative static asset URLs
+        if (url.startsWith("/backgrounds/") || url.startsWith("/assets/")) {
+            return `url('${url}')`;
+        }
+        // Allow file:// URLs (absolute only)
+        if (url.startsWith("file://")) {
+            const path = url.slice(7);
+            if (!path.startsWith("/") && !/^[a-zA-Z]:(\/|\\)/.test(path)) {
+                return "none";
+            }
+            return `url('${encodeFileURL(path)}')`;
+        }
+        // Allow absolute paths
+        if (url.startsWith("/") || url.startsWith("~/") || /^[a-zA-Z]:(\/|\\)/.test(url)) {
+            return `url('${encodeFileURL(url)}')`;
+        }
+        return "none";
     });
-    let hasUnsafeUrl = false;
-    walkCSS(ast, {
-        visit: "Url",
-        enter(node) {
-            const originalUrl = node.value.trim();
-            if (
-                originalUrl.startsWith("http:") ||
-                originalUrl.startsWith("https:") ||
-                originalUrl.startsWith("data:")
-            ) {
-                return;
-            }
-            // allow file:/// urls (if they are absolute)
-            if (originalUrl.startsWith("file://")) {
-                const path = originalUrl.slice(7);
-                // Unix absolute paths start with /, Windows absolute paths start with drive letter (e.g. C:/)
-                if (!path.startsWith("/") && !/^[a-zA-Z]:(\/|\\)/.test(path)) {
-                    console.log(`Invalid background, contains a non-absolute file URL: ${originalUrl}`);
-                    hasUnsafeUrl = true;
-                    return;
-                }
-                const newUrl = encodeFileURL(path);
-                node.value = newUrl;
-                return;
-            }
-            // allow absolute paths
-            if (originalUrl.startsWith("/") || originalUrl.startsWith("~/") || /^[a-zA-Z]:(\/|\\)/.test(originalUrl)) {
-                const newUrl = encodeFileURL(originalUrl);
-                node.value = newUrl;
-                return;
-            }
-            hasUnsafeUrl = true;
-            console.log(`Invalid background, contains an unsafe URL scheme: ${originalUrl}`);
-        },
-    });
-    if (hasUnsafeUrl) {
-        return null;
-    }
-    const rtnStyle = generateCSS(ast);
-    if (rtnStyle == null) {
-        return null;
-    }
-    return rtnStyle.replace(/^background:\s*/, "");
+    return cssText;
 }
 
 export function computeBgStyleFromMeta(meta: MetaType, defaultOpacity: number = null): React.CSSProperties {
@@ -77,8 +58,19 @@ export function computeBgStyleFromMeta(meta: MetaType, defaultOpacity: number = 
     }
     try {
         const processedBg = processBackgroundUrls(bgAttr);
+        if (processedBg == null) {
+            return null;
+        }
         const rtn: React.CSSProperties = {};
-        rtn.background = processedBg;
+        // For url() images, use backgroundImage (not background shorthand which resets size/position)
+        if (/url\s*\(/i.test(processedBg)) {
+            rtn.backgroundImage = processedBg;
+            rtn.backgroundSize = "cover";
+            rtn.backgroundPosition = "center";
+            rtn.backgroundRepeat = "no-repeat";
+        } else {
+            rtn.background = processedBg;
+        }
         rtn.opacity = boundNumber(meta["bg:opacity"], 0, 1) ?? defaultOpacity;
         if (!isBlank(meta?.["bg:blendmode"])) {
             rtn.backgroundBlendMode = meta["bg:blendmode"];

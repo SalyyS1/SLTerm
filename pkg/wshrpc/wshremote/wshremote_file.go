@@ -27,7 +27,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/wshutil"
 )
 
-const RemoteFileTransferSizeLimit = 32 * 1024 * 1024
+const RemoteFileTransferSizeLimit = 100 * 1024 * 1024
 
 var DisableRecursiveFileOpts = true
 
