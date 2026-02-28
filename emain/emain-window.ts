@@ -6,7 +6,6 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { fireAndForget } from "@/util/util";
 import { BaseWindow, BaseWindowConstructorOptions, dialog, globalShortcut, ipcMain, screen } from "electron";
 import { globalEvents } from "emain/emain-events";
-import path from "path";
 import { debounce, throttle } from "throttle-debounce";
 import {
     getGlobalIsQuitting,
@@ -16,7 +15,7 @@ import {
     setWasInFg,
 } from "./emain-activity";
 import { log } from "./emain-log";
-import { getElectronAppBasePath, unamePlatform } from "./emain-platform";
+import { unamePlatform } from "./emain-platform";
 import { getOrCreateWebViewForTab, getWaveTabViewByWebContentsId, WaveTabView } from "./emain-tabview";
 import { delay, ensureBoundsAreVisible, waveKeyToElectronKey } from "./emain-util";
 import { ElectronWshClient } from "./emain-wsh";
@@ -208,12 +207,16 @@ export class WaveBrowserWindow extends BaseWindow {
             debounce(400, (e) => this.mainResizeHandler(e))
         );
         // Throttle immediate resize to 30fps so positionTabOnScreen doesn't run on every pixel.
-        const throttledPosition = throttle(33, () => {
-            if (this.isDestroyed()) {
-                return;
-            }
-            this.activeTabView?.positionTabOnScreen(this.getContentBounds());
-        }, { noLeading: false, noTrailing: true });
+        const throttledPosition = throttle(
+            33,
+            () => {
+                if (this.isDestroyed()) {
+                    return;
+                }
+                this.activeTabView?.positionTabOnScreen(this.getContentBounds());
+            },
+            { noLeading: false, noTrailing: true }
+        );
         this.on("resize", throttledPosition);
         this.on(
             // @ts-expect-error
@@ -482,7 +485,12 @@ export class WaveBrowserWindow extends BaseWindow {
 
     private async _queueActionInternal(entry: WindowActionQueueEntry) {
         if (this.actionQueue.length >= 2) {
-            this.actionQueue[1] = entry;
+            // Never drop closetab ops — always append them so they execute
+            if (entry.op === "closetab") {
+                this.actionQueue.push(entry);
+            } else {
+                this.actionQueue[1] = entry;
+            }
             return;
         }
         const wasEmpty = this.actionQueue.length === 0;
@@ -495,7 +503,7 @@ export class WaveBrowserWindow extends BaseWindow {
     private removeTabViewLater(tabId: string, delayMs: number) {
         setTimeout(() => {
             this.removeTabView(tabId, false);
-        }, 1000);
+        }, delayMs);
     }
 
     // the queue and this function are used to serialize operations that update the window contents view
@@ -686,6 +694,13 @@ ipcMain.on("set-active-tab", async (event, tabId) => {
     const ww = getWaveWindowByWebContentsId(event.sender.id);
     console.log("set-active-tab", tabId, ww?.waveWindowId);
     await ww?.setActiveTab(tabId, true);
+});
+
+ipcMain.on("set-fullscreen", (event, isFullScreen: boolean) => {
+    const ww = getWaveWindowByWebContentsId(event.sender.id);
+    if (ww && !ww.isDestroyed()) {
+        ww.setFullScreen(isFullScreen);
+    }
 });
 
 ipcMain.on("create-tab", async (event, opts) => {

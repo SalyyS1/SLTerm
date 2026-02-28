@@ -72,7 +72,10 @@ async function initBare() {
     getApi().onZoomFactorChange((zoomFactor) => {
         updateZoomFactor(zoomFactor);
     });
-    await document.fonts.ready;
+    // Fire-and-forget: browser handles FOUT re-render automatically
+    document.fonts.ready.then(() => {
+        console.log("Fonts ready");
+    });
     console.log("Init Bare Done");
     getApi().setWindowInitStatus("ready");
 }
@@ -188,7 +191,6 @@ async function initWave(initOpts: WaveInitOpts) {
     registerGlobalKeys();
     registerElectronReinjectKeyHandler();
     registerControlShiftStateUpdateHandler();
-    await loadMonaco();
     const fullConfig = await RpcApi.GetFullConfigCommand(TabRpcClient);
     console.log("fullconfig", fullConfig);
     globalStore.set(atoms.fullConfigAtom, fullConfig);
@@ -207,4 +209,10 @@ async function initWave(initOpts: WaveInitOpts) {
     await firstRenderPromise;
     console.log("Wave First Render Done");
     getApi().setWindowInitStatus("wave-ready");
+    // Defer Monaco loading 10s after first render to avoid hammering main thread during startup
+    setTimeout(() => {
+        loadMonaco().catch((e) => {
+            console.error("Failed to load Monaco editor:", e);
+        });
+    }, 10000);
 }

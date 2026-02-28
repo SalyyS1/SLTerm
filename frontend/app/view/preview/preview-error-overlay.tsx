@@ -21,7 +21,7 @@ export const ErrorOverlay = memo(({ errorMsg, resetOverlay }: { errorMsg: ErrorM
     }, [errorMsg.text]);
 
     return (
-        <div className="absolute top-[0] left-1.5 right-1.5 z-[var(--zindex-block-mask-inner)] overflow-hidden bg-[var(--conn-status-overlay-bg-color)] backdrop-blur-[50px] rounded-md shadow-lg">
+        <div className="absolute top-[0] left-1.5 right-1.5 z-[var(--zindex-block-mask-inner)] overflow-hidden bg-[var(--conn-status-overlay-bg-color)] rounded-md shadow-lg">
             <div className="flex flex-row justify-between p-2.5 pl-3 font-normal text-sm leading-normal font-sans text-secondary">
                 <div
                     className={clsx("flex flex-row items-center gap-3 grow min-w-0 shrink", {
@@ -40,7 +40,7 @@ export const ErrorOverlay = memo(({ errorMsg, resetOverlay }: { errorMsg: ErrorM
                             options={{ scrollbars: { autoHide: "leave" } }}
                         >
                             <CopyButton
-                                className="invisible group-hover:visible flex absolute top-0 right-1 rounded backdrop-blur-lg p-1 items-center justify-end gap-1"
+                                className="invisible group-hover:visible flex absolute top-0 right-1 rounded p-1 items-center justify-end gap-1"
                                 onClick={handleCopyToClipboard}
                                 title="Copy"
                             />

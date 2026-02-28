@@ -11,11 +11,7 @@ import {
 } from "@/app/block/blocktypes";
 import type { TabModel } from "@/app/store/tab-model";
 import { useTabModel } from "@/app/store/tab-model";
-import { LauncherViewModel } from "@/app/view/launcher/launcher";
 import { PreviewModel } from "@/app/view/preview/preview-model";
-import { SysinfoViewModel } from "@/app/view/sysinfo/sysinfo";
-import { TsunamiViewModel } from "@/app/view/tsunami/tsunami";
-import { VDomModel } from "@/app/view/vdom/vdom-model";
 import { ErrorBoundary } from "@/element/errorboundary";
 import { CenteredDiv } from "@/element/quickelems";
 import { useDebouncedNodeInnerRect } from "@/layout/index";
@@ -28,36 +24,65 @@ import {
 import { getWaveObjectAtom, makeORef, useWaveObjectValue } from "@/store/wos";
 import { focusedBlockId, getElemAsStr } from "@/util/focusutil";
 import { isBlank, useAtomValueSafe } from "@/util/util";
-import { HelpViewModel } from "@/view/helpview/helpview";
 import { TermViewModel } from "@/view/term/term-model";
 import { WebViewModel } from "@/view/webview/webview";
 import clsx from "clsx";
 import { atom, useAtomValue } from "jotai";
 import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { QuickTipsViewModel } from "../view/quicktipsview/quicktipsview";
-import { WaveConfigViewModel } from "../view/waveconfig/waveconfig-model";
 import "./block.scss";
 import { BlockFrame } from "./blockframe";
 import { blockViewToIcon, blockViewToName } from "./blockutil";
 
-const BlockRegistry: Map<string, ViewModelClass> = new Map();
-BlockRegistry.set("term", TermViewModel);
-BlockRegistry.set("preview", PreviewModel);
-BlockRegistry.set("web", WebViewModel);
+// Core views — eagerly loaded (always needed)
+const EagerRegistry: Map<string, ViewModelClass> = new Map();
+EagerRegistry.set("term", TermViewModel);
+EagerRegistry.set("preview", PreviewModel);
+EagerRegistry.set("web", WebViewModel);
 
-BlockRegistry.set("cpuplot", SysinfoViewModel);
-BlockRegistry.set("sysinfo", SysinfoViewModel);
-BlockRegistry.set("vdom", VDomModel);
-BlockRegistry.set("tips", QuickTipsViewModel);
-BlockRegistry.set("help", HelpViewModel);
-BlockRegistry.set("launcher", LauncherViewModel);
-BlockRegistry.set("tsunami", TsunamiViewModel);
+// Heavy/rare views — lazily loaded on first use
+type LazyViewModelLoader = () => Promise<ViewModelClass>;
+const LazyRegistry: Map<string, LazyViewModelLoader> = new Map();
+const lazyCtorCache: Map<string, ViewModelClass> = new Map();
 
-BlockRegistry.set("waveconfig", WaveConfigViewModel);
+LazyRegistry.set("cpuplot", () => import("@/app/view/sysinfo/sysinfo").then((m) => m.SysinfoViewModel));
+LazyRegistry.set("sysinfo", () => import("@/app/view/sysinfo/sysinfo").then((m) => m.SysinfoViewModel));
+LazyRegistry.set("vdom", () => import("@/app/view/vdom/vdom-model").then((m) => m.VDomModel));
+LazyRegistry.set("tips", () => import("../view/quicktipsview/quicktipsview").then((m) => m.QuickTipsViewModel));
+LazyRegistry.set("help", () => import("@/view/helpview/helpview").then((m) => m.HelpViewModel));
+LazyRegistry.set("launcher", () => import("@/app/view/launcher/launcher").then((m) => m.LauncherViewModel));
+LazyRegistry.set("tsunami", () => import("@/app/view/tsunami/tsunami").then((m) => m.TsunamiViewModel));
+LazyRegistry.set("waveconfig", () => import("../view/waveconfig/waveconfig-model").then((m) => m.WaveConfigViewModel));
 
 function makeViewModel(blockId: string, blockView: string, nodeModel: BlockNodeModel, tabModel: TabModel): ViewModel {
-    const ctor = BlockRegistry.get(blockView);
-    if (ctor != null) {
+    const eagerCtor = EagerRegistry.get(blockView);
+    if (eagerCtor != null) {
+        return new eagerCtor(blockId, nodeModel, tabModel);
+    }
+    // Check if lazy ctor was already loaded
+    const cachedCtor = lazyCtorCache.get(blockView);
+    if (cachedCtor != null) {
+        return new cachedCtor(blockId, nodeModel, tabModel);
+    }
+    return makeDefaultViewModel(blockId, blockView);
+}
+
+async function makeViewModelAsync(
+    blockId: string,
+    blockView: string,
+    nodeModel: BlockNodeModel,
+    tabModel: TabModel
+): Promise<ViewModel> {
+    const eagerCtor = EagerRegistry.get(blockView);
+    if (eagerCtor != null) {
+        return new eagerCtor(blockId, nodeModel, tabModel);
+    }
+    const lazyLoader = LazyRegistry.get(blockView);
+    if (lazyLoader != null) {
+        let ctor = lazyCtorCache.get(blockView);
+        if (ctor == null) {
+            ctor = await lazyLoader();
+            lazyCtorCache.set(blockView, ctor);
+        }
         return new ctor(blockId, nodeModel, tabModel);
     }
     return makeDefaultViewModel(blockId, blockView);
@@ -263,19 +288,46 @@ const Block = memo((props: BlockProps) => {
     counterInc("render-Block-" + props.nodeModel?.blockId?.substring(0, 8));
     const tabModel = useTabModel();
     const [blockData, loading] = useWaveObjectValue<Block>(makeORef("block", props.nodeModel.blockId));
+    const blockView = blockData?.meta?.view;
     const bcm = getBlockComponentModel(props.nodeModel.blockId);
-    let viewModel = bcm?.viewModel;
-    if (viewModel == null || viewModel.viewType != blockData?.meta?.view) {
-        viewModel = makeViewModel(props.nodeModel.blockId, blockData?.meta?.view, props.nodeModel, tabModel);
-        registerBlockComponentModel(props.nodeModel.blockId, { viewModel });
-    }
+    const [viewModel, setViewModel] = useState<ViewModel | null>(bcm?.viewModel ?? null);
+    const [lazyLoading, setLazyLoading] = useState(false);
+
+    useEffect(() => {
+        if (loading || isBlank(props.nodeModel.blockId) || blockData == null) return;
+        const existing = getBlockComponentModel(props.nodeModel.blockId)?.viewModel;
+        if (existing != null && existing.viewType === blockView) {
+            setViewModel(existing);
+            return;
+        }
+        // Try sync first (eager or cached lazy)
+        const syncVm = makeViewModel(props.nodeModel.blockId, blockView, props.nodeModel, tabModel);
+        if (syncVm.viewComponent != null || !LazyRegistry.has(blockView)) {
+            registerBlockComponentModel(props.nodeModel.blockId, { viewModel: syncVm });
+            setViewModel(syncVm);
+            return;
+        }
+        // Need async load
+        setLazyLoading(true);
+        makeViewModelAsync(props.nodeModel.blockId, blockView, props.nodeModel, tabModel).then((vm) => {
+            registerBlockComponentModel(props.nodeModel.blockId, { viewModel: vm });
+            setViewModel(vm);
+            setLazyLoading(false);
+        });
+    }, [props.nodeModel.blockId, blockView, loading, blockData == null]);
+
+    const viewModelRef = useRef<ViewModel | null>(viewModel);
+    useEffect(() => {
+        viewModelRef.current = viewModel;
+    }, [viewModel]);
+
     useEffect(() => {
         return () => {
             unregisterBlockComponentModel(props.nodeModel.blockId);
-            viewModel?.dispose?.();
+            viewModelRef.current?.dispose?.();
         };
     }, []);
-    if (loading || isBlank(props.nodeModel.blockId) || blockData == null) {
+    if (loading || isBlank(props.nodeModel.blockId) || blockData == null || viewModel == null || lazyLoading) {
         return null;
     }
     if (props.preview) {
@@ -289,19 +341,44 @@ const SubBlock = memo((props: SubBlockProps) => {
     counterInc("render-Block-" + props.nodeModel?.blockId?.substring(0, 8));
     const tabModel = useTabModel();
     const [blockData, loading] = useWaveObjectValue<Block>(makeORef("block", props.nodeModel.blockId));
+    const blockView = blockData?.meta?.view;
     const bcm = getBlockComponentModel(props.nodeModel.blockId);
-    let viewModel = bcm?.viewModel;
-    if (viewModel == null || viewModel.viewType != blockData?.meta?.view) {
-        viewModel = makeViewModel(props.nodeModel.blockId, blockData?.meta?.view, props.nodeModel, tabModel);
-        registerBlockComponentModel(props.nodeModel.blockId, { viewModel });
-    }
+    const [viewModel, setViewModel] = useState<ViewModel | null>(bcm?.viewModel ?? null);
+    const [lazyLoading, setLazyLoading] = useState(false);
+
+    useEffect(() => {
+        if (loading || isBlank(props.nodeModel.blockId) || blockData == null) return;
+        const existing = getBlockComponentModel(props.nodeModel.blockId)?.viewModel;
+        if (existing != null && existing.viewType === blockView) {
+            setViewModel(existing);
+            return;
+        }
+        const syncVm = makeViewModel(props.nodeModel.blockId, blockView, props.nodeModel, tabModel);
+        if (syncVm.viewComponent != null || !LazyRegistry.has(blockView)) {
+            registerBlockComponentModel(props.nodeModel.blockId, { viewModel: syncVm });
+            setViewModel(syncVm);
+            return;
+        }
+        setLazyLoading(true);
+        makeViewModelAsync(props.nodeModel.blockId, blockView, props.nodeModel, tabModel).then((vm) => {
+            registerBlockComponentModel(props.nodeModel.blockId, { viewModel: vm });
+            setViewModel(vm);
+            setLazyLoading(false);
+        });
+    }, [props.nodeModel.blockId, blockView, loading, blockData == null]);
+
+    const viewModelRef = useRef<ViewModel | null>(viewModel);
+    useEffect(() => {
+        viewModelRef.current = viewModel;
+    }, [viewModel]);
+
     useEffect(() => {
         return () => {
             unregisterBlockComponentModel(props.nodeModel.blockId);
-            viewModel?.dispose?.();
+            viewModelRef.current?.dispose?.();
         };
     }, []);
-    if (loading || isBlank(props.nodeModel.blockId) || blockData == null) {
+    if (loading || isBlank(props.nodeModel.blockId) || blockData == null || viewModel == null || lazyLoading) {
         return null;
     }
     return <BlockSubBlock {...props} viewModel={viewModel} />;

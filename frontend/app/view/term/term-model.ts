@@ -41,6 +41,44 @@ import { getBlockingCommand } from "./shellblocking";
 import { computeTheme, DefaultTermTheme } from "./termutil";
 import { TermWrap } from "./termwrap";
 
+const INPUT_BATCH_DELAY_MS = 2;
+const CONTROL_CHAR_RE = /[\r\n\t\x00-\x1f]/;
+
+class InputBatcher {
+    private buffer: string = "";
+    private timer: ReturnType<typeof setTimeout> | null = null;
+    private flushFn: (data: string) => void;
+
+    constructor(flushFn: (data: string) => void) {
+        this.flushFn = flushFn;
+    }
+
+    write(data: string): void {
+        this.buffer += data;
+        if (CONTROL_CHAR_RE.test(data)) {
+            this.flush();
+        } else if (!this.timer) {
+            this.timer = setTimeout(() => this.flush(), INPUT_BATCH_DELAY_MS);
+        }
+    }
+
+    flush(): void {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        if (this.buffer.length > 0) {
+            const data = this.buffer;
+            this.buffer = "";
+            this.flushFn(data);
+        }
+    }
+
+    dispose(): void {
+        this.flush();
+    }
+}
+
 export class TermViewModel implements ViewModel {
     viewType: string;
     nodeModel: BlockNodeModel;
@@ -76,14 +114,20 @@ export class TermViewModel implements ViewModel {
     blockJobStatusUnsubFn: () => void;
     termBPMUnsubFn: () => void;
     isCmdController: jotai.Atom<boolean>;
+    shellProcStatusReceived: boolean;
     isRestarting: jotai.PrimitiveAtom<boolean>;
     termDurableStatus: jotai.Atom<BlockJobStatusData | null>;
     termConfigedDurable: jotai.Atom<null | boolean>;
     searchAtoms?: SearchAtoms;
+    inputBatcher: InputBatcher;
 
     constructor(blockId: string, nodeModel: BlockNodeModel, tabModel: TabModel) {
         this.viewType = "term";
         this.blockId = blockId;
+        this.inputBatcher = new InputBatcher((data) => {
+            const b64data = stringToBase64(data);
+            RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, inputdata64: b64data });
+        });
         this.tabModel = tabModel;
         this.termWshClient = new TermWshClient(blockId, this);
         DefaultRouter.registerRoute(makeFeBlockRouteId(blockId), this.termWshClient);
@@ -316,9 +360,11 @@ export class TermViewModel implements ViewModel {
             return get(controllerMetaAtom) == "cmd";
         });
         this.shellProcFullStatus = jotai.atom(null) as jotai.PrimitiveAtom<BlockControllerRuntimeStatus>;
+        this.shellProcStatusReceived = false;
         const initialShellProcStatus = services.BlockService.GetControllerStatus(blockId);
         initialShellProcStatus.then((rts) => {
             this.updateShellProcStatus(rts);
+            this.shellProcStatusReceived = true;
         });
         this.shellProcStatusUnsubFn = waveEventSubscribe({
             eventType: "controllerstatus",
@@ -326,6 +372,7 @@ export class TermViewModel implements ViewModel {
             handler: (event) => {
                 let bcRTS: BlockControllerRuntimeStatus = event.data;
                 this.updateShellProcStatus(bcRTS);
+                this.shellProcStatusReceived = true;
             },
         });
         this.shellProcStatus = jotai.atom((get) => {
@@ -441,8 +488,7 @@ export class TermViewModel implements ViewModel {
     }
 
     sendDataToController(data: string) {
-        const b64data = stringToBase64(data);
-        RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, inputdata64: b64data });
+        this.inputBatcher.write(data);
     }
 
     setTermMode(mode: "term" | "vdom") {
@@ -512,6 +558,7 @@ export class TermViewModel implements ViewModel {
         this.shellProcStatusUnsubFn?.();
         this.blockJobStatusUnsubFn?.();
         this.termBPMUnsubFn?.();
+        this.inputBatcher?.dispose();
     }
 
     giveFocus(): boolean {
@@ -687,7 +734,11 @@ export class TermViewModel implements ViewModel {
             return false;
         }
         const shellProcStatus = globalStore.get(this.shellProcStatus);
-        if ((shellProcStatus == "done" || shellProcStatus == "init") && keyutil.checkKeyPressed(waveEvent, "Enter")) {
+        if (
+            this.shellProcStatusReceived &&
+            (shellProcStatus == "done" || shellProcStatus == "init") &&
+            keyutil.checkKeyPressed(waveEvent, "Enter")
+        ) {
             fireAndForget(() => this.forceRestartController());
             return false;
         }

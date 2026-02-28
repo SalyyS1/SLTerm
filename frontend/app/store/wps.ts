@@ -1,8 +1,8 @@
 // Copyright 2025, Salyvn.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WshClient } from "@/app/store/wshclient";
 import { ipcBatcher } from "@/app/store/ipc-batcher";
+import type { WshClient } from "@/app/store/wshclient";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { isBlank } from "@/util/util";
 import { Subject } from "rxjs";
@@ -92,11 +92,11 @@ function waveEventUnsubscribe(...unsubscribes: WaveEventUnsubscribe[]) {
     for (const unsubscribe of unsubscribes) {
         let subjects = waveEventSubjects.get(unsubscribe.eventType);
         if (subjects == null) {
-            return;
+            continue;
         }
         const idx = subjects.findIndex((s) => s.id === unsubscribe.id);
         if (idx === -1) {
-            return;
+            continue;
         }
         subjects.splice(idx, 1);
         if (subjects.length === 0) {

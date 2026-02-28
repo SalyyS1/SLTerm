@@ -578,7 +578,7 @@ async function replaceBlock(blockId: string, blockDef: BlockDef, focus: boolean)
     const newBlockId = await ObjectService.CreateBlock(blockDef, rtOpts);
     setTimeout(() => {
         fireAndForget(() => ObjectService.DeleteBlock(blockId));
-    }, 300);
+    }, 50);
     const targetNodeId = layoutModel.getNodeByBlockId(blockId)?.id;
     if (targetNodeId == null) {
         throw new Error(`targetNodeId not found for blockId: ${blockId}`);
@@ -702,6 +702,10 @@ function registerBlockComponentModel(blockId: string, bcm: BlockComponentModel) 
 
 function unregisterBlockComponentModel(blockId: string) {
     blockComponentModelMap.delete(blockId);
+    // Clean up per-block atom caches to prevent memory leaks
+    const blockORef = WOS.makeORef("block", blockId);
+    orefAtomCache.delete(blockORef);
+    blockCache.delete(blockId);
 }
 
 function getBlockComponentModel(blockId: string): BlockComponentModel {

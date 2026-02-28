@@ -150,6 +150,13 @@ export class WaveTabView extends WebContentsView {
         });
         this.waveReadyPromise = new Promise((resolve, _) => {
             this.waveReadyResolve = resolve;
+            // Timeout: auto-resolve after 15s to prevent infinite hang if frontend init fails
+            setTimeout(() => {
+                if (!this.isWaveReady) {
+                    console.error("waveReadyPromise timeout (15s) for tab, force-resolving");
+                    resolve();
+                }
+            }, 15000);
         });
         this.waveReadyPromise.then(() => {
             this.isWaveReady = true;

@@ -46,6 +46,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/wslconn"
 	"github.com/SalyyS1/SLTerm/pkg/wstore"
 	"github.com/joho/godotenv"
+	"golang.org/x/sync/errgroup"
 
 	"net/http"
 	_ "net/http/pprof"
@@ -517,14 +518,16 @@ func main() {
 	log.Printf("wave version: %s (%s)\n", WaveVersion, BuildTime)
 	log.Printf("wave data dir: %s\n", wavebase.GetWaveDataDir())
 	log.Printf("wave config dir: %s\n", wavebase.GetWaveConfigDir())
-	err = filestore.InitFilestore()
-	if err != nil {
-		log.Printf("error initializing filestore: %v\n", err)
-		return
-	}
-	err = wstore.InitWStore()
-	if err != nil {
-		log.Printf("error initializing wstore: %v\n", err)
+	// Parallelize filestore + wstore init (separate SQLite databases: filestore.db / slterm.db)
+	var g errgroup.Group
+	g.Go(func() error {
+		return filestore.InitFilestore()
+	})
+	g.Go(func() error {
+		return wstore.InitWStore()
+	})
+	if err = g.Wait(); err != nil {
+		log.Printf("error initializing stores: %v\n", err)
 		return
 	}
 	panichandler.PanicTelemetryHandler = panicTelemetryHandler

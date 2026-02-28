@@ -153,6 +153,30 @@ export default defineConfig({
                         if (p.includes("node_modules/jotai")) return "jotai";
                         // React runtime — always needed, cache-friendly separate chunk
                         if (p.includes("node_modules/react-dom") || p.includes("node_modules/react/")) return "react-core";
+                        // Markdown ecosystem — only needed when markdown blocks render
+                        if (
+                            p.includes("node_modules/react-markdown") ||
+                            p.includes("node_modules/remark-") ||
+                            p.includes("node_modules/rehype-") ||
+                            p.includes("node_modules/unified") ||
+                            p.includes("node_modules/mdast-") ||
+                            p.includes("node_modules/hast-") ||
+                            p.includes("node_modules/unist-") ||
+                            p.includes("node_modules/micromark") ||
+                            p.includes("node_modules/devlop") ||
+                            p.includes("node_modules/vfile")
+                        )
+                            return "markdown-libs";
+                        // DnD — only needed for tile layout drag interactions
+                        if (p.includes("node_modules/react-dnd") || p.includes("node_modules/dnd-core"))
+                            return "dnd-libs";
+                        // i18n — load separately from core UI
+                        if (p.includes("node_modules/i18next") || p.includes("node_modules/react-i18next"))
+                            return "i18n-libs";
+                        // Floating UI — used by tooltips, popovers, widgets
+                        if (p.includes("node_modules/@floating-ui")) return "floating-ui";
+                        // Overlay scrollbars
+                        if (p.includes("node_modules/overlayscrollbars")) return "scrollbar-libs";
                         return undefined;
                     },
                 },

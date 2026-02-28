@@ -48,7 +48,16 @@ const THEME_COLOR_GROUPS = [
     },
     {
         label: "Bright Colors",
-        fields: ["brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite"],
+        fields: [
+            "brightBlack",
+            "brightRed",
+            "brightGreen",
+            "brightYellow",
+            "brightBlue",
+            "brightMagenta",
+            "brightCyan",
+            "brightWhite",
+        ],
     },
 ];
 
@@ -68,7 +77,12 @@ async function readCustomThemes(): Promise<Record<string, TermThemeType>> {
 
 async function writeCustomThemes(themes: Record<string, TermThemeType>): Promise<void> {
     const configDir = getApi().getConfigDir();
-    const filePath = `${configDir}/${CUSTOM_THEMES_FILE}`;
+    const dirPath = `${configDir}/termthemes`;
+    const filePath = `${dirPath}/custom.json`;
+    // Ensure termthemes directory exists
+    await RpcApi.FileMkdirCommand(TabRpcClient, {
+        info: { path: dirPath },
+    });
     await RpcApi.FileWriteCommand(TabRpcClient, {
         info: { path: filePath },
         data64: stringToBase64(JSON.stringify(themes, null, 2)),
@@ -114,12 +128,8 @@ const ThemeCard = memo(
                     gap: "6px",
                     padding: "10px",
                     borderRadius: "8px",
-                    border: isActive
-                        ? "2px solid var(--accent-color)"
-                        : "1px solid var(--border-color)",
-                    background: isActive
-                        ? "rgba(var(--accent-color-rgb, 88, 193, 66), 0.08)"
-                        : "transparent",
+                    border: isActive ? "2px solid var(--accent-color)" : "1px solid var(--border-color)",
+                    background: isActive ? "rgba(var(--accent-color-rgb, 88, 193, 66), 0.08)" : "transparent",
                     cursor: "pointer",
                     transition: "all 0.2s ease",
                     transform: "scale(1)",
@@ -254,184 +264,187 @@ const ThemeCard = memo(
 ThemeCard.displayName = "ThemeCard";
 
 // ---- Create theme form ----
-const CreateThemeForm = memo(
-    ({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) => {
-        const [themeName, setThemeName] = useState("");
-        const [colors, setColors] = useState<TermThemeType>({ ...DEFAULT_NEW_THEME });
-        const [saving, setSaving] = useState(false);
+const CreateThemeForm = memo(({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) => {
+    const [themeName, setThemeName] = useState("");
+    const [colors, setColors] = useState<TermThemeType>({ ...DEFAULT_NEW_THEME });
+    const [saving, setSaving] = useState(false);
 
-        const updateColor = useCallback((field: string, value: string) => {
-            setColors((prev) => ({ ...prev, [field]: value }));
-        }, []);
+    const updateColor = useCallback((field: string, value: string) => {
+        setColors((prev) => ({ ...prev, [field]: value }));
+    }, []);
 
-        const handleSave = useCallback(async () => {
-            if (!themeName.trim()) return;
-            setSaving(true);
-            try {
-                const sanitizedKey = themeName
-                    .toLowerCase()
-                    .replace(/[^a-z0-9-]/g, "-")
-                    .replace(/-+/g, "-")
-                    .replace(/^-|-$/g, "");
-                const key = `custom-${sanitizedKey}`;
-                const existing = await readCustomThemes();
-                existing[key] = { ...colors, "display:name": themeName.trim() };
-                await writeCustomThemes(existing);
-                writeSetting("term:theme", key);
-                onSave();
-            } finally {
-                setSaving(false);
-            }
-        }, [themeName, colors, onSave]);
+    const handleSave = useCallback(async () => {
+        if (!themeName.trim()) return;
+        setSaving(true);
+        try {
+            const sanitizedKey = themeName
+                .toLowerCase()
+                .replace(/[^a-z0-9-]/g, "-")
+                .replace(/-+/g, "-")
+                .replace(/^-|-$/g, "");
+            const key = `custom-${sanitizedKey}`;
+            const existing = await readCustomThemes();
+            existing[key] = { ...colors, "display:name": themeName.trim() };
+            await writeCustomThemes(existing);
+            writeSetting("term:theme", key);
+            onSave();
+        } finally {
+            setSaving(false);
+        }
+    }, [themeName, colors, onSave]);
 
-        return (
+    return (
+        <div
+            style={{
+                gridColumn: "1 / -1",
+                border: "1px solid var(--accent-color)",
+                borderRadius: "8px",
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                background: "rgba(var(--accent-color-rgb, 88, 193, 66), 0.03)",
+            }}
+        >
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent-color)" }}>Create Custom Theme</div>
+
+            {/* Theme name */}
+            <input
+                type="text"
+                value={themeName}
+                onChange={(e) => setThemeName(e.target.value)}
+                placeholder="Theme name..."
+                style={{
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--form-element-border-color)",
+                    background: "var(--form-element-bg-color)",
+                    color: "var(--main-text-color)",
+                    fontSize: "12px",
+                    outline: "none",
+                }}
+            />
+
+            {/* Live mini preview */}
             <div
                 style={{
-                    gridColumn: "1 / -1",
-                    border: "1px solid var(--accent-color)",
-                    borderRadius: "8px",
-                    padding: "16px",
+                    background: colors.background || "#000",
+                    borderRadius: "6px",
+                    padding: "8px 10px",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "12px",
-                    background: "rgba(var(--accent-color-rgb, 88, 193, 66), 0.03)",
+                    gap: "4px",
                 }}
             >
-                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--accent-color)" }}>
-                    Create Custom Theme
+                <div style={{ display: "flex", gap: "3px" }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.red }} />
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.yellow }} />
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.green }} />
                 </div>
+                <div style={{ display: "flex", gap: "2px", flexWrap: "wrap" }}>
+                    {[
+                        colors.black,
+                        colors.red,
+                        colors.green,
+                        colors.yellow,
+                        colors.blue,
+                        colors.magenta,
+                        colors.cyan,
+                        colors.white,
+                    ].map((c, i) => (
+                        <div key={i} style={{ width: 14, height: 10, borderRadius: 2, background: c || "#333" }} />
+                    ))}
+                </div>
+                <span style={{ fontFamily: "monospace", fontSize: "9px", color: colors.foreground, opacity: 0.7 }}>
+                    $ hello world
+                </span>
+            </div>
 
-                {/* Theme name */}
-                <input
-                    type="text"
-                    value={themeName}
-                    onChange={(e) => setThemeName(e.target.value)}
-                    placeholder="Theme name..."
-                    style={{
-                        padding: "6px 10px",
-                        borderRadius: "6px",
-                        border: "1px solid var(--form-element-border-color)",
-                        background: "var(--form-element-bg-color)",
-                        color: "var(--main-text-color)",
-                        fontSize: "12px",
-                        outline: "none",
-                    }}
-                />
+            {/* Color groups */}
+            {THEME_COLOR_GROUPS.map((group) => (
+                <div key={group.label}>
+                    <div
+                        style={{
+                            fontSize: "10px",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em",
+                            color: "var(--secondary-text-color)",
+                            marginBottom: "6px",
+                        }}
+                    >
+                        {group.label}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {group.fields.map((field) => (
+                            <label
+                                key={field}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    fontSize: "10px",
+                                    color: "var(--secondary-text-color)",
+                                }}
+                            >
+                                <input
+                                    type="color"
+                                    value={(colors as any)[field] || "#000000"}
+                                    onChange={(e) => updateColor(field, e.target.value)}
+                                    style={{
+                                        width: "22px",
+                                        height: "22px",
+                                        border: "1px solid var(--border-color)",
+                                        borderRadius: "4px",
+                                        padding: 0,
+                                        cursor: "pointer",
+                                        background: "transparent",
+                                    }}
+                                />
+                                {field}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            ))}
 
-                {/* Live mini preview */}
-                <div
+            {/* Actions */}
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <button
+                    onClick={onCancel}
                     style={{
-                        background: colors.background || "#000",
+                        padding: "5px 14px",
                         borderRadius: "6px",
-                        padding: "8px 10px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "4px",
+                        border: "1px solid var(--border-color)",
+                        background: "transparent",
+                        color: "var(--secondary-text-color)",
+                        fontSize: "11px",
+                        cursor: "pointer",
                     }}
                 >
-                    <div style={{ display: "flex", gap: "3px" }}>
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.red }} />
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.yellow }} />
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: colors.green }} />
-                    </div>
-                    <div style={{ display: "flex", gap: "2px", flexWrap: "wrap" }}>
-                        {[colors.black, colors.red, colors.green, colors.yellow, colors.blue, colors.magenta, colors.cyan, colors.white].map(
-                            (c, i) => (
-                                <div key={i} style={{ width: 14, height: 10, borderRadius: 2, background: c || "#333" }} />
-                            )
-                        )}
-                    </div>
-                    <span style={{ fontFamily: "monospace", fontSize: "9px", color: colors.foreground, opacity: 0.7 }}>
-                        $ hello world
-                    </span>
-                </div>
-
-                {/* Color groups */}
-                {THEME_COLOR_GROUPS.map((group) => (
-                    <div key={group.label}>
-                        <div
-                            style={{
-                                fontSize: "10px",
-                                fontWeight: 600,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.05em",
-                                color: "var(--secondary-text-color)",
-                                marginBottom: "6px",
-                            }}
-                        >
-                            {group.label}
-                        </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                            {group.fields.map((field) => (
-                                <label
-                                    key={field}
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "4px",
-                                        fontSize: "10px",
-                                        color: "var(--secondary-text-color)",
-                                    }}
-                                >
-                                    <input
-                                        type="color"
-                                        value={(colors as any)[field] || "#000000"}
-                                        onChange={(e) => updateColor(field, e.target.value)}
-                                        style={{
-                                            width: "22px",
-                                            height: "22px",
-                                            border: "1px solid var(--border-color)",
-                                            borderRadius: "4px",
-                                            padding: 0,
-                                            cursor: "pointer",
-                                            background: "transparent",
-                                        }}
-                                    />
-                                    {field}
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-                ))}
-
-                {/* Actions */}
-                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                    <button
-                        onClick={onCancel}
-                        style={{
-                            padding: "5px 14px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border-color)",
-                            background: "transparent",
-                            color: "var(--secondary-text-color)",
-                            fontSize: "11px",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={!themeName.trim() || saving}
-                        style={{
-                            padding: "5px 14px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--accent-color)",
-                            background: "rgba(var(--accent-color-rgb, 88, 193, 66), 0.15)",
-                            color: "var(--accent-color)",
-                            fontSize: "11px",
-                            fontWeight: 600,
-                            cursor: themeName.trim() ? "pointer" : "not-allowed",
-                            opacity: themeName.trim() ? 1 : 0.5,
-                        }}
-                    >
-                        {saving ? "Saving..." : "Save Theme"}
-                    </button>
-                </div>
+                    Cancel
+                </button>
+                <button
+                    onClick={handleSave}
+                    disabled={!themeName.trim() || saving}
+                    style={{
+                        padding: "5px 14px",
+                        borderRadius: "6px",
+                        border: "1px solid var(--accent-color)",
+                        background: "rgba(var(--accent-color-rgb, 88, 193, 66), 0.15)",
+                        color: "var(--accent-color)",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: themeName.trim() ? "pointer" : "not-allowed",
+                        opacity: themeName.trim() ? 1 : 0.5,
+                    }}
+                >
+                    {saving ? "Saving..." : "Save Theme"}
+                </button>
             </div>
-        );
-    }
-);
+        </div>
+    );
+});
 CreateThemeForm.displayName = "CreateThemeForm";
 
 // ---- Create theme button ----
@@ -463,7 +476,14 @@ const CreateThemeButton = memo(({ onClick }: { onClick: () => void }) => {
                 (e.currentTarget as HTMLElement).style.background = "transparent";
             }}
         >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--secondary-text-color)" strokeWidth="1.5">
+            <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--secondary-text-color)"
+                strokeWidth="1.5"
+            >
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span style={{ fontSize: "10px", color: "var(--secondary-text-color)" }}>Create Theme</span>
@@ -502,24 +522,24 @@ const ThemePicker = memo(() => {
     return (
         <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-2 @[500px]:grid-cols-3 @[700px]:grid-cols-4">
-                {sorted.map(([key, theme]) => (
-                    <ThemeCard
-                        key={key}
-                        themeKey={key}
-                        theme={theme}
-                        isActive={currentTheme === key}
-                        isCustom={key.startsWith("custom-")}
-                        onSelect={() => writeSetting("term:theme", key)}
-                        onDelete={() => handleDeleteCustomTheme(key)}
-                    />
-                ))}
+                {sorted.map(([key, theme]) => {
+                    const isCustomTheme = ((theme as any)["display:order"] ?? 999) >= 100;
+                    return (
+                        <ThemeCard
+                            key={key}
+                            themeKey={key}
+                            theme={theme}
+                            isActive={currentTheme === key}
+                            isCustom={isCustomTheme}
+                            onSelect={() => {
+                                writeSetting("term:theme", key);
+                            }}
+                            onDelete={() => handleDeleteCustomTheme(key)}
+                        />
+                    );
+                })}
                 <CreateThemeButton onClick={() => setShowForm(true)} />
-                {showForm && (
-                    <CreateThemeForm
-                        onSave={() => setShowForm(false)}
-                        onCancel={() => setShowForm(false)}
-                    />
-                )}
+                {showForm && <CreateThemeForm onSave={() => setShowForm(false)} onCancel={() => setShowForm(false)} />}
             </div>
         </div>
     );

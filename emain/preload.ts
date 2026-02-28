@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld("api", {
     nativePaste: () => ipcRenderer.send("native-paste"),
     openBuilder: (appId?: string) => ipcRenderer.send("open-builder", appId),
     setBuilderWindowAppId: (appId: string) => ipcRenderer.send("set-builder-window-appid", appId),
+    setFullScreen: (isFullScreen: boolean) => ipcRenderer.send("set-fullscreen", isFullScreen),
     doRefresh: () => ipcRenderer.send("do-refresh"),
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });

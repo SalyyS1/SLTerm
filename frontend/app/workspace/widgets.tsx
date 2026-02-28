@@ -313,12 +313,33 @@ const Widgets = memo(() => {
     const filteredWidgets = hasCustomAIPresets
         ? widgetsMap
         : Object.fromEntries(Object.entries(widgetsMap).filter(([key]) => key !== "defwidget@ai"));
-    const widgets = sortByDisplayOrder(filteredWidgets);
+    // Dedup widgets by view type (keep first by display order)
+    const dedupedWidgets = Object.fromEntries(
+        Object.entries(filteredWidgets).filter(([, widget]) => {
+            const view = widget?.blockdef?.meta?.view;
+            if (!view) return true;
+            // Check if a widget with same view and lower order already exists
+            const hasBetterDupe = Object.entries(filteredWidgets).some(
+                ([, other]) =>
+                    other !== widget &&
+                    other?.blockdef?.meta?.view === view &&
+                    (other["display:order"] ?? 0) < (widget["display:order"] ?? 0)
+            );
+            return !hasBetterDupe;
+        })
+    );
+    const widgets = sortByDisplayOrder(dedupedWidgets);
 
     const [isAppsOpen, setIsAppsOpen] = useState(false);
     const appsButtonRef = useRef<HTMLDivElement>(null);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const settingsButtonRef = useRef<HTMLDivElement>(null);
+    const openSettings = useCallback(() => {
+        const blockDef: BlockDef = {
+            meta: {
+                view: "waveconfig",
+            },
+        };
+        createBlock(blockDef, false, true);
+    }, []);
 
     const checkModeNeeded = useCallback(() => {
         if (!containerRef.current || !measurementRef.current) return;
@@ -417,15 +438,10 @@ const Widgets = memo(() => {
                                 </div>
                             ) : null}
                             <div
-                                ref={settingsButtonRef}
                                 className="flex flex-col justify-center items-center w-full py-1.5 pr-0.5 text-secondary text-sm overflow-hidden rounded-sm hover:bg-hoverbg hover:text-white cursor-pointer"
-                                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                                onClick={openSettings}
                             >
-                                <Tooltip
-                                    content={t("sidebar.settingsAndHelp")}
-                                    placement="left"
-                                    disable={isSettingsOpen}
-                                >
+                                <Tooltip content={t("sidebar.settings")} placement="left">
                                     <div>
                                         <i className={makeIconClass("gear", true)}></i>
                                     </div>
@@ -460,11 +476,10 @@ const Widgets = memo(() => {
                             </div>
                         ) : null}
                         <div
-                            ref={settingsButtonRef}
                             className="flex flex-col justify-center items-center w-full py-1.5 pr-0.5 text-secondary text-lg overflow-hidden rounded-sm hover:bg-hoverbg hover:text-white cursor-pointer"
-                            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                            onClick={openSettings}
                         >
-                            <Tooltip content={t("sidebar.settingsAndHelp")} placement="left" disable={isSettingsOpen}>
+                            <Tooltip content={t("sidebar.settings")} placement="left">
                                 <div>
                                     <i className={makeIconClass("gear", true)}></i>
                                 </div>
@@ -486,13 +501,6 @@ const Widgets = memo(() => {
                     isOpen={isAppsOpen}
                     onClose={() => setIsAppsOpen(false)}
                     referenceElement={appsButtonRef.current}
-                />
-            )}
-            {settingsButtonRef.current && (
-                <SettingsFloatingWindow
-                    isOpen={isSettingsOpen}
-                    onClose={() => setIsSettingsOpen(false)}
-                    referenceElement={settingsButtonRef.current}
                 />
             )}
 

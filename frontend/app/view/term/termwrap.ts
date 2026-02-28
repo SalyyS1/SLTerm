@@ -40,6 +40,9 @@ const TermCacheFileName = "cache:term:full";
 const MinDataProcessedForCache = 100 * 1024;
 export const SupportsImageInput = true;
 
+// Cached resolved promise to avoid GC pressure from creating new ones per write
+const RESOLVED_PROMISE: Promise<void> = Promise.resolve();
+
 // detect webgl support
 function detectWebGLSupport(): boolean {
     try {
@@ -83,28 +86,18 @@ class BatchedWriter {
 
     flush(): void {
         if (this.buffer.length > 0) {
-            // Join strings; pass Uint8Arrays individually since terminal.write handles both
             const chunks = this.buffer;
             this.buffer = [];
             if (chunks.length === 1) {
                 this.terminal.write(chunks[0] as any);
             } else {
-                // Merge all chunks: strings joined, Uint8Arrays concatenated separately
-                let strBuf = "";
+                // Consolidate all chunks into a single string for one terminal.write() call
+                const decoder = new TextDecoder();
+                let merged = "";
                 for (const chunk of chunks) {
-                    if (typeof chunk === "string") {
-                        strBuf += chunk;
-                    } else {
-                        if (strBuf) {
-                            this.terminal.write(strBuf);
-                            strBuf = "";
-                        }
-                        this.terminal.write(chunk);
-                    }
+                    merged += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
                 }
-                if (strBuf) {
-                    this.terminal.write(strBuf);
-                }
+                this.terminal.write(merged);
             }
         }
         if (this.timer) {
@@ -341,29 +334,27 @@ export class TermWrap {
         this.mainFileSubject = getFileSubject(this.getZoneId(), TermFileName);
         this.mainFileSubject.subscribe(this.handleNewFileSubjectData.bind(this));
 
-        try {
-            const rtInfo = await RpcApi.GetRTInfoCommand(TabRpcClient, {
+        // Run RPC info fetch and terminal data load in parallel for faster startup
+        const [rtInfo] = await Promise.all([
+            RpcApi.GetRTInfoCommand(TabRpcClient, {
                 oref: WOS.makeORef("block", this.blockId),
-            });
+            }).catch((e) => {
+                console.log("Error loading runtime info:", e);
+                return null;
+            }),
+            this.loadInitialTerminalData().finally(() => {
+                this.loaded = true;
+            }),
+        ]);
 
-            if (rtInfo && rtInfo["shell:integration"]) {
-                const shellState = rtInfo["shell:state"] as ShellIntegrationStatus;
-                globalStore.set(this.shellIntegrationStatusAtom, shellState || null);
-            } else {
-                globalStore.set(this.shellIntegrationStatusAtom, null);
-            }
-
-            const lastCmd = rtInfo ? rtInfo["shell:lastcmd"] : null;
-            globalStore.set(this.lastCommandAtom, lastCmd || null);
-        } catch (e) {
-            console.log("Error loading runtime info:", e);
+        if (rtInfo && rtInfo["shell:integration"]) {
+            const shellState = rtInfo["shell:state"] as ShellIntegrationStatus;
+            globalStore.set(this.shellIntegrationStatusAtom, shellState || null);
+        } else {
+            globalStore.set(this.shellIntegrationStatusAtom, null);
         }
-
-        try {
-            await this.loadInitialTerminalData();
-        } finally {
-            this.loaded = true;
-        }
+        const lastCmd = rtInfo ? rtInfo["shell:lastcmd"] : null;
+        globalStore.set(this.lastCommandAtom, lastCmd || null);
         performance.mark(`${perfId}-end`);
         performance.measure(`terminal-init-${this.blockId}`, `${perfId}-start`, `${perfId}-end`);
         const measure = performance.getEntriesByName(`terminal-init-${this.blockId}`, "measure")[0];
@@ -416,22 +407,21 @@ export class TermWrap {
         }
 
         // IME Deduplication (for Capslock input method switching)
-        // When switching input methods with Capslock during composition, some systems send the
-        // composed text twice. We allow the first send and block subsequent duplicates.
-        const IMEDedupWindowMs = 50;
-        const now = Date.now();
-        const timeSinceCompositionEnd = now - this.lastCompositionEnd;
-        if (timeSinceCompositionEnd < IMEDedupWindowMs && data === this.lastComposedText && this.lastComposedText) {
-            if (!this.firstDataAfterCompositionSent) {
-                // First send after composition - allow it but mark as sent
-                this.firstDataAfterCompositionSent = true;
-                dlog("First data after composition, allowing:", data);
-            } else {
-                // Second send of the same data - this is a duplicate from Capslock switching, block it
-                dlog("Blocked duplicate IME data:", data);
-                this.lastComposedText = ""; // Clear to allow same text to be typed again later
-                this.firstDataAfterCompositionSent = false;
-                return;
+        // Skip entirely if no composition has ever occurred (fast path for non-IME users)
+        if (this.lastCompositionEnd > 0) {
+            const IMEDedupWindowMs = 30;
+            const now = Date.now();
+            const timeSinceCompositionEnd = now - this.lastCompositionEnd;
+            if (timeSinceCompositionEnd < IMEDedupWindowMs && data === this.lastComposedText && this.lastComposedText) {
+                if (!this.firstDataAfterCompositionSent) {
+                    this.firstDataAfterCompositionSent = true;
+                    dlog("First data after composition, allowing:", data);
+                } else {
+                    dlog("Blocked duplicate IME data:", data);
+                    this.lastComposedText = "";
+                    this.firstDataAfterCompositionSent = false;
+                    return;
+                }
             }
         }
 
@@ -466,22 +456,16 @@ export class TermWrap {
     }
 
     doTerminalWrite(data: string | Uint8Array, setPtyOffset?: number): Promise<void> {
-        let resolve: () => void = null;
-        let prtn = new Promise<void>((presolve, _) => {
-            resolve = presolve;
-        });
-        // Use batched writer for output; callback runs after the batch flushes
-        this.terminal.write(data, () => {
-            if (setPtyOffset != null) {
-                this.ptyOffset = setPtyOffset;
-            } else {
-                this.ptyOffset += data.length;
-                this.dataBytesProcessed += data.length;
-            }
-            this.lastUpdated = Date.now();
-            resolve();
-        });
-        return prtn;
+        // Route through batched writer to coalesce high-throughput output
+        this.batchedWriter.write(data);
+        if (setPtyOffset != null) {
+            this.ptyOffset = setPtyOffset;
+        } else {
+            this.ptyOffset += data.length;
+            this.dataBytesProcessed += data.length;
+        }
+        this.lastUpdated = Date.now();
+        return RESOLVED_PROMISE;
     }
 
     async loadInitialTerminalData(): Promise<void> {
@@ -511,9 +495,7 @@ export class TermWrap {
             }
         }
         const { data: mainData, fileInfo: mainFile } = await fetchWaveFile(zoneId, TermFileName, ptyOffset);
-        console.log(
-            `terminal loaded cachefile:${cacheData?.byteLength ?? 0} main:${mainData?.byteLength ?? 0} bytes`
-        );
+        console.log(`terminal loaded cachefile:${cacheData?.byteLength ?? 0} main:${mainData?.byteLength ?? 0} bytes`);
         performance.mark(`${loadPerfId}-end`);
         performance.measure(`terminal-load-${this.blockId}`, `${loadPerfId}-start`, `${loadPerfId}-end`);
         if (mainFile != null) {
@@ -539,6 +521,11 @@ export class TermWrap {
 
     async attachWebGL(): Promise<void> {
         if (this.webglAddon) return;
+        // Skip WebGL when transparency is enabled — WebGL canvas is always opaque
+        // and hides any background image/color set behind the terminal
+        if (this.terminal.options.allowTransparency) {
+            return;
+        }
         try {
             const { WebglAddon } = await import("@xterm/addon-webgl");
             this.webglAddon = new WebglAddon();
@@ -546,6 +533,8 @@ export class TermWrap {
                 // On GPU context loss, dispose and null so next attach re-creates it
                 this.webglAddon?.dispose();
                 this.webglAddon = null;
+                // Force a re-render to clear stale visuals from the lost context
+                this.terminal.refresh(0, this.terminal.rows - 1);
             });
             this.terminal.loadAddon(this.webglAddon);
             if (!loggedWebGL) {

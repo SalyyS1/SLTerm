@@ -260,7 +260,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         const termTransparency = globalStore.get(model.termTransparencyAtom);
         const termMacOptionIsMetaAtom = getOverrideConfigAtom(blockId, "term:macoptionismeta");
         const [termTheme, _] = computeTheme(fullConfig, termThemeName, termTransparency);
-        let termScrollback = 500; // reduced from 2000; configurable via term:scrollback setting
+        let termScrollback = 2000; // default scrollback; configurable via term:scrollback setting
         if (termSettings?.["term:scrollback"]) {
             termScrollback = Math.floor(termSettings["term:scrollback"]);
         }
@@ -276,6 +276,10 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         const termAllowBPM = globalStore.get(model.termBPMAtom) ?? true;
         const termMacOptionIsMeta = globalStore.get(termMacOptionIsMetaAtom) ?? false;
         const wasFocused = model.termRef.current != null && globalStore.get(model.nodeModel.isFocused);
+        // Only enable allowTransparency when user has transparency or a background configured
+        // When enabled, WebGL is skipped (opaque canvas) and canvas renderer is used (slower)
+        const hasBg = !!blockData?.meta?.["bg"];
+        const needsTransparency = hasBg || (termTransparency != null && termTransparency > 0 && termTransparency < 1);
         const termWrap = new TermWrap(
             tabModel.tabId,
             blockId,
@@ -287,7 +291,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
                 drawBoldTextInBrightColors: false,
                 fontWeight: "normal",
                 fontWeightBold: "bold",
-                allowTransparency: true,
+                allowTransparency: needsTransparency,
                 scrollback: termScrollback,
                 allowProposedApi: true, // Required by @xterm/addon-search to enable search functionality and decorations
                 ignoreBracketedPasteMode: !termAllowBPM,

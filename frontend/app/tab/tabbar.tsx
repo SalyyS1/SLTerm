@@ -299,9 +299,9 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
     }, [reinitVersion]);
 
     useEffect(() => {
-        window.addEventListener("resize", () => handleResizeTabs());
+        window.addEventListener("resize", handleResizeTabs);
         return () => {
-            window.removeEventListener("resize", () => handleResizeTabs());
+            window.removeEventListener("resize", handleResizeTabs);
         };
     }, [handleResizeTabs]);
 
@@ -568,8 +568,13 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
     const handleCloseTab = (event: React.MouseEvent<HTMLButtonElement, MouseEvent> | null, tabId: string) => {
         event?.stopPropagation();
         const ws = globalStore.get(atoms.workspace);
+        if (ws == null) {
+            return;
+        }
+        // Optimistically remove tab from local state immediately (backend WPS update is delayed)
+        setTabIds((prev) => prev.filter((id) => id !== tabId));
         getApi().closeTab(ws.oid, tabId);
-        tabsWrapperRef.current.style.setProperty("--tabs-wrapper-transition", "width 0.3s ease");
+        tabsWrapperRef.current?.style.setProperty("--tabs-wrapper-transition", "width 0.3s ease");
         deleteLayoutModelForTab(tabId);
     };
 
@@ -665,6 +670,14 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
             <IconButton className="add-tab" ref={addBtnRef} decl={addtabButtonDecl} />
             <div className="tab-bar-right">
                 <ConfigErrorIcon buttonRef={configErrorButtonRef} />
+                <div
+                    className="flex items-center justify-center px-1.5 cursor-pointer text-secondary hover:text-primary"
+                    style={{ WebkitAppRegion: "no-drag", fontSize: "14px" } as React.CSSProperties}
+                    title={isFullScreen ? "Exit Fullscreen" : "Fullscreen"}
+                    onClick={() => getApi().setFullScreen(!isFullScreen)}
+                >
+                    <i className={isFullScreen ? "fa-sharp fa-solid fa-compress" : "fa-sharp fa-solid fa-expand"} />
+                </div>
                 <div
                     ref={draggerRightRef}
                     className="h-full shrink-0 z-window-drag"

@@ -48,6 +48,8 @@ class WSControl {
     noReconnect: boolean = false;
     onOpenTimeoutId: NodeJS.Timeout = null;
 
+    private pingIntervalId: ReturnType<typeof setInterval> | null = null;
+
     constructor(
         baseHostPort: string,
         stableId: string,
@@ -59,11 +61,15 @@ class WSControl {
         this.stableId = stableId;
         this.open = false;
         this.eoOpts = electronOverrideOpts;
-        setInterval(this.sendPing.bind(this), 5000);
+        this.pingIntervalId = setInterval(this.sendPing.bind(this), 5000);
     }
 
     shutdown() {
         this.noReconnect = true;
+        if (this.pingIntervalId) {
+            clearInterval(this.pingIntervalId);
+            this.pingIntervalId = null;
+        }
         this.wsConn.close();
     }
 
@@ -82,6 +88,7 @@ class WSControl {
                   }
                 : null
         );
+        this.wsConn.binaryType = "arraybuffer";
         this.wsConn.onopen = (e: Event) => {
             this.onopen(e);
         };
@@ -106,7 +113,7 @@ class WSControl {
             return;
         }
         this.reconnectTimes++;
-        if (this.reconnectTimes > 20) {
+        if (this.reconnectTimes > 50) {
             dlog("cannot connect, giving up");
             return;
         }
@@ -161,24 +168,80 @@ class WSControl {
         if (!this.open) {
             return;
         }
-        if (this.msgQueue.length == 0) {
+        while (this.msgQueue.length > 0) {
+            const msg = this.msgQueue.shift();
+            this.sendMessage(msg);
+        }
+    }
+
+    decodeBinaryBatch(buf: Uint8Array) {
+        if (buf.byteLength < 4) {
             return;
         }
-        const msg = this.msgQueue.shift();
-        this.sendMessage(msg);
-        setTimeout(() => {
-            this.runMsgQueue();
-        }, 100);
+        const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+        const count = view.getUint32(0, true); // little-endian
+        let offset = 4;
+        for (let i = 0; i < count; i++) {
+            if (offset + 4 > buf.byteLength) break;
+            const msgLen = view.getUint32(offset, true);
+            offset += 4;
+            if (offset + msgLen > buf.byteLength) break;
+            const msgBytes = buf.subarray(offset, offset + msgLen);
+            offset += msgLen;
+            const msgStr = new TextDecoder().decode(msgBytes);
+            try {
+                const msgData = JSON.parse(msgStr);
+                this.processMessage(msgData);
+            } catch (e) {
+                console.log("[ws] error parsing batch message", i, e);
+            }
+        }
     }
 
     onmessage(event: MessageEvent) {
+        const data = event.data;
+        if (data == null) {
+            return;
+        }
+        // Binary batch frame: Go WSBatcher sends multiple messages in one BinaryMessage
+        // Wire format: [count:4B LE][len0:4B LE][msg0 bytes][len1:4B LE][msg1 bytes]...
+        if (typeof data !== "string") {
+            // Handle Blob — browser WebSocket default binary type
+            if (data instanceof Blob) {
+                data.arrayBuffer().then((ab) => {
+                    this.decodeBinaryBatch(new Uint8Array(ab));
+                });
+                return;
+            }
+            let buf: Uint8Array;
+            if (data instanceof ArrayBuffer) {
+                buf = new Uint8Array(data);
+            } else if (ArrayBuffer.isView(data)) {
+                buf = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+            } else if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) {
+                buf = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+            } else {
+                console.log("[ws] unknown binary data type, skipping", typeof data);
+                return;
+            }
+            this.decodeBinaryBatch(buf);
+            return;
+        }
+        // Text frame: single JSON message
         let eventData = null;
-        if (event.data != null) {
-            eventData = JSON.parse(event.data);
+        try {
+            eventData = JSON.parse(data);
+        } catch (e) {
+            console.log("[ws] error parsing text message", e);
+            return;
         }
         if (eventData == null) {
             return;
         }
+        this.processMessage(eventData);
+    }
+
+    processMessage(eventData: any) {
         if (eventData.type == "ping") {
             this.wsConn.send(JSON.stringify({ type: "pong", stime: Date.now() }));
             return;
@@ -208,7 +271,7 @@ class WSControl {
             return;
         }
         const msg = JSON.stringify(data);
-        const byteSize = new Blob([msg]).size;
+        const byteSize = msg.length * 3; // conservative upper bound (UTF-8 worst case)
         if (byteSize > MaxWebSocketSendSize) {
             console.log("ws message too large", byteSize, data.wscommand, msg.substring(0, 100));
             return;

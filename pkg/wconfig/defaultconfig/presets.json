@@ -155,137 +155,22 @@
         "bg:blendmode": "overlay",
         "bg:activebordercolor": "#cc0000"
     },
-    "bg@img-01": {
-        "display:name": "Image 01",
-        "display:order": 5.01,
+    "bg@kawaii-pink": {
+        "display:name": "🌸 Kawaii Pink",
+        "display:order": 4.7,
         "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-01.jpg')",
-        "bg:opacity": 0.3
+        "bg": "linear-gradient(135deg, rgba(18,8,24,1) 0%, rgba(80,10,60,0.9) 20%, rgba(255,105,180,0.4) 40%, rgba(200,100,255,0.3) 60%, rgba(255,182,193,0.2) 80%, rgba(18,8,24,1) 100%), radial-gradient(circle at 25% 75%, rgba(255,105,180,0.2), transparent 50%), radial-gradient(circle at 75% 25%, rgba(200,100,255,0.15), transparent 40%), radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 60%)",
+        "bg:opacity": 0.85,
+        "bg:blendmode": "overlay",
+        "bg:activebordercolor": "#ff69b4"
     },
-    "bg@img-02": {
-        "display:name": "Image 02",
-        "display:order": 5.02,
+    "bg@neon-otaku": {
+        "display:name": "✨ Neon Otaku",
+        "display:order": 4.8,
         "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-02.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-03": {
-        "display:name": "Image 03",
-        "display:order": 5.03,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-03.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-04": {
-        "display:name": "Image 04",
-        "display:order": 5.04,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-04.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-05": {
-        "display:name": "Image 05",
-        "display:order": 5.05,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-05.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-06": {
-        "display:name": "Image 06",
-        "display:order": 5.06,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-06.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-07": {
-        "display:name": "Image 07",
-        "display:order": 5.07,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-07.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-08": {
-        "display:name": "Image 08",
-        "display:order": 5.08,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-08.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-09": {
-        "display:name": "Image 09",
-        "display:order": 5.09,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-09.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-10": {
-        "display:name": "Image 10",
-        "display:order": 5.10,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-10.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-11": {
-        "display:name": "Image 11",
-        "display:order": 5.11,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-11.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-12": {
-        "display:name": "Image 12",
-        "display:order": 5.12,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-12.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-13": {
-        "display:name": "Image 13",
-        "display:order": 5.13,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-13.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-14": {
-        "display:name": "Image 14",
-        "display:order": 5.14,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-14.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-15": {
-        "display:name": "Image 15",
-        "display:order": 5.15,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-15.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-16": {
-        "display:name": "Image 16",
-        "display:order": 5.16,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-16.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-17": {
-        "display:name": "Image 17",
-        "display:order": 5.17,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-17.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-18": {
-        "display:name": "Image 18",
-        "display:order": 5.18,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-18.jpg')",
-        "bg:opacity": 0.3
-    },
-    "bg@img-19": {
-        "display:name": "Image 19",
-        "display:order": 5.19,
-        "bg:*": true,
-        "bg": "url('/backgrounds/bg-img-19.jpg')",
-        "bg:opacity": 0.3
+        "bg": "linear-gradient(160deg, rgba(5,5,16,1) 0%, rgba(20,0,40,0.95) 15%, rgba(60,0,90,0.7) 35%, rgba(0,60,120,0.5) 55%, rgba(57,255,20,0.15) 75%, rgba(5,5,16,1) 100%), radial-gradient(circle at 20% 80%, rgba(255,0,255,0.12), transparent 50%), radial-gradient(circle at 80% 20%, rgba(0,255,204,0.1), transparent 40%), radial-gradient(circle at 50% 50%, rgba(57,255,20,0.05), transparent 60%)",
+        "bg:opacity": 0.9,
+        "bg:blendmode": "overlay",
+        "bg:activebordercolor": "#39ff14"
     }
 }

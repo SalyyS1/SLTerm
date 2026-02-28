@@ -8,7 +8,7 @@ import { getSettingsKeyAtom } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useAtomValue } from "jotai";
-import { memo, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 export function useSettingValue<T extends keyof SettingsType>(key: T): SettingsType[T] {
     return useAtomValue(getSettingsKeyAtom(key));
@@ -22,6 +22,37 @@ export async function writeSetting(key: string, value: any): Promise<void> {
     }
 }
 
+// Debounced write hook — keeps local state snappy while coalescing RPC calls
+function useDebouncedSetting(settingKey: string, serverValue: any, delayMs: number) {
+    const [localValue, setLocalValue] = useState(serverValue);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Sync local state when server value changes externally
+    useEffect(() => {
+        setLocalValue(serverValue);
+    }, [serverValue]);
+
+    const onChange = useCallback(
+        (newValue: any) => {
+            setLocalValue(newValue);
+            if (timerRef.current) clearTimeout(timerRef.current);
+            timerRef.current = setTimeout(() => {
+                writeSetting(settingKey, newValue);
+            }, delayMs);
+        },
+        [settingKey, delayMs]
+    );
+
+    // Flush on unmount
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, []);
+
+    return [localValue, onChange] as const;
+}
+
 export const ToggleSetting = memo(({ settingKey, label }: { settingKey: string; label: string }) => {
     const value = useSettingValue(settingKey as any) ?? false;
     return <Toggle checked={!!value} onChange={(v) => writeSetting(settingKey, v)} label={label} />;
@@ -30,17 +61,18 @@ ToggleSetting.displayName = "ToggleSetting";
 
 export const NumberSetting = memo(
     ({ settingKey, label, min, max, step = 1 }: { settingKey: string; label: string; min?: number; max?: number; step?: number }) => {
-        const value = useSettingValue(settingKey as any) ?? 0;
+        const serverValue = useSettingValue(settingKey as any) ?? 0;
+        const [localValue, onChange] = useDebouncedSetting(settingKey, serverValue, 300);
         return (
             <div className="flex items-center justify-between gap-3">
                 <span className="text-secondary text-sm">{label}</span>
                 <input
                     type="number"
-                    value={value}
+                    value={localValue}
                     min={min}
                     max={max}
                     step={step}
-                    onChange={(e) => writeSetting(settingKey, Number(e.target.value))}
+                    onChange={(e) => onChange(Number(e.target.value))}
                     className="w-20 px-2 py-1 rounded bg-[var(--form-element-bg-color)] border border-[var(--form-element-border-color)] text-[var(--main-text-color)] text-sm"
                 />
             </div>
@@ -48,17 +80,19 @@ export const NumberSetting = memo(
     }
 );
 NumberSetting.displayName = "NumberSetting";
+
 export const TextSetting = memo(
     ({ settingKey, label, placeholder }: { settingKey: string; label: string; placeholder?: string }) => {
-        const value = useSettingValue(settingKey as any) ?? "";
+        const serverValue = useSettingValue(settingKey as any) ?? "";
+        const [localValue, onChange] = useDebouncedSetting(settingKey, serverValue, 400);
         return (
             <div className="flex items-center justify-between gap-3">
                 <span className="text-secondary text-sm">{label}</span>
                 <input
                     type="text"
-                    value={value}
+                    value={localValue}
                     placeholder={placeholder}
-                    onChange={(e) => writeSetting(settingKey, e.target.value || null)}
+                    onChange={(e) => onChange(e.target.value || null)}
                     className="w-48 px-2 py-1 rounded bg-[var(--form-element-bg-color)] border border-[var(--form-element-border-color)] text-[var(--main-text-color)] text-sm"
                 />
             </div>
@@ -71,7 +105,8 @@ export const SliderSetting = memo(
     ({ settingKey, label, min = 0, max = 1, step = 0.05, displayMultiplier = 100, unit = "%" }: {
         settingKey: string; label: string; min?: number; max?: number; step?: number; displayMultiplier?: number; unit?: string;
     }) => {
-        const value = useSettingValue(settingKey as any) ?? min;
+        const serverValue = useSettingValue(settingKey as any) ?? min;
+        const [localValue, onChange] = useDebouncedSetting(settingKey, serverValue, 150);
         return (
             <div className="flex items-center justify-between gap-3">
                 <span className="text-secondary text-sm">{label}</span>
@@ -81,12 +116,12 @@ export const SliderSetting = memo(
                         min={min}
                         max={max}
                         step={step}
-                        value={value}
-                        onChange={(e) => writeSetting(settingKey, Number(e.target.value))}
+                        value={localValue}
+                        onChange={(e) => onChange(Number(e.target.value))}
                         className="w-28 accent-[var(--accent-color)]"
                     />
                     <span className="text-xs text-muted-foreground w-12 text-right">
-                        {Math.round(Number(value) * displayMultiplier)}{unit}
+                        {Math.round(Number(localValue) * displayMultiplier)}{unit}
                     </span>
                 </div>
             </div>
@@ -96,18 +131,19 @@ export const SliderSetting = memo(
 SliderSetting.displayName = "SliderSetting";
 
 export const ColorSetting = memo(({ settingKey, label }: { settingKey: string; label: string }) => {
-    const value = useSettingValue(settingKey as any) ?? "#000000";
+    const serverValue = useSettingValue(settingKey as any) ?? "#000000";
+    const [localValue, onChange] = useDebouncedSetting(settingKey, serverValue, 200);
     return (
         <div className="flex items-center justify-between gap-3">
             <span className="text-secondary text-sm">{label}</span>
             <div className="flex items-center gap-2">
                 <input
                     type="color"
-                    value={value}
-                    onChange={(e) => writeSetting(settingKey, e.target.value)}
+                    value={localValue}
+                    onChange={(e) => onChange(e.target.value)}
                     className="w-8 h-8 rounded cursor-pointer border border-[var(--form-element-border-color)] bg-transparent"
                 />
-                <span className="text-xs text-muted-foreground font-mono">{value}</span>
+                <span className="text-xs text-muted-foreground font-mono">{localValue}</span>
             </div>
         </div>
     );

@@ -4,6 +4,7 @@
 import { ClientModel } from "@/app/store/client-model";
 import { GlobalModel } from "@/app/store/global-model";
 import { getTabModelByTabId, TabModelContext } from "@/app/store/tab-model";
+import { cleanWaveObjectCache } from "@/app/store/wos";
 import { Workspace } from "@/app/workspace/workspace";
 import { ContextMenuModel } from "@/store/contextmenu";
 import {
@@ -329,6 +330,14 @@ const AppInner = () => {
     const client = useAtomValue(ClientModel.getInstance().clientAtom);
     const windowData = useAtomValue(GlobalModel.getInstance().windowDataAtom);
     const isFullScreen = useAtomValue(atoms.isFullScreen);
+
+    // Periodically clean up WaveObject cache to prevent unbounded memory growth
+    useEffect(() => {
+        const ivId = setInterval(() => {
+            cleanWaveObjectCache();
+        }, 30000);
+        return () => clearInterval(ivId);
+    }, []);
 
     if (client == null || windowData == null) {
         return (
