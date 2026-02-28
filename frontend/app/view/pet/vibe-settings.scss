@@ -1,0 +1,740 @@
+// Copyright 2025, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+// ============================================================
+// Vibe Settings Page Styles
+// ============================================================
+
+// Slider for pet size
+.vibe-pet-size {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vibe-slider {
+    width: 100%;
+    height: 6px;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    outline: none;
+
+    &::-webkit-slider-thumb {
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        background: var(--accent-color, #818cf8);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(129, 140, 248, 0.4);
+    }
+}
+
+// Toggle switch
+.vibe-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+
+    input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    input:checked + .vibe-toggle-slider {
+        background: var(--accent-color, #818cf8);
+    }
+
+    input:checked + .vibe-toggle-slider::before {
+        transform: translateX(20px);
+    }
+
+    .vibe-toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 24px;
+        transition: 0.3s;
+
+        &::before {
+            content: "";
+            position: absolute;
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+    }
+}
+
+// ============================================================
+// Pet Stats Card
+// ============================================================
+
+.vibe-pet-stats {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vibe-pet-stats-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.vibe-pet-stats-sprite {
+    width: 48px;
+    height: 48px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.vibe-pet-stats-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--main-text-color, #fff);
+}
+
+// Pixelmon-style level badge
+.vibe-level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #2d2b55 100%);
+    border: 1px solid rgba(129, 140, 248, 0.4);
+    border-radius: 10px;
+    margin-top: 2px;
+
+    .vibe-level-label {
+        font-size: 9px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .vibe-level-num {
+        font-size: 14px;
+        font-weight: 800;
+        color: #fbbf24;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+}
+
+.vibe-pet-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vibe-pet-stats-xp {
+    margin-left: auto;
+    text-align: right;
+
+    .vibe-xp-text {
+        font-size: 10px;
+        color: rgba(255, 255, 255, 0.4);
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+}
+
+// Pixelmon-style XP bar
+.vibe-xp-bar {
+    width: 120px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    &.pixelmon {
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+}
+
+.vibe-xp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #4ade80, #86efac);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+.vibe-pet-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.vibe-stat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+}
+
+.vibe-stat-label {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.vibe-stat-value {
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: capitalize;
+}
+
+.vibe-stat-bar {
+    width: 60px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.vibe-stat-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+
+    &.energy {
+        background: linear-gradient(90deg, #34d399, #6ee7b7);
+    }
+    &.hunger {
+        background: linear-gradient(90deg, #fb923c, #f97316);
+    }
+}
+
+// ============================================================
+// Edge Toggle (top/bottom)
+// ============================================================
+
+.vibe-edge-toggle {
+    display: flex;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 2px;
+}
+
+.vibe-edge-btn {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &.active {
+        background: var(--accent-color, #818cf8);
+        color: #fff;
+        font-weight: 600;
+    }
+}
+
+// ============================================================
+// Pet Selector Grid
+// ============================================================
+
+.vibe-pet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 8px;
+}
+
+.vibe-pet-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 4px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+    }
+
+    &.selected {
+        background: rgba(129, 140, 248, 0.12);
+        border-color: var(--accent-color, #818cf8);
+        box-shadow: 0 0 12px rgba(129, 140, 248, 0.15);
+    }
+}
+
+.vibe-pet-sprite {
+    width: 40px;
+    height: 40px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    transition: transform 0.2s;
+
+    .vibe-pet-option:hover & {
+        transform: scale(1.15);
+    }
+}
+
+.vibe-pet-name {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+
+    .vibe-pet-option.selected & {
+        color: var(--accent-color, #818cf8);
+        font-weight: 600;
+    }
+}
+
+// ============================================================
+// Text fallback when both sprite sources fail
+// ============================================================
+
+.vibe-pet-emoji-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: rgba(129, 140, 248, 0.15);
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent-color, #818cf8);
+    text-transform: uppercase;
+}
+
+// ============================================================
+// Food Shop
+// ============================================================
+
+.vibe-shop-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vibe-coin-balance {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fbbf24;
+}
+
+.vibe-shop-msg {
+    padding: 6px 12px;
+    background: rgba(129, 140, 248, 0.1);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--accent-color, #818cf8);
+    text-align: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.vibe-shop-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vibe-shop-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    transition: all 0.2s;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+}
+
+.vibe-shop-item-icon {
+    font-size: 24px;
+    width: 36px;
+    text-align: center;
+}
+
+.vibe-shop-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.vibe-shop-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--main-text-color, #fff);
+}
+
+.vibe-shop-item-effect {
+    font-size: 10px;
+    color: rgba(52, 211, 153, 0.8);
+}
+
+.vibe-shop-buy {
+    padding: 4px 12px;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 8px;
+    background: rgba(251, 191, 36, 0.08);
+    color: #fbbf24;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover:not(:disabled) {
+        background: rgba(251, 191, 36, 0.15);
+        border-color: rgba(251, 191, 36, 0.5);
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+}
+
+// ============================================================
+// Inventory
+// ============================================================
+
+.vibe-inventory-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.vibe-inventory-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 64px;
+
+    &:hover {
+        background: rgba(52, 211, 153, 0.08);
+        border-color: rgba(52, 211, 153, 0.3);
+        transform: translateY(-2px);
+    }
+}
+
+.vibe-inv-icon {
+    font-size: 20px;
+}
+
+.vibe-inv-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.vibe-inv-feed {
+    font-size: 9px;
+    color: #34d399;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+// ============================================================
+// Dialogue Editor
+// ============================================================
+
+.vibe-dialogue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.vibe-dialogue-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.vibe-dialogue-texts {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vibe-dialogue-vi,
+.vibe-dialogue-en {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.4;
+}
+
+.vibe-dialogue-en {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+}
+
+.vibe-dialogue-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vibe-dialogue-mood {
+    font-size: 14px;
+}
+
+.vibe-dialogue-remove {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 4px;
+
+    &:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+}
+
+.vibe-dialogue-add {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.vibe-dialogue-add-row {
+    display: flex;
+    gap: 6px;
+}
+
+.vibe-input {
+    flex: 1;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--main-text-color, #fff);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+        border-color: var(--accent-color, #818cf8);
+    }
+
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.25);
+    }
+}
+
+.vibe-select {
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--main-text-color, #fff);
+    font-size: 12px;
+    outline: none;
+
+    option {
+        background: #1a1b2e;
+        color: #fff;
+    }
+}
+
+.vibe-btn-add {
+    padding: 6px 16px;
+    background: var(--accent-color, #818cf8);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+    }
+}
+
+// ============================================================
+// Health Reminders
+// ============================================================
+
+.vibe-health-section {
+    margin-top: 12px;
+}
+
+.vibe-health-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vibe-health-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+
+    input[type="checkbox"] {
+        accent-color: var(--accent-color, #818cf8);
+    }
+}
+
+// ============================================================
+// Discord Section
+// ============================================================
+
+.vibe-discord-customize {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vibe-discord-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    label {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.4);
+        font-weight: 500;
+    }
+}
+
+.vibe-discord-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.vibe-discord-card {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: #2b2d31;
+    border-radius: 12px;
+    border-left: 4px solid #5865f2;
+}
+
+.vibe-discord-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: rgba(88, 101, 242, 0.15);
+}
+
+.vibe-discord-sprite {
+    width: 32px;
+    height: 32px;
+    image-rendering: pixelated;
+}
+
+.vibe-discord-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.vibe-discord-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.vibe-discord-card-detail {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vibe-discord-card-time {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    margin-top: 4px;
+}
+
+// ============================================================
+// Food Pixel Art
+// ============================================================
+
+.vibe-food-pixel {
+    width: 28px;
+    height: 28px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+.vibe-inv-pixel {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+.vibe-hunger-status {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    text-align: center;
+}

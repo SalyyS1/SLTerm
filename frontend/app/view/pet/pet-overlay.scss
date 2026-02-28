@@ -1,0 +1,612 @@
+// Copyright 2025, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+// ============================================================
+// Pet Overlay — All animations are CSS on the sprite itself
+// No emoji overlays (❤💧⭐ etc.) — pure sprite + CSS transform
+// ============================================================
+
+.pet-overlay-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 100;
+}
+
+// ============================================================
+// Pet Character
+// ============================================================
+
+.pet-character {
+    position: absolute;
+    pointer-events: auto;
+    user-select: none;
+    z-index: 101;
+
+    &.grabbed {
+        z-index: 200;
+    }
+}
+
+.pet-sprite {
+    line-height: 1;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+    transition: filter 0.3s ease;
+
+    .pet-character:hover & {
+        filter: drop-shadow(0 4px 12px rgba(255, 200, 0, 0.6));
+    }
+
+    img {
+        display: block;
+    }
+}
+
+// Shadow under pet
+.pet-shadow {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 50%;
+    transition: all 0.2s ease;
+
+    .anim-jump & {
+        opacity: 0.2;
+        width: 24px;
+    }
+
+    .grabbed & {
+        opacity: 0;
+    }
+}
+
+// ============================================================
+// Walking — springy 8-step bounce
+// ============================================================
+
+.anim-walk .pet-sprite {
+    animation: petWalk 0.5s ease-in-out infinite;
+}
+
+@keyframes petWalk {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+    15% {
+        transform: translateY(-4px) rotate(-2deg);
+    }
+    30% {
+        transform: translateY(0) rotate(0deg);
+    }
+    45% {
+        transform: translateY(-3px) rotate(2deg);
+    }
+    60% {
+        transform: translateY(0) rotate(0deg);
+    }
+    75% {
+        transform: translateY(-4px) rotate(-1deg);
+    }
+    90% {
+        transform: translateY(-1px) rotate(1deg);
+    }
+}
+
+// ============================================================
+// Running — faster bounce with lean
+// ============================================================
+
+.anim-run .pet-sprite {
+    animation: petRun 0.45s ease-in-out infinite;
+}
+
+@keyframes petRun {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg) scaleX(1.02);
+    }
+    25% {
+        transform: translateY(-6px) rotate(-3deg) scaleX(0.98);
+    }
+    50% {
+        transform: translateY(0) rotate(0deg) scaleX(1.02);
+    }
+    75% {
+        transform: translateY(-5px) rotate(3deg) scaleX(0.98);
+    }
+}
+
+// ============================================================
+// Jump — actual hop up with squash-stretch
+// ============================================================
+
+.anim-jump .pet-sprite {
+    animation: petJump 0.8s ease-in-out infinite;
+}
+
+@keyframes petJump {
+    0% {
+        transform: translateY(0) scaleY(1) scaleX(1);
+    }
+    15% {
+        transform: translateY(3px) scaleY(0.85) scaleX(1.1);
+    }
+    40% {
+        transform: translateY(-20px) scaleY(1.1) scaleX(0.9);
+    }
+    60% {
+        transform: translateY(-18px) scaleY(1.05) scaleX(0.95);
+    }
+    80% {
+        transform: translateY(2px) scaleY(0.9) scaleX(1.05);
+    }
+    100% {
+        transform: translateY(0) scaleY(1) scaleX(1);
+    }
+}
+
+// ============================================================
+// Idle — gentle breathing
+// ============================================================
+
+.anim-idle .pet-sprite {
+    animation: petIdle 3s ease-in-out infinite;
+}
+
+@keyframes petIdle {
+    0%,
+    100% {
+        transform: translateY(0) scaleY(1);
+    }
+    50% {
+        transform: translateY(-2px) scaleY(1.02);
+    }
+}
+
+// ============================================================
+// Sit — settle down
+// ============================================================
+
+.anim-sit .pet-sprite {
+    animation: petSit 0.5s ease-out forwards;
+}
+
+@keyframes petSit {
+    0% {
+        transform: translateY(0) scaleY(1);
+    }
+    100% {
+        transform: translateY(4px) scaleY(0.88) scaleX(1.08);
+    }
+}
+
+// ============================================================
+// SLEEP — LIE DOWN (rotate to side, shrink Y)
+// ============================================================
+
+.anim-sleep .pet-sprite {
+    animation: petSleep 2s ease-in-out infinite;
+}
+
+@keyframes petSleep {
+    0%,
+    100% {
+        transform: translateY(6px) rotate(80deg) scaleY(0.85) scaleX(1.1);
+        opacity: 0.85;
+    }
+    50% {
+        transform: translateY(8px) rotate(82deg) scaleY(0.82) scaleX(1.12);
+        opacity: 0.75;
+    }
+}
+
+// ============================================================
+// Celebrate — bounce happily
+// ============================================================
+
+.anim-celebrate .pet-sprite {
+    animation: petCelebrate 0.4s ease-in-out infinite;
+}
+
+@keyframes petCelebrate {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    25% {
+        transform: translateY(-8px) rotate(-5deg) scale(1.05);
+    }
+    50% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    75% {
+        transform: translateY(-8px) rotate(5deg) scale(1.05);
+    }
+}
+
+// ============================================================
+// PET — smooth gentle sway when double-clicked (enjoying pets)
+// ============================================================
+
+.anim-pet .pet-sprite {
+    animation: petPetted 1.5s ease-in-out infinite;
+    filter: drop-shadow(0 0 10px rgba(255, 200, 50, 0.5));
+}
+
+@keyframes petPetted {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg) scale(1.02);
+    }
+    25% {
+        transform: translateY(-3px) rotate(-3deg) scale(1.05);
+    }
+    50% {
+        transform: translateY(-1px) rotate(0deg) scale(1.03);
+    }
+    75% {
+        transform: translateY(-3px) rotate(3deg) scale(1.05);
+    }
+}
+
+// ============================================================
+// EAT — munch munch squash
+// ============================================================
+
+.anim-eat .pet-sprite {
+    animation: petEat 0.5s ease-in-out infinite;
+}
+
+@keyframes petEat {
+    0%,
+    100% {
+        transform: scaleY(1) translateY(0);
+    }
+    30% {
+        transform: scaleY(0.88) translateY(3px);
+    }
+    60% {
+        transform: scaleY(1.06) translateY(-2px);
+    }
+}
+
+// ============================================================
+// Grabbed — shake nervously
+// ============================================================
+
+.anim-grabbed .pet-sprite {
+    animation: petGrabbed 0.35s ease-in-out infinite;
+}
+
+@keyframes petGrabbed {
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(-5deg);
+    }
+    75% {
+        transform: rotate(5deg);
+    }
+}
+
+// ============================================================
+// Fall — stretch vertically
+// ============================================================
+
+.anim-fall .pet-sprite {
+    animation: petFall 0.4s ease-in infinite;
+}
+
+@keyframes petFall {
+    0% {
+        transform: scaleY(1) scaleX(1);
+    }
+    100% {
+        transform: scaleY(1.15) scaleX(0.85);
+    }
+}
+
+// ============================================================
+// Dizzy — wobble
+// ============================================================
+
+.anim-dizzy .pet-sprite {
+    animation: petDizzy 0.8s ease-in-out infinite;
+}
+
+@keyframes petDizzy {
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+    25% {
+        transform: rotate(-10deg) translateX(-3px);
+    }
+    75% {
+        transform: rotate(10deg) translateX(3px);
+    }
+}
+
+// ============================================================
+// Petted — golden shiny glow
+// ============================================================
+
+.pet-character.petted .pet-sprite {
+    filter: drop-shadow(0 0 12px rgba(255, 200, 0, 0.8)) drop-shadow(0 0 24px rgba(255, 200, 0, 0.4));
+    animation: pettedGlow 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pettedGlow {
+    0% {
+        filter: drop-shadow(0 0 8px rgba(255, 200, 0, 0.6)) drop-shadow(0 0 16px rgba(255, 200, 0, 0.3));
+    }
+    100% {
+        filter: drop-shadow(0 0 16px rgba(255, 200, 0, 0.9)) drop-shadow(0 0 32px rgba(255, 200, 0, 0.5));
+    }
+}
+
+// ============================================================
+// Speech Bubble
+// ============================================================
+
+.pet-speech-bubble {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 30, 50, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+    animation: bubbleIn 0.3s ease-out;
+    z-index: 102;
+
+    .speech-tail {
+        position: absolute;
+        bottom: -5px;
+        left: 50%;
+        transform: translateX(-50%) rotate(45deg);
+        width: 10px;
+        height: 10px;
+        background: rgba(30, 30, 50, 0.92);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        border-right: 1px solid rgba(255, 255, 255, 0.15);
+    }
+}
+
+@keyframes bubbleIn {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(5px) scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+// ============================================================
+// Dropped Food Items — fall from sky, draggable
+// ============================================================
+
+.dropped-food-item {
+    position: absolute;
+    pointer-events: auto;
+    cursor: grab;
+    z-index: 105;
+    user-select: none;
+    transition: transform 0.15s ease;
+
+    &:hover {
+        transform: scale(1.2);
+        filter: drop-shadow(0 0 8px rgba(255, 200, 50, 0.6));
+    }
+
+    &:active {
+        cursor: grabbing;
+    }
+
+    &.falling {
+        animation: foodBounce 0.5s ease-in-out infinite;
+    }
+
+    &.landed {
+        animation: foodFloat 2s ease-in-out infinite;
+    }
+}
+
+.dropped-food-sprite {
+    width: 32px;
+    height: 32px;
+    image-rendering: pixelated;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+.dropped-food-emoji {
+    font-size: 24px;
+}
+
+@keyframes foodBounce {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes foodFloat {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+    25% {
+        transform: translateY(-4px) rotate(-3deg);
+    }
+    75% {
+        transform: translateY(-2px) rotate(3deg);
+    }
+}
+
+// ============================================================
+// HAPPY — excited jumping with sparkle glow
+// ============================================================
+
+.anim-happy .pet-sprite {
+    animation: petHappy 0.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 8px rgba(255, 223, 0, 0.5));
+}
+
+@keyframes petHappy {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    20% {
+        transform: translateY(-10px) rotate(-6deg) scale(1.06);
+    }
+    40% {
+        transform: translateY(0) rotate(0deg) scale(0.98);
+    }
+    60% {
+        transform: translateY(-8px) rotate(6deg) scale(1.04);
+    }
+    80% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+}
+
+// ============================================================
+// SAD — drooping, slow, desaturated
+// ============================================================
+
+.anim-sad .pet-sprite {
+    animation: petSad 3s ease-in-out infinite;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)) saturate(0.5) brightness(0.85);
+}
+
+@keyframes petSad {
+    0%,
+    100% {
+        transform: translateY(3px) scaleY(0.92) rotate(-2deg);
+    }
+    50% {
+        transform: translateY(5px) scaleY(0.9) rotate(-3deg);
+    }
+}
+
+// ============================================================
+// CRY — shaking with blue tint
+// ============================================================
+
+.anim-cry .pet-sprite {
+    animation: petCry 0.8s ease-in-out infinite;
+    filter: drop-shadow(0 0 8px rgba(100, 149, 237, 0.5)) saturate(0.6);
+}
+
+@keyframes petCry {
+    0%,
+    100% {
+        transform: translateX(0) translateY(2px) scaleY(0.94);
+    }
+    25% {
+        transform: translateX(-3px) translateY(3px) scaleY(0.92);
+    }
+    75% {
+        transform: translateX(3px) translateY(3px) scaleY(0.92);
+    }
+}
+
+// ============================================================
+// WAG — rapid side-to-side tail wag wiggle
+// ============================================================
+
+.anim-wag .pet-sprite {
+    animation: petWag 0.5s ease-in-out infinite;
+    filter: drop-shadow(0 0 4px rgba(255, 200, 0, 0.3));
+}
+
+@keyframes petWag {
+    0%,
+    100% {
+        transform: rotate(0deg) scaleX(1);
+    }
+    25% {
+        transform: rotate(-4deg) scaleX(1.02);
+    }
+    75% {
+        transform: rotate(4deg) scaleX(1.02);
+    }
+}
+
+// ============================================================
+// PLAY — bouncy spinning playful movement
+// ============================================================
+
+.anim-play .pet-sprite {
+    animation: petPlay 0.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 6px rgba(0, 255, 128, 0.4));
+}
+
+@keyframes petPlay {
+    0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    15% {
+        transform: translateY(-12px) rotate(-8deg) scale(1.05);
+    }
+    30% {
+        transform: translateY(0) rotate(0deg) scale(0.95);
+    }
+    45% {
+        transform: translateY(-8px) rotate(8deg) scale(1.08);
+    }
+    60% {
+        transform: translateY(2px) rotate(0deg) scale(0.92);
+    }
+    75% {
+        transform: translateY(-5px) rotate(-4deg) scale(1.03);
+    }
+    100% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+}
+
+// ============================================================
+// SNOOZE — deep sleep, very slow breathing tilt
+// ============================================================
+
+.anim-snooze .pet-sprite {
+    animation: petSnooze 4s ease-in-out infinite;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5)) brightness(0.75) saturate(0.7);
+}
+
+@keyframes petSnooze {
+    0%,
+    100% {
+        transform: translateY(6px) rotate(75deg) scaleY(0.82) scaleX(1.1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: translateY(8px) rotate(78deg) scaleY(0.8) scaleX(1.12);
+        opacity: 0.6;
+    }
+}

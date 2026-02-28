@@ -18,6 +18,8 @@ import clsx from "clsx";
 import debug from "debug";
 import * as jotai from "jotai";
 import * as React from "react";
+import { PetHUD } from "../pet/pet-hud";
+import { PetOverlay } from "../pet/pet-overlay";
 import { TermStickers } from "./termsticker";
 import { TermThemeUpdater } from "./termtheme";
 import { computeTheme } from "./termutil";
@@ -395,6 +397,8 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
                 />
             </div>
             <Search {...searchProps} />
+            <PetOverlay />
+            <PetHUD />
         </div>
     );
 };

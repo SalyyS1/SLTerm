@@ -8,6 +8,7 @@ import type { TabModel } from "@/app/store/tab-model";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 
+import { VibeSettingsContent } from "@/app/view/pet/vibe-settings";
 import { BgPresetsEditor } from "@/app/view/waveconfig/bg-presets-editor";
 import { ConnectionsEditor } from "@/app/view/waveconfig/connections-editor";
 import { SettingsVisualContent } from "@/app/view/waveconfig/settings-visual";
@@ -79,6 +80,14 @@ const configFiles: ConfigFile[] = [
         validator: validateBgJson,
         hasJsonView: true,
         visualComponent: BgPresetsEditor as any,
+    },
+    {
+        name: "Vibe System",
+        path: "vibe.json",
+        language: "json",
+        description: "Pet system, dialogues, and Discord Rich Presence",
+        hasJsonView: false,
+        visualComponent: VibeSettingsContent as any,
     },
 ];
 

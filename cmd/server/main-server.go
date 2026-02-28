@@ -21,6 +21,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/filestore"
 	"github.com/SalyyS1/SLTerm/pkg/jobcontroller"
 	"github.com/SalyyS1/SLTerm/pkg/panichandler"
+	"github.com/SalyyS1/SLTerm/pkg/petengine"
 	"github.com/SalyyS1/SLTerm/pkg/remote/conncontroller"
 	"github.com/SalyyS1/SLTerm/pkg/remote/fileshare/wshfs"
 	"github.com/SalyyS1/SLTerm/pkg/secretstore"
@@ -82,6 +83,7 @@ func doShutdown(reason string) {
 		ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelFn()
 		go blockcontroller.StopAllBlockControllersForShutdown()
+		petengine.Shutdown()
 		shutdownActivityUpdate()
 		sendTelemetryWrapper()
 		// TODO deal with flush in progress
@@ -579,6 +581,8 @@ func main() {
 	jobcontroller.InitJobController()
 	blockcontroller.InitBlockController()
 	wcore.InitTabIndicatorStore()
+	petengine.Init()
+	log.Printf("pet engine initialized")
 	go func() {
 		defer func() {
 			panichandler.PanicHandler("GetSystemSummary", recover())

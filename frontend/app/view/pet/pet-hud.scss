@@ -1,0 +1,84 @@
+// Copyright 2025, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.pet-hud {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    background: rgba(20, 20, 30, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    z-index: 102;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.8);
+    pointer-events: auto;
+    transition: all 0.3s ease;
+
+    &:hover {
+        background: rgba(20, 20, 30, 0.9);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+}
+
+.pet-hud-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .pet-hud-name {
+        font-weight: 600;
+        color: #fff;
+    }
+
+    .pet-hud-level {
+        font-size: 10px;
+        font-weight: 700;
+        color: #818cf8;
+    }
+}
+
+.pet-hud-xpbar {
+    width: 50px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+
+    .xp-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #818cf8, #a78bfa);
+        border-radius: 2px;
+        transition: width 0.5s ease;
+    }
+}
+
+.pet-hud-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    .pet-hud-streak {
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .pet-hud-settings-btn {
+        background: none;
+        border: none;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px;
+        border-radius: 4px;
+        transition: all 0.2s;
+        line-height: 1;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    }
+}

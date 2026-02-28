@@ -198,6 +198,15 @@ type WshRpcInterface interface {
 	JobControllerDetachJobCommand(ctx context.Context, jobId string) error
 	JobControllerGetAllJobManagerStatusCommand(ctx context.Context) ([]*JobManagerStatusUpdate, error)
 	BlockJobStatusCommand(ctx context.Context, blockId string) (*BlockJobStatusData, error)
+	// pet
+	PetGetStateCommand(ctx context.Context) (*PetStateData, error)
+	PetGetProfileCommand(ctx context.Context) (*PetProfileData, error)
+	PetGetSessionCommand(ctx context.Context) (*PetSessionData, error)
+	PetSelectPetCommand(ctx context.Context, data PetSelectData) (*PetStateData, error)
+	PetInteractCommand(ctx context.Context, data PetInteractData) (*PetStateData, error)
+	PetAddXPCommand(ctx context.Context, data PetXPData) (*PetStateData, error)
+	PetGetCatalogueCommand(ctx context.Context) ([]PetCatalogueEntryData, error)
+	PetGetDialogueCommand(ctx context.Context, data PetDialogueRequestData) (*PetDialogueResponseData, error)
 }
 
 // for frontend
@@ -892,4 +901,76 @@ type FocusedBlockData struct {
 	ConnStatus                 *ConnStatus         `json:"connstatus,omitempty"`
 	TermShellIntegrationStatus string              `json:"termshellintegrationstatus,omitempty"`
 	TermLastCommand            string              `json:"termlastcommand,omitempty"`
+}
+
+// ============================================================
+// Pet System RPC Types
+// ============================================================
+
+type PetStateData struct {
+	ID            string  `json:"id"`
+	PetID         string  `json:"petId"`
+	Name          string  `json:"name"`
+	Level         int     `json:"level"`
+	XP            int     `json:"xp"`
+	XPToNext      int     `json:"xpToNext"`
+	Progress      float64 `json:"progress"`
+	Mood          string  `json:"mood"`
+	State         string  `json:"state"`
+	Hunger        float64 `json:"hunger"`
+	Energy        float64 `json:"energy"`
+	SpawnedAt     string  `json:"spawnedAt"`
+	TotalPlaytime int64   `json:"totalPlaytime"`
+}
+
+type PetProfileData struct {
+	ActivePetID    string   `json:"activePetId"`
+	CompletedPets  []string `json:"completedPets"`
+	StreakDays     int      `json:"streakDays"`
+	LastActiveDate string   `json:"lastActiveDate"`
+	TotalFocusTime int64    `json:"totalFocusTime"`
+	TotalCommands  int      `json:"totalCommands"`
+	Achievements   []string `json:"achievements"`
+}
+
+type PetSessionData struct {
+	StartedAt        string `json:"startedAt"`
+	ActiveTime       int64  `json:"activeTime"`
+	CommandCount     int    `json:"commandCount"`
+	IsIdle           bool   `json:"isIdle"`
+	CurrentProject   string `json:"currentProject"`
+	DiscordConnected bool   `json:"discordConnected"`
+}
+
+type PetSelectData struct {
+	PetID string `json:"petId"`
+}
+
+type PetInteractData struct {
+	Action string `json:"action"` // "pet", "feed"
+}
+
+type PetXPData struct {
+	Amount int `json:"amount"`
+}
+
+type PetDialogueRequestData struct {
+	Mood string `json:"mood"`
+	Hour int    `json:"hour"` // 0-23 local hour
+	Lang string `json:"lang"` // "vi", "en"
+}
+
+type PetDialogueResponseData struct {
+	Text string `json:"text"`
+	Type string `json:"type"` // "random", "health", "levelup", "custom"
+}
+
+type PetCatalogueEntryData struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	SpriteSheet     string `json:"spriteSheet"`
+	FrameWidth      int    `json:"frameWidth"`
+	FrameHeight     int    `json:"frameHeight"`
+	Type            string `json:"type"`
+	DiscordAssetKey string `json:"discordAssetKey"`
 }
