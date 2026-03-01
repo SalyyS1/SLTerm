@@ -121,6 +121,14 @@ export class TermViewModel implements ViewModel {
     searchAtoms?: SearchAtoms;
     inputBatcher: InputBatcher;
 
+    // Auto-restart fields for controller crash recovery
+    private autoRestartTimer: ReturnType<typeof setTimeout> | null = null;
+    private autoRestartCount: number = 0;
+    private autoRestartWindowStart: number = 0;
+    private readonly MAX_AUTO_RESTARTS = 3;
+    private readonly AUTO_RESTART_WINDOW_MS = 30000;
+    private readonly AUTO_RESTART_DELAY_MS = 1500;
+
     constructor(blockId: string, nodeModel: BlockNodeModel, tabModel: TabModel) {
         this.viewType = "term";
         this.blockId = blockId;
@@ -526,7 +534,43 @@ export class TermViewModel implements ViewModel {
         const curStatus = globalStore.get(this.shellProcFullStatus);
         if (curStatus == null || curStatus.version < fullStatus.version) {
             globalStore.set(this.shellProcFullStatus, fullStatus);
+            // Auto-restart shell when controller dies unexpectedly (not cmd blocks)
+            if (fullStatus.shellprocstatus === "done" && this.shellProcStatusReceived) {
+                const blockData = globalStore.get(this.blockAtom);
+                const isCmd = blockData?.meta?.controller === "cmd";
+                if (!isCmd) {
+                    this.scheduleAutoRestart();
+                }
+            }
         }
+    }
+
+    scheduleAutoRestart() {
+        if (this.autoRestartTimer != null) return;
+
+        const now = Date.now();
+        if (now - this.autoRestartWindowStart > this.AUTO_RESTART_WINDOW_MS) {
+            this.autoRestartCount = 0;
+            this.autoRestartWindowStart = now;
+        }
+
+        if (this.autoRestartCount >= this.MAX_AUTO_RESTARTS) {
+            console.warn(`[term] auto-restart limit reached for block ${this.blockId}, showing reconnect overlay`);
+            return;
+        }
+
+        console.log(
+            `[term] scheduling auto-restart for block ${this.blockId} (attempt ${this.autoRestartCount + 1}/${this.MAX_AUTO_RESTARTS})`
+        );
+        this.autoRestartTimer = setTimeout(async () => {
+            this.autoRestartTimer = null;
+            this.autoRestartCount++;
+            try {
+                await this.forceRestartController();
+            } catch (e) {
+                console.error(`[term] auto-restart failed for block ${this.blockId}`, e);
+            }
+        }, this.AUTO_RESTART_DELAY_MS);
     }
 
     getVDomModel(): VDomModel {
@@ -559,6 +603,10 @@ export class TermViewModel implements ViewModel {
         this.blockJobStatusUnsubFn?.();
         this.termBPMUnsubFn?.();
         this.inputBatcher?.dispose();
+        if (this.autoRestartTimer != null) {
+            clearTimeout(this.autoRestartTimer);
+            this.autoRestartTimer = null;
+        }
     }
 
     giveFocus(): boolean {

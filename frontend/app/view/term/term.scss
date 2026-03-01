@@ -146,6 +146,61 @@
         width: calc(100% - 18px);
     }
 
+    .term-disconnected-overlay {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 100;
+        pointer-events: auto;
+
+        .term-disconnected-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 8px;
+            background: rgba(220, 38, 38, 0.15);
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            backdrop-filter: blur(8px);
+            color: var(--error-color, #ef4444);
+            font-size: 12px;
+            font-weight: 500;
+            animation: termDisconnectFadeIn 0.3s ease;
+
+            i {
+                font-size: 14px;
+            }
+        }
+
+        .term-reconnect-btn {
+            padding: 3px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(220, 38, 38, 0.4);
+            background: rgba(220, 38, 38, 0.2);
+            color: inherit;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+            transition: background 0.15s;
+
+            &:hover {
+                background: rgba(220, 38, 38, 0.35);
+            }
+        }
+    }
+
+    @keyframes termDisconnectFadeIn {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
+
     .terminal {
         .xterm-viewport {
             &::-webkit-scrollbar {

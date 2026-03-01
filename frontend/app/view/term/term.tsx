@@ -55,6 +55,29 @@ const TermResyncHandler = React.memo(({ blockId, model }: TerminalViewProps) => 
     return null;
 });
 
+const TermDisconnectedOverlay = React.memo(({ model }: { model: TermViewModel }) => {
+    const shellProcStatus = jotai.useAtomValue(model.shellProcStatus);
+
+    if (shellProcStatus !== "done") {
+        return null;
+    }
+
+    return (
+        <div className="term-disconnected-overlay">
+            <div className="term-disconnected-content">
+                <i className="fa-solid fa-plug-circle-xmark" />
+                <span>Terminal Disconnected</span>
+                <button
+                    className="term-reconnect-btn"
+                    onClick={() => fireAndForget(() => model.forceRestartController())}
+                >
+                    <i className="fa-solid fa-rotate-right" /> Reconnect
+                </button>
+            </div>
+        </div>
+    );
+});
+
 const TermVDomToolbarNode = ({ vdomBlockId, blockId, model }: TerminalViewProps & { vdomBlockId: string }) => {
     React.useEffect(() => {
         const unsub = waveEventSubscribe({
@@ -384,6 +407,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         <div className={clsx("view-term", "term-mode-" + termMode)} ref={viewRef} onContextMenu={handleContextMenu}>
             {termBg && <div className="absolute inset-0 z-0 pointer-events-none" style={termBg} />}
             <TermResyncHandler blockId={blockId} model={model} />
+            <TermDisconnectedOverlay model={model} />
             <TermThemeUpdater blockId={blockId} model={model} termRef={model.termRef} />
             <TermStickers config={stickerConfig} />
             <TermToolbarVDomNode key="vdom-toolbar" blockId={blockId} model={model} />
