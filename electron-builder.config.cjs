@@ -84,7 +84,13 @@ const config = {
         icon: "build/icon.icns",
         artifactName: "${productName}-darwin-${arch}-${version}.${ext}",
         category: "public.app-category.developer-tools",
-        target: ["dmg", "zip"],
+        // zip only, deliberately. `dmg` pulls in dmg-license →
+        // iconv-corefoundation → node-addon-api, a chain npm keeps failing to
+        // install on the runner, and an unsigned .dmg buys nothing over a
+        // zipped .app: either way the user has to clear Gatekeeper by hand.
+        // Revisit once there is a signing certificate, which is when a dmg
+        // starts being worth its build cost.
+        target: ["zip"],
         // Separate per-arch artifacts rather than a universal binary: wavesrv is
         // a CGO build per architecture, so a universal app would have to lipo
         // two Go binaries together for no benefit over two downloads.
@@ -96,13 +102,6 @@ const config = {
         // Unsigned builds are usable via right-click → Open. Signing turns on
         // automatically when CSC_LINK / CSC_KEY_PASSWORD are present.
         identity: process.env.CSC_LINK ? undefined : null,
-    },
-    dmg: {
-        icon: "build/icon.icns",
-        contents: [
-            { x: 130, y: 220 },
-            { x: 410, y: 220, type: "link", path: "/Applications" },
-        ],
     },
     linux: {
         icon: "build/icons",

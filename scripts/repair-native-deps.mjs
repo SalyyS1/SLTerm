@@ -34,6 +34,17 @@ const isMusl = (() => {
 
 const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 
+/**
+ * Packages excluded from repair even when the lockfile marks them optional and
+ * platform-gated.
+ *
+ * fsevents has no prebuilt binary — npm runs node-gyp on it, which fails on the
+ * macOS runner with "binding.gyp not found" and takes the whole install command
+ * down with it, so nothing else in the batch gets repaired either. It is only
+ * used for file-watching in dev mode; a production build does not need it.
+ */
+const EXCLUDED = new Set(["fsevents"]);
+
 /** @type {{name: string, version: string, path: string}[]} */
 const candidates = [];
 for (const [lockPath, entry] of Object.entries(lock.packages ?? {})) {
@@ -57,6 +68,7 @@ for (const [lockPath, entry] of Object.entries(lock.packages ?? {})) {
     }
 
     const name = lockPath.replace(/^node_modules\//, "").replace(/.*\/node_modules\//, "");
+    if (EXCLUDED.has(name)) continue;
     candidates.push({ name, version: entry.version, path: lockPath });
 }
 
@@ -97,7 +109,11 @@ for (const c of missing) console.log(`  ${c.name}@${c.version}`);
 // any of them.
 const spec = rootCandidates.map((c) => `${c.name}@${c.version}`).join(" ");
 console.log(`repair-native-deps: installing all ${rootCandidates.length} together so none get pruned`);
-execSync(`npm install --no-save --no-audit --no-fund ${spec}`, { stdio: "inherit" });
+// --ignore-scripts because every package here ships a prebuilt binary and needs
+// no build step. Without it npm runs the root postinstall
+// (electron-builder install-app-deps) and any package lifecycle scripts, and a
+// single node-gyp failure aborts the whole command — leaving nothing repaired.
+execSync(`npm install --no-save --no-audit --no-fund --ignore-scripts ${spec}`, { stdio: "inherit" });
 
 const stillMissing = rootCandidates.filter((c) => !existsSync(c.path));
 if (stillMissing.length > 0) {
