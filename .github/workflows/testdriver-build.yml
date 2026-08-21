@@ -59,6 +59,11 @@ jobs:
                   retry_on: error
                   max_attempts: 3
                   timeout_minutes: 5
+            # See npm/cli#4828 — npm intermittently skips optional native
+            # binaries that are present in the lockfile, which kills the build at
+            # config load time.
+            - name: Repair skipped native binaries
+              run: node scripts/repair-native-deps.mjs
             - name: Install Task
               uses: arduino/setup-task@v2
               with:

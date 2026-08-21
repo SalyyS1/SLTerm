@@ -88,6 +88,13 @@ jobs:
                   max_attempts: 3
                   timeout_minutes: 10
 
+            # npm sometimes skips a platform's optional native binaries even when
+            # they are in the lockfile (npm/cli#4828). Rollup, lightningcss and
+            # tailwind's oxide are the ones that actually break the build when
+            # missing, so repair them rather than failing the whole release.
+            - name: Repair skipped native binaries
+              run: node scripts/repair-native-deps.mjs
+
             - name: Package
               run: task package
               env:
@@ -121,9 +128,12 @@ jobs:
         name: Publish Release
         needs: build
         runs-on: ubuntu-latest
-        # Only publish for a real tag; workflow_dispatch runs are build-only so
-        # the pipeline can be exercised without cutting a release.
-        if: startsWith(github.ref, 'refs/tags/v')
+        # `fail-fast: false` keeps the other platforms building when one fails,
+        # but a failed matrix leg still marks the whole `build` job failed, which
+        # would skip this one by default. `always()` means a bad platform costs
+        # that platform's installers, not the entire release. If nothing at all
+        # built, fail_on_unmatched_files below stops an empty release.
+        if: always() && startsWith(github.ref, 'refs/tags/v')
         steps:
             - uses: actions/download-artifact@v6
               with:

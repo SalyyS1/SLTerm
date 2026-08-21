@@ -145,9 +145,6 @@
         "ws": "^8.20.0",
         "yaml": "^2.7.1"
     },
-    "optionalDependencies": {
-        "@rollup/rollup-linux-x64-gnu": "^4.60.4"
-    },
     "packageManager": "npm@10.9.2",
     "workspaces": []
 }
