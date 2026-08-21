@@ -29,6 +29,10 @@ env:
     GO_VERSION: "1.25.6"
     NODE_VERSION: "22"
     GOTOOLCHAIN: local
+    # The renderer bundle is large (monaco ~8MB, mermaid ~4MB, cytoscape ~1.5MB)
+    # and the vite build OOMs on the default heap — it died on the macOS runner
+    # with "Reached heap limit". This is the value the previous pipeline used.
+    NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
     build:
