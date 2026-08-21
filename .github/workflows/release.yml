@@ -46,12 +46,22 @@ jobs:
                 include:
                     - label: windows-x64
                       runner: windows-latest
-                    - label: macos-arm64
+                      package_args: ""
+                    # Both macOS architectures come off the arm64 runner in one
+                    # electron-builder invocation. build:server:darwin already
+                    # compiles wavesrv for amd64 and arm64 there, so a second
+                    # runner buys nothing — and macos-13 (Intel) queues for a
+                    # long time. Building both together also produces a single
+                    # latest-mac.yml covering both arches; two separate jobs each
+                    # emit their own and the second would overwrite the first
+                    # when artifacts are merged, leaving the updater pointing at
+                    # the wrong architecture.
+                    - label: macos
                       runner: macos-latest
-                    - label: macos-x64
-                      runner: macos-13
+                      package_args: "-- --mac --arm64 --x64"
                     - label: linux-x64
                       runner: ubuntu-latest
+                      package_args: ""
         steps:
             - uses: actions/checkout@v6
 
@@ -100,7 +110,7 @@ jobs:
               run: node scripts/repair-native-deps.mjs
 
             - name: Package
-              run: task package
+              run: task package ${{ matrix.package_args }}
               env:
                   # Signing is opt-in: these are unset unless the repo defines
                   # them, and electron-builder falls back to unsigned builds.
