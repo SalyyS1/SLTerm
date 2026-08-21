@@ -45,15 +45,15 @@ Download from [**Releases**](https://github.com/SalyyS1/SLTerm/releases).
 
 ### macOS
 
-| File                       | Description                  |
-| -------------------------- | ---------------------------- |
-| `SLTerm-darwin-arm64-*.dmg` | Apple Silicon (recommended) |
-| `SLTerm-darwin-x64-*.dmg`   | Intel                       |
-| `SLTerm-darwin-*-*.zip`     | Portable app bundle         |
+| File                         | Description                 |
+| ---------------------------- | --------------------------- |
+| `SLTerm-darwin-arm64-*.zip`  | Apple Silicon (recommended) |
+| `SLTerm-darwin-x64-*.zip`    | Intel                       |
 
-Builds are currently unsigned, so the first launch needs right-click → **Open**
-(or `xattr -dr com.apple.quarantine /Applications/SLTerm.app`) to get past
-Gatekeeper.
+Unzip and move `SLTerm.app` to `/Applications`. Builds are currently unsigned, so
+the first launch needs right-click → **Open** (or
+`xattr -dr com.apple.quarantine /Applications/SLTerm.app`) to get past Gatekeeper.
+A `.dmg` will return once the project has a signing certificate.
 
 ### Linux
 
