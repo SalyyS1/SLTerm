@@ -10,7 +10,6 @@ vars:
         sh: node version.cjs
     RMRF: '{{if eq OS "windows"}}powershell Remove-Item -Force -Recurse -ErrorAction SilentlyContinue{{else}}rm -rf{{end}}'
     DATE: '{{if eq OS "windows"}}powershell Get-Date -UFormat{{else}}date{{end}}'
-    ARTIFACTS_BUCKET: slterm-github-artifacts/staging-w2
     RELEASES_BUCKET: dl.github.com/SalyyS1/SLTerm/releases-w2
     WINGET_PACKAGE: Salyvn.SLTerm
 
@@ -115,9 +114,11 @@ tasks:
             - task: copyfiles:'schema':'dist/schema'
 
     build:server:
-        desc: Build the wavesrv component.
+        desc: Build the wavesrv component for the host platform.
         cmds:
             - task: build:server:windows
+            - task: build:server:darwin
+            - task: build:server:linux
         deps:
             - go:mod:tidy
             - generate
@@ -142,6 +143,29 @@ tasks:
                   GO_ENV_VARS:
                       sh: echo "{{if eq "amd64" ARCH}}CC=\"zig cc -target x86_64-windows-gnu\"{{else}}CC=\"zig cc -target aarch64-windows-gnu\"{{end}}"
 
+    build:server:darwin:
+        desc: Build the wavesrv component for macOS (both architectures, for a universal app).
+        platforms: [darwin]
+        cmds:
+            - cmd: rm -f dist/bin/wavesrv*
+              ignore_error: true
+            - task: build:server:internal
+              vars:
+                  ARCHS: amd64,arm64
+                  GO_ENV_VARS:
+                      sh: echo "CGO_CFLAGS=\"-mmacosx-version-min=11.0\" CGO_LDFLAGS=\"-mmacosx-version-min=11.0\""
+
+    build:server:linux:
+        desc: Build the wavesrv component for Linux (current architecture only).
+        platforms: [linux]
+        cmds:
+            - cmd: rm -f dist/bin/wavesrv*
+              ignore_error: true
+            - task: build:server:internal
+              vars:
+                  ARCHS:
+                      sh: echo {{if eq "arm" ARCH}}arm64{{else}}{{ARCH}}{{end}}
+
     build:server:internal:
         requires:
             vars:
@@ -158,19 +182,26 @@ tasks:
         internal: true
 
     build:wsh:
-        desc: Build the wsh component for Windows targets.
+        desc: Build the wsh component for every supported target.
         cmds:
             - cmd: powershell -Command "Remove-Item -Force -ErrorAction SilentlyContinue -Path dist/bin/wsh*"
               platforms: [windows]
               ignore_error: true
+            - cmd: rm -f dist/bin/wsh*
+              platforms: [darwin, linux]
+              ignore_error: true
             - task: build:wsh:internal
-              vars:
-                  GOOS: windows
-                  GOARCH: amd64
+              vars: { GOOS: windows, GOARCH: amd64 }
             - task: build:wsh:internal
-              vars:
-                  GOOS: windows
-                  GOARCH: arm64
+              vars: { GOOS: windows, GOARCH: arm64 }
+            - task: build:wsh:internal
+              vars: { GOOS: darwin, GOARCH: amd64 }
+            - task: build:wsh:internal
+              vars: { GOOS: darwin, GOARCH: arm64 }
+            - task: build:wsh:internal
+              vars: { GOOS: linux, GOARCH: amd64 }
+            - task: build:wsh:internal
+              vars: { GOOS: linux, GOARCH: arm64 }
         deps:
             - go:mod:tidy
             - generate
@@ -214,49 +245,6 @@ tasks:
     version:
         desc: Get the current package version, or bump version if args are present. To pass args to `version.cjs`, add them after `--`. See `version.cjs` for usage definitions for the arguments.
         cmd: node version.cjs {{.CLI_ARGS}}
-
-    artifacts:upload:
-        desc: Uploads build artifacts to the staging bucket in S3. To add additional AWS CLI arguments, add them after `--`.
-        vars:
-            ORIGIN: "make/"
-            DESTINATION: "{{.ARTIFACTS_BUCKET}}/{{.VERSION}}"
-        cmd: aws s3 cp {{.ORIGIN}}/ s3://{{.DESTINATION}}/ --recursive --exclude "*/*" --exclude "builder-*.yml" {{.CLI_ARGS}}
-
-    artifacts:download:*:
-        desc: Downloads the specified artifacts version from the staging bucket. To add additional AWS CLI arguments, add them after `--`.
-        vars:
-            DL_VERSION: '{{ replace "v" "" (index .MATCH 0)}}'
-            ORIGIN: "{{.ARTIFACTS_BUCKET}}/{{.DL_VERSION}}"
-            DESTINATION: "artifacts/{{.DL_VERSION}}"
-        cmds:
-            - '{{.RMRF}} "{{.DESTINATION}}"'
-            - aws s3 cp s3://{{.ORIGIN}}/ {{.DESTINATION}}/ --recursive {{.CLI_ARGS}}
-
-    artifacts:publish:*:
-        desc: Publishes the specified artifacts version from the staging bucket to the releases bucket. To add additional AWS CLI arguments, add them after `--`.
-        vars:
-            UP_VERSION: '{{ replace "v" "" (index .MATCH 0)}}'
-            ORIGIN: "{{.ARTIFACTS_BUCKET}}/{{.UP_VERSION}}"
-            DESTINATION: "{{.RELEASES_BUCKET}}"
-        cmd: |
-            OUTPUT=$(aws s3 cp s3://{{.ORIGIN}}/ s3://{{.DESTINATION}}/ --recursive {{.CLI_ARGS}})
-
-            for line in $OUTPUT; do
-                PREFIX=${line%%{{.DESTINATION}}*}
-                SUFFIX=${line:${#PREFIX}}
-                if [[ -n "$SUFFIX" ]]; then
-                    echo "https://$SUFFIX"
-                fi
-            done
-
-    artifacts:winget:publish:*:
-        desc: Submits a version bump request to WinGet for the latest release.
-        status:
-            - exit {{if contains "beta" .UP_VERSION}}0{{else}}1{{end}}
-        vars:
-            UP_VERSION: '{{ replace "v" "" (index .MATCH 0)}}'
-        cmd: |
-            wingetcreate update {{.WINGET_PACKAGE}} -s -v {{.UP_VERSION}} -u "https://{{.RELEASES_BUCKET}}/{{.APP_NAME}}-win32-x64-{{.UP_VERSION}}.msi" -t {{.GITHUB_TOKEN}}
 
     dev:clearconfig:
         desc: Clear the config directory for slterm-dev
