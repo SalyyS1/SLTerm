@@ -35,9 +35,6 @@
         "app:disablectrlshiftdisplay": {
           "type": "boolean"
         },
-        "feature:waveappbuilder": {
-          "type": "boolean"
-        },
         "ai:*": {
           "type": "boolean"
         },
@@ -79,9 +76,6 @@
         },
         "ai:fixedfontsize": {
           "type": "number"
-        },
-        "waveai:showcloudmodes": {
-          "type": "boolean"
         },
         "waveai:defaultmode": {
           "type": "string"
@@ -286,21 +280,6 @@
         },
         "debug:pprofmemprofilerate": {
           "type": "integer"
-        },
-        "tsunami:*": {
-          "type": "boolean"
-        },
-        "tsunami:scaffoldpath": {
-          "type": "string"
-        },
-        "tsunami:sdkreplacepath": {
-          "type": "string"
-        },
-        "tsunami:sdkversion": {
-          "type": "string"
-        },
-        "tsunami:gopath": {
-          "type": "string"
         }
       },
       "additionalProperties": false,

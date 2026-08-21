@@ -28,7 +28,6 @@ const config = {
                 "!bin/*",
                 "bin/wavesrv.${arch}*",
                 "bin/wsh*",
-                "!tsunamiscaffold/**/*",
                 "!**/*.map",  // exclude source maps from production
                 "!**/*.d.ts", // exclude TypeScript declarations
                 "!**/test/**",
@@ -42,12 +41,6 @@ const config = {
             filter: ["package.json"],
         },
         "!node_modules", // We don't need electron-builder to package in Node modules as Vite has already bundled any code that our program is using.
-    ],
-    extraResources: [
-        {
-            from: "dist/tsunamiscaffold",
-            to: "tsunamiscaffold",
-        },
     ],
     directories: {
         output: "release",

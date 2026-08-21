@@ -64,8 +64,6 @@ type SettingsType struct {
 	AppDisableCtrlShiftArrows     bool   `json:"app:disablectrlshiftarrows,omitempty"`
 	AppDisableCtrlShiftDisplay    bool   `json:"app:disablectrlshiftdisplay,omitempty"`
 
-	FeatureWaveAppBuilder bool `json:"feature:waveappbuilder,omitempty"`
-
 	AiClear         bool    `json:"ai:*,omitempty"`
 	AiPreset        string  `json:"ai:preset,omitempty"`
 	AiApiType       string  `json:"ai:apitype,omitempty"`
@@ -81,8 +79,7 @@ type SettingsType struct {
 	AiFontSize      float64 `json:"ai:fontsize,omitempty"`
 	AiFixedFontSize float64 `json:"ai:fixedfontsize,omitempty"`
 
-	WaveAiShowCloudModes bool   `json:"waveai:showcloudmodes,omitempty"`
-	WaveAiDefaultMode    string `json:"waveai:defaultmode,omitempty"`
+	WaveAiDefaultMode string `json:"waveai:defaultmode,omitempty"`
 
 	TermClear               bool     `json:"term:*,omitempty"`
 	TermFontSize            float64  `json:"term:fontsize,omitempty"`
@@ -161,12 +158,6 @@ type SettingsType struct {
 	DebugClear               bool `json:"debug:*,omitempty"`
 	DebugPprofPort           *int `json:"debug:pprofport,omitempty"`
 	DebugPprofMemProfileRate *int `json:"debug:pprofmemprofilerate,omitempty"`
-
-	TsunamiClear          bool   `json:"tsunami:*,omitempty"`
-	TsunamiScaffoldPath   string `json:"tsunami:scaffoldpath,omitempty"`
-	TsunamiSdkReplacePath string `json:"tsunami:sdkreplacepath,omitempty"`
-	TsunamiSdkVersion     string `json:"tsunami:sdkversion,omitempty"`
-	TsunamiGoPath         string `json:"tsunami:gopath,omitempty"`
 }
 
 func (s *SettingsType) GetAiSettings() *AiSettingsType {

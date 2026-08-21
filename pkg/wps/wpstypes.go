@@ -12,8 +12,6 @@ const (
 	Event_ConnChange          = "connchange"
 	Event_SysInfo             = "sysinfo"
 	Event_ControllerStatus    = "controllerstatus"
-	Event_BuilderStatus       = "builderstatus"
-	Event_BuilderOutput       = "builderoutput"
 	Event_WaveObjUpdate       = "waveobj:update"
 	Event_BlockFile           = "blockfile"
 	Event_Config              = "config"
@@ -23,7 +21,6 @@ const (
 	Event_WorkspaceUpdate     = "workspace:update"
 	Event_WaveAIRateLimit     = "waveai:ratelimit"
 	Event_WaveAppAppGoUpdated = "waveapp:appgoupdated"
-	Event_TsunamiUpdateMeta   = "tsunami:updatemeta"
 	Event_AIModeConfig        = "waveai:modeconfig"
 	Event_TabIndicator        = "tab:indicator"
 	Event_BlockJobStatus      = "block:jobstatus" // type: BlockJobStatusData

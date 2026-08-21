@@ -17,10 +17,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/SalyyS1/SLTerm/pkg/panichandler"
 	"github.com/SalyyS1/SLTerm/pkg/wavejwt"
 	"github.com/SalyyS1/SLTerm/pkg/waveobj"
-	"github.com/SalyyS1/SLTerm/pkg/wcloud"
 	"github.com/SalyyS1/SLTerm/pkg/wps"
 	"github.com/SalyyS1/SLTerm/pkg/wstore"
 )
@@ -143,22 +141,6 @@ func ResolveBlockIdFromPrefix(ctx context.Context, tabId string, blockIdPrefix s
 	}
 
 	return "", fmt.Errorf("widget_id not found: %q", blockIdPrefix)
-}
-
-func GoSendNoTelemetryUpdate(telemetryEnabled bool) {
-	go func() {
-		defer func() {
-			panichandler.PanicHandler("GoSendNoTelemetryUpdate", recover())
-		}()
-		ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancelFn()
-		clientId := wstore.GetClientId()
-		err := wcloud.SendNoTelemetryUpdate(ctx, clientId, !telemetryEnabled)
-		if err != nil {
-			log.Printf("[error] sending no-telemetry update: %v\n", err)
-			return
-		}
-	}()
 }
 
 func InitMainServer() error {

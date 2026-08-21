@@ -51,12 +51,6 @@ function initGlobal(initOpts: GlobalInitOptions) {
 
 function initGlobalAtoms(initOpts: GlobalInitOptions) {
     const windowIdAtom = atom(initOpts.windowId) as PrimitiveAtom<string>;
-    const builderIdAtom = atom(initOpts.builderId) as PrimitiveAtom<string>;
-    const builderAppIdAtom = atom<string>(null) as PrimitiveAtom<string>;
-    const waveWindowTypeAtom = atom((get) => {
-        const builderId = get(builderIdAtom);
-        return builderId != null ? "builder" : "tab";
-    }) as Atom<"tab" | "builder">;
     const uiContextAtom = atom((get) => {
         const uiContext: UIContext = {
             windowid: initOpts.windowId,
@@ -100,22 +94,9 @@ function initGlobalAtoms(initOpts: GlobalInitOptions) {
         return WOS.getObjectValue(WOS.makeORef("workspace", windowData.workspaceid), get);
     });
     const fullConfigAtom = atom(null) as PrimitiveAtom<FullConfigType>;
-    const waveaiModeConfigAtom = atom(null) as PrimitiveAtom<Record<string, AIModeConfigType>>;
     const settingsAtom = atom((get) => {
         return get(fullConfigAtom)?.settings ?? {};
     }) as Atom<SettingsType>;
-    const hasCustomAIPresetsAtom = atom((get) => {
-        const fullConfig = get(fullConfigAtom);
-        if (!fullConfig?.presets) {
-            return false;
-        }
-        for (const presetId in fullConfig.presets) {
-            if (presetId.startsWith("ai@") && presetId !== "ai@global" && presetId !== "ai@wave") {
-                return true;
-            }
-        }
-        return false;
-    }) as Atom<boolean>;
     // this is *the* tab that this tabview represents.  it should never change.
     const staticTabIdAtom: Atom<string> = atom(initOpts.tabId);
     const controlShiftDelayAtom = atom(false);
@@ -169,18 +150,12 @@ function initGlobalAtoms(initOpts: GlobalInitOptions) {
     const notificationsAtom = atom<NotificationType[]>([]);
     const notificationPopoverModeAtom = atom<boolean>(false);
     const reinitVersion = atom(0);
-    const rateLimitInfoAtom = atom(null) as PrimitiveAtom<RateLimitInfo>;
     atoms = {
         // initialized in wave.ts (will not be null inside of application)
-        builderId: builderIdAtom,
-        builderAppId: builderAppIdAtom,
-        waveWindowType: waveWindowTypeAtom,
         uiContext: uiContextAtom,
         workspace: workspaceAtom,
         fullConfigAtom,
-        waveaiModeConfigAtom,
         settingsAtom,
-        hasCustomAIPresetsAtom,
         staticTabId: staticTabIdAtom,
         isFullScreen: isFullScreenAtom,
         zoomFactorAtom,
@@ -194,7 +169,6 @@ function initGlobalAtoms(initOpts: GlobalInitOptions) {
         notifications: notificationsAtom,
         notificationPopoverMode: notificationPopoverModeAtom,
         reinitVersion,
-        waveAIRateLimitInfoAtom: rateLimitInfoAtom,
     } as GlobalAtomsType;
 }
 
@@ -217,13 +191,6 @@ function initGlobalWaveEventSubs(initOpts: WaveInitOpts) {
             },
         },
         {
-            eventType: "waveai:modeconfig",
-            handler: (event) => {
-                const modeConfigs = (event.data as AIModeConfigUpdate).configs;
-                globalStore.set(atoms.waveaiModeConfigAtom, modeConfigs);
-            },
-        },
-        {
             eventType: "userinput",
             handler: (event) => {
                 // console.log("userinput event handler", event);
@@ -241,13 +208,6 @@ function initGlobalWaveEventSubs(initOpts: WaveInitOpts) {
                 if (fileSubject != null) {
                     fileSubject.next(fileData);
                 }
-            },
-        },
-        {
-            eventType: "waveai:ratelimit",
-            handler: (event) => {
-                const rateLimitInfo: RateLimitInfo = event.data;
-                globalStore.set(atoms.waveAIRateLimitInfoAtom, rateLimitInfo);
             },
         },
         {

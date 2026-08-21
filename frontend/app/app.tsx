@@ -32,6 +32,8 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 import { AppBackground } from "./app-bg";
 import { CenteredDiv } from "./element/quickelems";
 import { NotificationBubbles } from "./notification/notificationbubbles";
+import { PetHUD } from "./view/pet/pet-hud";
+import { PetOverlay } from "./view/pet/pet-overlay";
 
 import "./app.scss";
 
@@ -365,6 +367,13 @@ const AppInner = () => {
             <DndProvider backend={HTML5Backend}>
                 <Workspace />
             </DndProvider>
+            {/* One pet per window. These were previously rendered inside the
+                terminal block, so every open terminal spawned its own
+                independent pet. Both components take no props and already scan
+                the whole document for terminal output, so app level is where
+                they belong. */}
+            <PetOverlay />
+            <PetHUD />
             <FlashError />
             {isDev() ? <NotificationBubbles></NotificationBubbles> : null}
         </div>

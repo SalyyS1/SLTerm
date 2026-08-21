@@ -4,7 +4,6 @@ go 1.25.6
 
 require (
 	github.com/Microsoft/go-winio v0.6.2
-	github.com/SalyyS1/SLTerm/tsunami v0.12.3
 	github.com/alexflint/go-filemutex v1.3.0
 	github.com/creack/pty v1.1.24
 	github.com/emirpasic/gods v1.18.1
@@ -63,5 +62,3 @@ require (
 replace github.com/kevinburke/ssh_config => github.com/wavetermdev/ssh_config v0.0.0-20241219203747-6409e4292f34
 
 replace github.com/creack/pty => github.com/photostorm/pty v1.1.19-0.20230903182454-31354506054b
-
-replace github.com/SalyyS1/SLTerm/tsunami => ./tsunami

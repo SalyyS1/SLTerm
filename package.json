@@ -26,6 +26,7 @@
         "build:prod": "electron-vite build --mode production",
         "coverage": "vitest run --coverage",
         "test": "vitest",
+        "typecheck": "tsc --noEmit",
         "postinstall": "electron-builder install-app-deps"
     },
     "devDependencies": {
@@ -147,7 +148,6 @@
     },
     "packageManager": "npm@10.9.2",
     "workspaces": [
-        "docs",
-        "tsunami/frontend"
+        "docs"
     ]
 }

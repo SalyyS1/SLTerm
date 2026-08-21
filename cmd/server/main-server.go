@@ -34,7 +34,6 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/util/utilfn"
 	"github.com/SalyyS1/SLTerm/pkg/wavebase"
 	"github.com/SalyyS1/SLTerm/pkg/waveobj"
-	"github.com/SalyyS1/SLTerm/pkg/wcloud"
 	"github.com/SalyyS1/SLTerm/pkg/wconfig"
 	"github.com/SalyyS1/SLTerm/pkg/wcore"
 	"github.com/SalyyS1/SLTerm/pkg/web"
@@ -64,8 +63,6 @@ const TelemetryInitialCountsWait = 5 * time.Second
 const TelemetryCountsInterval = 1 * time.Hour
 const BackupCleanupTick = 2 * time.Minute
 const BackupCleanupInterval = 4 * time.Hour
-const InitialDiagnosticWait = 5 * time.Minute
-const DiagnosticTick = 10 * time.Minute
 
 var shutdownOnce sync.Once
 
@@ -136,42 +133,6 @@ func telemetryLoop() {
 	}
 }
 
-func diagnosticLoop() {
-	defer func() {
-		panichandler.PanicHandler("diagnosticLoop", recover())
-	}()
-	if os.Getenv("SLTERM_NOPING") != "" {
-		log.Printf("SLTERM_NOPING set, disabling diagnostic ping\n")
-		return
-	}
-	var lastSentDate string
-	time.Sleep(InitialDiagnosticWait)
-	for {
-		currentDate := time.Now().Format("2006-01-02")
-		if lastSentDate == "" || lastSentDate != currentDate {
-			if sendDiagnosticPing() {
-				lastSentDate = currentDate
-			}
-		}
-		time.Sleep(DiagnosticTick)
-	}
-}
-
-func sendDiagnosticPing() bool {
-	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFn()
-
-	rpcClient := wshclient.GetBareRpcClient()
-	isOnline, err := wshclient.NetworkOnlineCommand(rpcClient, &wshrpc.RpcOpts{Route: "electron", Timeout: 2000})
-	if err != nil || !isOnline {
-		return false
-	}
-	clientId := wstore.GetClientId()
-	usageTelemetry := telemetry.IsTelemetryEnabled()
-	wcloud.SendDiagnosticPing(ctx, clientId, usageTelemetry)
-	return true
-}
-
 func setupTelemetryConfigHandler() {
 	watcher := wconfig.GetWatcher()
 	if watcher == nil {
@@ -184,7 +145,6 @@ func setupTelemetryConfigHandler() {
 		newTelemetryEnabled := newConfig.Settings.TelemetryEnabled
 		if newTelemetryEnabled != currentTelemetryEnabled {
 			currentTelemetryEnabled = newTelemetryEnabled
-			wcore.GoSendNoTelemetryUpdate(newTelemetryEnabled)
 		}
 	})
 }
@@ -224,11 +184,6 @@ func sendTelemetryWrapper() {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelFn()
 	beforeSendActivityUpdate(ctx)
-	clientId := wstore.GetClientId()
-	err := wcloud.SendAllTelemetry(clientId)
-	if err != nil {
-		log.Printf("[error] sending telemetry: %v\n", err)
-	}
 }
 
 func updateTelemetryCounts(lastCounts telemetrydata.TEventProps) telemetrydata.TEventProps {
@@ -405,10 +360,6 @@ func grabAndRemoveEnvVars() error {
 	if err != nil {
 		return err
 	}
-	err = wcloud.CacheAndRemoveEnvVars()
-	if err != nil {
-		return err
-	}
 
 	// Remove SLTERM env vars that leak from prod => dev
 	os.Unsetenv("SLTERM_CLIENTID")
@@ -572,7 +523,6 @@ func main() {
 	maybeStartPprofServer()
 	go stdinReadWatch()
 	go telemetryLoop()
-	go diagnosticLoop()
 	setupTelemetryConfigHandler()
 	go updateTelemetryCountsLoop()
 	go backupCleanupLoop()

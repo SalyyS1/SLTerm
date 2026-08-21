@@ -1,0 +1,229 @@
+// Copyright 2025, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.aitools-view {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    color: var(--main-text-color);
+}
+
+.aitools-tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.aitools-tabs-spacer {
+    flex-grow: 1;
+}
+
+.aitools-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--secondary-text-color);
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover {
+        background: var(--highlight-bg-color);
+        color: var(--main-text-color);
+    }
+
+    &.active {
+        background: var(--highlight-bg-color);
+        color: var(--main-text-color);
+        box-shadow: inset 0 -2px 0 var(--accent-color);
+    }
+}
+
+.aitools-count {
+    font-size: 11px;
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
+}
+
+.aitools-refresh {
+    border: none;
+    background: transparent;
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+
+    &:hover {
+        background: var(--highlight-bg-color);
+        color: var(--main-text-color);
+    }
+}
+
+.aitools-warning {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--error-color);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.aitools-body {
+    display: flex;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.aitools-pane-left {
+    width: 40%;
+    min-width: 220px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color);
+}
+
+.aitools-pane-right {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.aitools-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.aitools-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+        background: var(--highlight-bg-color);
+    }
+
+    &.selected {
+        background: var(--highlight-bg-color);
+        box-shadow: inset 2px 0 0 var(--accent-color);
+    }
+
+    &.static {
+        cursor: default;
+
+        &:hover {
+            background: transparent;
+        }
+    }
+}
+
+.aitools-row-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.aitools-row-name {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.aitools-row-desc {
+    font-size: 12px;
+    color: var(--secondary-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.mono {
+        font-family: var(--fixed-font);
+        font-size: 11px;
+    }
+}
+
+.aitools-row-src {
+    font-family: var(--fixed-font);
+    font-size: 10px;
+    color: var(--secondary-text-color);
+    opacity: 0.65;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.aitools-scope {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    color: var(--secondary-text-color);
+}
+
+.aitools-scope-project {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.aitools-transport {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--accent-color);
+}
+
+.aitools-detail-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.aitools-detail-name {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.aitools-detail-path {
+    font-family: var(--fixed-font);
+    font-size: 10px;
+    color: var(--secondary-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.aitools-content {
+    flex-grow: 1;
+    margin: 0;
+    padding: 10px;
+    overflow: auto;
+    font-family: var(--fixed-font);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.aitools-empty {
+    padding: 14px 10px;
+    font-size: 12px;
+    color: var(--secondary-text-color);
+}
