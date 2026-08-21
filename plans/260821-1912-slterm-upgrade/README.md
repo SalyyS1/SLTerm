@@ -81,6 +81,7 @@ the real weak seams rather than importing a fix for a bug SLTerm does not have.
 | 0 | Baseline, guardrails, quick wins | done | No | [phase-0-baseline.md](phase-0-baseline.md) |
 | 0.5 | Scope reduction — cut non-ADE subsystems | done | No | [phase-0.5-scope-cut.md](phase-0.5-scope-cut.md) |
 | 0.6 | ADE feature layer, build pipeline, release artifact | done | No | [phase-0.6-ade-layer-and-build.md](phase-0.6-ade-layer-and-build.md) |
+| 0.7 | CI repair + multi-platform release pipeline | done | No | [phase-0.7-ci-and-release.md](phase-0.7-ci-and-release.md) |
 | 1 | Terminal rendering hardening | 2-3w | No | [phase-1-terminal.md](phase-1-terminal.md) |
 | 2 | Host adapter + Tauri spike → gate | 2-3w | Prep | [phase-2-host-adapter.md](phase-2-host-adapter.md) |
 | 3 | Single-webview in-DOM tabs | 3-4w | No (done under Electron) | [phase-3-tabs.md](phase-3-tabs.md) |
