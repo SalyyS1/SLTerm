@@ -166,9 +166,6 @@ type WshRpcInterface interface {
 	WshRpcFileInterface
 	WaveFileReadStreamCommand(ctx context.Context, data CommandWaveFileReadStreamData) (*WaveFileInfo, error)
 
-	// builder
-	WshRpcBuilderInterface
-
 	// proc
 	VDomRenderCommand(ctx context.Context, data vdom.VDomFrontendUpdate) chan RespOrErrorUnion[*vdom.VDomBackendUpdate]
 	VDomUrlRequestCommand(ctx context.Context, data VDomUrlRequestData) chan RespOrErrorUnion[VDomUrlRequestResponse]
@@ -207,6 +204,14 @@ type WshRpcInterface interface {
 	PetAddXPCommand(ctx context.Context, data PetXPData) (*PetStateData, error)
 	PetGetCatalogueCommand(ctx context.Context) ([]PetCatalogueEntryData, error)
 	PetGetDialogueCommand(ctx context.Context, data PetDialogueRequestData) (*PetDialogueResponseData, error)
+	// ai tools (Claude Code skills / MCP servers / agents / commands)
+	AIToolsGetInventoryCommand(ctx context.Context, data AIToolsInventoryRequestData) (*AIToolsInventoryData, error)
+	AIToolsReadItemCommand(ctx context.Context, data AIToolsItemRefData) (*AIToolsItemContentData, error)
+	AIToolsWriteItemCommand(ctx context.Context, data AIToolsWriteItemData) error
+	AIToolsDeleteItemCommand(ctx context.Context, data AIToolsItemRefData) error
+	// agent teams (read-only view of multi-agent sessions)
+	AgentTeamsGetSnapshotCommand(ctx context.Context) (*AgentTeamsSnapshotData, error)
+	AgentTeamsGetTasksCommand(ctx context.Context, data AgentTeamsTasksRequestData) ([]AgentTeamsTaskData, error)
 }
 
 // for frontend
@@ -973,4 +978,107 @@ type PetCatalogueEntryData struct {
 	FrameHeight     int    `json:"frameHeight"`
 	Type            string `json:"type"`
 	DiscordAssetKey string `json:"discordAssetKey"`
+}
+
+// ============================================================
+// AI Tools RPC Types (Claude Code skills / MCP / agents / commands)
+// ============================================================
+
+// AIToolsInventoryRequestData scopes an inventory read. ProjectDir is optional;
+// when empty only user-scope config is read.
+type AIToolsInventoryRequestData struct {
+	ProjectDir string `json:"projectdir,omitempty"`
+}
+
+type AIToolsItemData struct {
+	Kind        string `json:"kind"` // "skill" | "agent" | "command"
+	Name        string `json:"name"`
+	Scope       string `json:"scope"` // "user" | "project"
+	Path        string `json:"path"`
+	Description string `json:"description,omitempty"`
+	SizeBytes   int64  `json:"sizebytes"`
+	ModTimeMs   int64  `json:"modtimems"`
+}
+
+type AIToolsMCPServerData struct {
+	Name       string            `json:"name"`
+	Transport  string            `json:"transport"` // "stdio" | "http"
+	Command    string            `json:"command,omitempty"`
+	Args       []string          `json:"args,omitempty"`
+	URL        string            `json:"url,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
+	Scope      string            `json:"scope"`
+	SourcePath string            `json:"sourcepath"`
+}
+
+// AIToolsInventoryData is a whole snapshot. Warnings is non-empty when config
+// existed but could not be read, so the UI can show a degraded state instead of
+// an empty list that looks like "nothing configured".
+type AIToolsInventoryData struct {
+	Skills   []AIToolsItemData      `json:"skills"`
+	Agents   []AIToolsItemData      `json:"agents"`
+	Commands []AIToolsItemData      `json:"commands"`
+	MCP      []AIToolsMCPServerData `json:"mcp"`
+	Warnings []string               `json:"warnings,omitempty"`
+}
+
+// AIToolsItemRefData addresses a single item for read or delete.
+type AIToolsItemRefData struct {
+	Kind       string `json:"kind"`
+	Scope      string `json:"scope"`
+	Name       string `json:"name"`
+	ProjectDir string `json:"projectdir,omitempty"`
+}
+
+type AIToolsItemContentData struct {
+	Content string `json:"content"`
+}
+
+type AIToolsWriteItemData struct {
+	Kind       string `json:"kind"`
+	Scope      string `json:"scope"`
+	Name       string `json:"name"`
+	ProjectDir string `json:"projectdir,omitempty"`
+	Content    string `json:"content"`
+}
+
+// ============================================================
+// Agent Teams RPC Types (read-only)
+// ============================================================
+
+type AgentTeamsMemberData struct {
+	AgentID   string `json:"agentId"`
+	Name      string `json:"name"`
+	AgentType string `json:"agentType"`
+	Model     string `json:"model,omitempty"`
+	JoinedAt  int64  `json:"joinedAt,omitempty"`
+	Cwd       string `json:"cwd,omitempty"`
+}
+
+type AgentTeamsTaskData struct {
+	ID         string   `json:"id"`
+	Subject    string   `json:"subject"`
+	Status     string   `json:"status"`
+	Owner      string   `json:"owner,omitempty"`
+	BlockedBy  []string `json:"blockedBy,omitempty"`
+	ActiveForm string   `json:"activeForm,omitempty"`
+}
+
+type AgentTeamsTeamData struct {
+	DirName     string                 `json:"dirname"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	CreatedAt   int64                  `json:"createdAt,omitempty"`
+	LeadAgentID string                 `json:"leadAgentId,omitempty"`
+	Members     []AgentTeamsMemberData `json:"members"`
+	Tasks       []AgentTeamsTaskData   `json:"tasks"`
+}
+
+type AgentTeamsSnapshotData struct {
+	Teams    []AgentTeamsTeamData `json:"teams"`
+	Warnings []string             `json:"warnings,omitempty"`
+}
+
+type AgentTeamsTasksRequestData struct {
+	TeamName string `json:"teamname"`
 }

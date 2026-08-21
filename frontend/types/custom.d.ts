@@ -7,15 +7,10 @@ import type * as rxjs from "rxjs";
 
 declare global {
     type GlobalAtomsType = {
-        builderId: jotai.PrimitiveAtom<string>; // readonly (for builder mode)
-        builderAppId: jotai.PrimitiveAtom<string>; // app being edited in builder mode
-        waveWindowType: jotai.Atom<"tab" | "builder">; // derived from builderId
         uiContext: jotai.Atom<UIContext>; // driven from windowId, tabId
         workspace: jotai.Atom<Workspace>; // driven from WOS
         fullConfigAtom: jotai.PrimitiveAtom<FullConfigType>; // driven from WOS, settings -- updated via WebSocket
-        waveaiModeConfigAtom: jotai.PrimitiveAtom<Record<string, AIModeConfigType>>; // resolved AI mode configs -- updated via WebSocket
         settingsAtom: jotai.Atom<SettingsType>; // derrived from fullConfig
-        hasCustomAIPresetsAtom: jotai.Atom<boolean>; // derived from fullConfig
         staticTabId: jotai.Atom<string>;
         isFullScreen: jotai.PrimitiveAtom<boolean>;
         zoomFactorAtom: jotai.PrimitiveAtom<number>;
@@ -27,9 +22,8 @@ declare global {
         allConnStatus: jotai.Atom<ConnStatus[]>;
         flashErrors: jotai.PrimitiveAtom<FlashErrorType[]>;
         notifications: jotai.PrimitiveAtom<NotificationType[]>;
-        notificationPopoverMode: jotai.Atom<boolean>;
+        notificationPopoverMode: jotai.PrimitiveAtom<boolean>;
         reinitVersion: jotai.PrimitiveAtom<number>;
-        waveAIRateLimitInfoAtom: jotai.PrimitiveAtom<RateLimitInfo>;
     };
 
     type WritableWaveObjectAtom<T extends WaveObj> = jotai.WritableAtom<T, [value: T], void>;
@@ -62,7 +56,6 @@ declare global {
         clientId: string;
         environment: "electron" | "renderer";
         primaryTabStartup?: boolean;
-        builderId?: string;
     };
 
     type WaveInitOpts = {
@@ -71,12 +64,6 @@ declare global {
         windowId: string;
         activate: boolean;
         primaryTabStartup?: boolean;
-    };
-
-    type BuilderInitOpts = {
-        builderId: string;
-        clientId: string;
-        windowId: string;
     };
 
     type ElectronApi = {
@@ -94,7 +81,6 @@ declare global {
         getAboutModalDetails: () => AboutModalDetails; // get-about-modal-details
         getZoomFactor: () => number; // get-zoom-factor
         showWorkspaceAppMenu: (workspaceId: string) => void; // workspace-appmenu-show
-        showBuilderAppMenu: (builderId: string) => void; // builder-appmenu-show
         showContextMenu: (workspaceId: string, menu: ElectronContextMenuItem[]) => void; // contextmenu-show
         onContextMenuClick: (callback: (id: string) => void) => void; // contextmenu-click
         onNavigate: (callback: (url: string) => void) => void;
@@ -121,7 +107,6 @@ declare global {
         closeTab: (workspaceId: string, tabId: string) => void; // close-tab
         setWindowInitStatus: (status: "ready" | "wave-ready") => void; // set-window-init-status
         onWaveInit: (callback: (initOpts: WaveInitOpts) => void) => void; // wave-init
-        onBuilderInit: (callback: (initOpts: BuilderInitOpts) => void) => void; // builder-init
         sendLog: (log: string) => void; // fe-log
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path
@@ -129,11 +114,8 @@ declare global {
         setKeyboardChordMode: () => void; // set-keyboard-chord-mode
         clearWebviewStorage: (webContentsId: number) => Promise<void>; // clear-webview-storage
         setWaveAIOpen: (isOpen: boolean) => void; // set-waveai-open
-        closeBuilderWindow: () => void; // close-builder-window
         incrementTermCommands: (opts?: { isRemote?: boolean; isWsl?: boolean; isDurable?: boolean }) => void; // increment-term-commands
         nativePaste: () => void; // native-paste
-        openBuilder: (appId?: string) => void; // open-builder
-        setBuilderWindowAppId: (appId: string) => void; // set-builder-window-appid
         setFullScreen: (isFullScreen: boolean) => void; // set-fullscreen
         doRefresh: () => void; // do-refresh
         getPathForFile: (file: File) => string; // webUtils.getPathForFile

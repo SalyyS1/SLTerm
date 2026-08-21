@@ -50,8 +50,9 @@ LazyRegistry.set("vdom", () => import("@/app/view/vdom/vdom-model").then((m) => 
 LazyRegistry.set("tips", () => import("../view/quicktipsview/quicktipsview").then((m) => m.QuickTipsViewModel));
 LazyRegistry.set("help", () => import("@/view/helpview/helpview").then((m) => m.HelpViewModel));
 LazyRegistry.set("launcher", () => import("@/app/view/launcher/launcher").then((m) => m.LauncherViewModel));
-LazyRegistry.set("tsunami", () => import("@/app/view/tsunami/tsunami").then((m) => m.TsunamiViewModel));
 LazyRegistry.set("waveconfig", () => import("../view/waveconfig/waveconfig-model").then((m) => m.WaveConfigViewModel));
+LazyRegistry.set("aitools", () => import("@/app/view/aitools/aitools").then((m) => m.AIToolsViewModel));
+LazyRegistry.set("agentteams", () => import("@/app/view/agentteams/agentteams").then((m) => m.AgentTeamsViewModel));
 
 function makeViewModel(blockId: string, blockView: string, nodeModel: BlockNodeModel, tabModel: TabModel): ViewModel {
     const eagerCtor = EagerRegistry.get(blockView);

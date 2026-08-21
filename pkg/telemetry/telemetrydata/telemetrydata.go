@@ -151,7 +151,6 @@ type TEventProps struct {
 	CountViews         map[string]int `json:"count:views,omitempty"`
 
 	WaveAIAPIType              string         `json:"waveai:apitype,omitempty"`
-	WaveAIModel                string         `json:"waveai:model,omitempty"`
 	WaveAIChatId               string         `json:"waveai:chatid,omitempty"`
 	WaveAIStepNum              int            `json:"waveai:stepnum,omitempty"`
 	WaveAIInputTokens          int            `json:"waveai:inputtokens,omitempty"`

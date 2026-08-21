@@ -61,11 +61,14 @@ class PetController {
 
     /** Select a pet from the catalogue — sets atom directly, no backend sync */
     async selectPet(petId: string): Promise<void> {
+        // Fire-and-forget so a slow backend can't stall the UI, but a rejection
+        // must stay visible: this call silently did nothing for its whole life
+        // because it named a command that does not exist (PetSelectCommand) and
+        // an `as any` cast plus a swallowing .catch() hid both facts.
         try {
-            // Just tell backend (fire-and-forget), don't let it overwrite our atom
-            (RpcApi as any).PetSelectCommand(TabRpcClient, { petId }).catch(() => {});
-        } catch (_) {
-            // ignore
+            await RpcApi.PetSelectPetCommand(TabRpcClient, { petId });
+        } catch (err) {
+            console.error("PetSelectPetCommand failed:", err);
         }
     }
 
@@ -74,8 +77,8 @@ class PetController {
         try {
             const [, profile, session] = await Promise.all([
                 Promise.resolve(null), // pet state managed locally, not synced from backend
-                (RpcApi as any).PetGetProfileCommand(TabRpcClient, {}),
-                (RpcApi as any).PetGetSessionCommand(TabRpcClient, {}),
+                RpcApi.PetGetProfileCommand(TabRpcClient),
+                RpcApi.PetGetSessionCommand(TabRpcClient),
             ]);
             // DO NOT overwrite petInstanceAtom — user's pet selection is local
             if (profile) globalStore.set(playerProfileAtom, profile as PlayerProfile);
@@ -94,11 +97,13 @@ class PetController {
 
     /** Interact with pet (pet, feed, etc.) — no atom overwrite */
     async interact(action: string): Promise<void> {
+        // Fire-and-forget to backend, don't overwrite petInstanceAtom. Failures
+        // are logged rather than swallowed so a renamed/removed command shows up
+        // instead of silently doing nothing.
         try {
-            // Fire-and-forget to backend, don't overwrite petInstanceAtom
-            (RpcApi as any).PetInteractCommand(TabRpcClient, { action }).catch(() => {});
-        } catch (_) {
-            // ignore
+            await RpcApi.PetInteractCommand(TabRpcClient, { action });
+        } catch (err) {
+            console.error("PetInteractCommand failed:", err);
         }
     }
 

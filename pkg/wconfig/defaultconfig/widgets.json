@@ -10,6 +10,58 @@
             }
         }
     },
+    "defwidget@claude": {
+        "display:order": -4.9,
+        "icon": "robot",
+        "label": "claude",
+        "description": "Claude Code in an interactive PTY",
+        "blockdef": {
+            "meta": {
+                "view": "term",
+                "controller": "cmd",
+                "cmd": "claude",
+                "cmd:interactive": true,
+                "cmd:login": true
+            }
+        }
+    },
+    "defwidget@codex": {
+        "display:order": -4.8,
+        "icon": "robot",
+        "label": "codex",
+        "description": "Codex CLI in an interactive PTY",
+        "blockdef": {
+            "meta": {
+                "view": "term",
+                "controller": "cmd",
+                "cmd": "codex",
+                "cmd:interactive": true,
+                "cmd:login": true
+            }
+        }
+    },
+    "defwidget@aitools": {
+        "display:order": -4.7,
+        "icon": "toolbox",
+        "label": "ai tools",
+        "description": "Browse Claude Code skills, MCP servers, agents and commands",
+        "blockdef": {
+            "meta": {
+                "view": "aitools"
+            }
+        }
+    },
+    "defwidget@agentteams": {
+        "display:order": -4.6,
+        "icon": "users",
+        "label": "agents",
+        "description": "Live view of multi-agent teams and their task board",
+        "blockdef": {
+            "meta": {
+                "view": "agentteams"
+            }
+        }
+    },
     "defwidget@files": {
         "display:order": -4,
         "icon": "folder",
@@ -28,16 +80,6 @@
         "blockdef": {
             "meta": {
                 "view": "web"
-            }
-        }
-    },
-    "defwidget@ai": {
-        "display:order": -2,
-        "icon": "sparkles",
-        "label": "ai",
-        "blockdef": {
-            "meta": {
-                "view": "waveai"
             }
         }
     },

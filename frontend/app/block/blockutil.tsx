@@ -22,14 +22,17 @@ export function blockViewToIcon(view: string): string {
     if (view == "web") {
         return "globe";
     }
-    if (view == "waveai") {
-        return "sparkles";
-    }
     if (view == "help") {
         return "circle-question";
     }
     if (view == "tips") {
         return "lightbulb";
+    }
+    if (view == "aitools") {
+        return "toolbox";
+    }
+    if (view == "agentteams") {
+        return "users";
     }
     return "square";
 }
@@ -47,14 +50,17 @@ export function blockViewToName(view: string): string {
     if (view == "web") {
         return "Web";
     }
-    if (view == "waveai") {
-        return "SLTerm AI";
-    }
     if (view == "help") {
         return "Help";
     }
     if (view == "tips") {
         return "Tips";
+    }
+    if (view == "aitools") {
+        return "AI Tools";
+    }
+    if (view == "agentteams") {
+        return "Agent Teams";
     }
     return view;
 }

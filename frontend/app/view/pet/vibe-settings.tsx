@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Vibe Settings — Pet System, Food Shop (buy → drop to terminal), Discord.
+ * Vibe Settings — Pet System, Food Shop (buy → drop to terminal), Dialogue.
  */
 
 import {
@@ -37,7 +37,6 @@ const VibeSettingsContent = memo(({ model }: { model: any }) => {
             <PetSystemSection />
             <FoodShopSection />
             <PetDialogueSection />
-            <DiscordSection />
         </div>
     );
 });
@@ -441,110 +440,6 @@ const PetDialogueSection = memo(() => {
 });
 PetDialogueSection.displayName = "PetDialogueSection";
 
-// ============================================================
-// Discord Section
-// ============================================================
-const DiscordSection = memo(() => {
-    const petInstance = jotai.useAtomValue(petInstanceAtom);
-    const profile = jotai.useAtomValue(playerProfileAtom);
-    const [discordEnabled, setDiscordEnabled] = useState(false);
-    const [labelLevel, setLabelLevel] = useState("LV.");
-    const [detailLine1, setDetailLine1] = useState("Coding with {petName}");
-    const [detailLine2, setDetailLine2] = useState("{levelLabel}{level} • {mood}");
-    const [largeImageText, setLargeImageText] = useState("SLTerm");
-
-    const previewLine1 = detailLine1.replace("{petName}", petInstance?.name || "Pikachu");
-    const previewLine2 = detailLine2
-        .replace("{levelLabel}", labelLevel)
-        .replace("{level}", String(petInstance?.level || 1))
-        .replace("{mood}", petInstance?.mood || "happy")
-        .replace("{petName}", petInstance?.name || "Pikachu");
-
-    return (
-        <SettingsCategory title="🎮 Discord Rich Presence" icon="gamepad">
-            <div className="flex items-center justify-between gap-3">
-                <span className="text-secondary text-sm">Enable Discord Activity</span>
-                <label className="vibe-toggle">
-                    <input
-                        type="checkbox"
-                        checked={discordEnabled}
-                        onChange={(e) => setDiscordEnabled(e.target.checked)}
-                    />
-                    <span className="vibe-toggle-slider" />
-                </label>
-            </div>
-            <div className="vibe-discord-customize">
-                <span className="text-secondary text-sm block mb-2">Customize Display</span>
-                <div className="vibe-discord-field">
-                    <label>Detail Line 1</label>
-                    <input
-                        type="text"
-                        value={detailLine1}
-                        onChange={(e) => setDetailLine1(e.target.value)}
-                        className="vibe-input"
-                    />
-                </div>
-                <div className="vibe-discord-field">
-                    <label>Detail Line 2</label>
-                    <input
-                        type="text"
-                        value={detailLine2}
-                        onChange={(e) => setDetailLine2(e.target.value)}
-                        className="vibe-input"
-                    />
-                </div>
-                <div className="vibe-discord-field-row">
-                    <div className="vibe-discord-field">
-                        <label>Level Label</label>
-                        <input
-                            type="text"
-                            value={labelLevel}
-                            onChange={(e) => setLabelLevel(e.target.value)}
-                            className="vibe-input"
-                        />
-                    </div>
-                    <div className="vibe-discord-field">
-                        <label>Large Image Text</label>
-                        <input
-                            type="text"
-                            value={largeImageText}
-                            onChange={(e) => setLargeImageText(e.target.value)}
-                            className="vibe-input"
-                        />
-                    </div>
-                </div>
-                <span className="text-muted-foreground text-[10px]">
-                    Variables: {"{petName}"}, {"{level}"}, {"{levelLabel}"}, {"{mood}"}, {"{streak}"}
-                </span>
-            </div>
-            <div className="vibe-discord-preview">
-                <span className="text-secondary text-sm block mb-2">Preview</span>
-                <div className="vibe-discord-card">
-                    <div className="vibe-discord-card-icon">
-                        <img
-                            src={petInstance ? `${SHOWDOWN_ANI}/${petInstance.petId}.gif` : ""}
-                            alt="pet"
-                            className="vibe-discord-sprite"
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).outerHTML = '<span style="font-size:24px">🎮</span>';
-                            }}
-                        />
-                    </div>
-                    <div className="vibe-discord-card-info">
-                        <div className="vibe-discord-card-title">{largeImageText}</div>
-                        <div className="vibe-discord-card-detail">{previewLine1}</div>
-                        <div className="vibe-discord-card-detail">
-                            {previewLine2}
-                            {profile && profile.streakDays > 0 ? ` • 🔥${profile.streakDays}d` : ""}
-                        </div>
-                        <div className="vibe-discord-card-time">12:34 elapsed</div>
-                    </div>
-                </div>
-            </div>
-        </SettingsCategory>
-    );
-});
-DiscordSection.displayName = "DiscordSection";
 
 // ============================================================
 function getMoodEmoji(mood: string): string {

@@ -1,0 +1,12 @@
+# Project-local scout-block overrides for SLTerm.
+#
+# This repo's release pipeline writes its Go binaries, the electron-vite output,
+# and the packaged installers into dist/ and build/, so packaging work has to be
+# able to name those paths. node_modules is unblocked so the project-local
+# toolchain (tsc, electron-builder, vite) can be invoked directly.
+#
+# Everything else in the shipped baseline still applies.
+
+!dist
+!build
+!node_modules

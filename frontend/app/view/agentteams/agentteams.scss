@@ -1,0 +1,186 @@
+// Copyright 2025, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.agentteams-view {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    color: var(--main-text-color);
+}
+
+.agentteams-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.agentteams-header-spacer {
+    flex-grow: 1;
+}
+
+.agentteams-title {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.agentteams-refresh {
+    border: none;
+    background: transparent;
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+
+    &:hover {
+        background: var(--highlight-bg-color);
+        color: var(--main-text-color);
+    }
+}
+
+.agentteams-warning {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--error-color);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.agentteams-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.agentteams-team {
+    border: 1px solid var(--border-color);
+    border-radius: var(--block-border-radius, 6px);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.agentteams-team-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agentteams-team-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.agentteams-team-count {
+    font-size: 11px;
+    color: var(--secondary-text-color);
+}
+
+.agentteams-team-desc {
+    font-size: 12px;
+    color: var(--secondary-text-color);
+}
+
+.agentteams-members {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.agentteams-member {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--highlight-bg-color);
+
+    &.lead {
+        box-shadow: inset 2px 0 0 var(--accent-color);
+    }
+
+    i {
+        color: var(--secondary-text-color);
+        font-size: 11px;
+    }
+}
+
+.agentteams-member-name {
+    font-weight: 500;
+}
+
+.agentteams-member-type,
+.agentteams-member-model {
+    font-size: 11px;
+    color: var(--secondary-text-color);
+}
+
+.agentteams-member-model {
+    font-family: var(--fixed-font);
+    opacity: 0.8;
+}
+
+.agentteams-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 8px;
+}
+
+.agentteams-task {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    padding: 2px 0;
+}
+
+.agentteams-task-status {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    min-width: 84px;
+    color: var(--secondary-text-color);
+}
+
+.agentteams-task.in-progress .agentteams-task-status {
+    color: var(--accent-color);
+}
+
+.agentteams-task.completed {
+    opacity: 0.55;
+
+    .agentteams-task-subject {
+        text-decoration: line-through;
+    }
+}
+
+.agentteams-task-subject {
+    flex-grow: 1;
+}
+
+.agentteams-task-owner {
+    font-size: 11px;
+    color: var(--secondary-text-color);
+}
+
+.agentteams-task-blocked {
+    font-size: 11px;
+    color: var(--error-color);
+}
+
+.agentteams-empty {
+    padding: 14px 4px;
+    font-size: 12px;
+    color: var(--secondary-text-color);
+}
