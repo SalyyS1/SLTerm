@@ -38,8 +38,16 @@ const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
 const candidates = [];
 for (const [lockPath, entry] of Object.entries(lock.packages ?? {})) {
     if (!entry.optional || !entry.version) continue;
-    if (!Array.isArray(entry.os) || !entry.os.includes(host.os)) continue;
-    if (!Array.isArray(entry.cpu) || !entry.cpu.includes(host.cpu)) continue;
+
+    // A package is platform-gated if it constrains os, cpu, or both. Treat an
+    // absent constraint as "any": dmg-license, for instance, is os:["darwin"]
+    // with no cpu field, and requiring both fields is what made an earlier
+    // version of this script miss it — which broke every macOS .dmg build.
+    const hasOs = Array.isArray(entry.os);
+    const hasCpu = Array.isArray(entry.cpu);
+    if (!hasOs && !hasCpu) continue;
+    if (hasOs && !entry.os.includes(host.os)) continue;
+    if (hasCpu && !entry.cpu.includes(host.cpu)) continue;
 
     // On Linux the same dependency often ships both a gnu and a musl build; the
     // lockfile's os/cpu fields cannot tell them apart, so filter by name.
