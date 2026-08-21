@@ -13,6 +13,11 @@ const config = {
     appId: pkg.build.appId,
     productName: pkg.productName,
     executableName: pkg.productName,
+    // `${platform}` resolves to the BUILD HOST's platform, so cross-building a
+    // Windows installer from Linux produced "SLTerm-linux-x64-*.exe" — and that
+    // wrong name propagated into latest.yml, which the auto-updater reads.
+    // Target names are pinned per-platform below instead; this stays as the
+    // fallback for any target without its own artifactName.
     artifactName: "${productName}-${platform}-${arch}-${version}.${ext}",
     generateUpdatesFilesForAllChannels: true,
     npmRebuild: false,
@@ -51,6 +56,10 @@ const config = {
     ],
     win: {
         icon: "build/icon.ico",
+        // Pinned rather than derived, so the name is correct whether the build
+        // runs on Windows or cross-builds from Linux. Matches the download
+        // filenames documented in README.md.
+        artifactName: "${productName}-win32-${arch}-${version}.${ext}",
         target: ["nsis", "zip"],
         signtoolOptions: windowsShouldSign && {
             signingHashAlgorithms: ["sha256"],
