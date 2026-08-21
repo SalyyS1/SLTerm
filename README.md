@@ -30,18 +30,37 @@ SLTerm is a modern, feature-rich terminal built on Electron. It combines the pow
 - **🎨 Theming** — 18 built-in themes, custom backgrounds, transparency, and blur effects
 - **Command Blocks** — Isolate and monitor individual commands
 - **`wsh` CLI** — Powerful command system for managing your workspace from the terminal
-- **NSIS Installer** — Professional Windows installer with custom install directory
+- **Cross-platform installers** — NSIS for Windows, `.dmg` for macOS, AppImage and `.deb` for Linux
 
 ## 📥 Installation
 
-### Windows
+Download from [**Releases**](https://github.com/SalyyS1/SLTerm/releases).
 
-Download the latest installer from [**Releases**](https://github.com/SalyyS1/SLTerm/releases):
+### Windows
 
 | File                     | Description                  |
 | ------------------------ | ---------------------------- |
 | `SLTerm-win32-x64-*.exe` | NSIS Installer (recommended) |
 | `SLTerm-win32-x64-*.zip` | Portable ZIP                 |
+
+### macOS
+
+| File                       | Description                  |
+| -------------------------- | ---------------------------- |
+| `SLTerm-darwin-arm64-*.dmg` | Apple Silicon (recommended) |
+| `SLTerm-darwin-x64-*.dmg`   | Intel                       |
+| `SLTerm-darwin-*-*.zip`     | Portable app bundle         |
+
+Builds are currently unsigned, so the first launch needs right-click → **Open**
+(or `xattr -dr com.apple.quarantine /Applications/SLTerm.app`) to get past
+Gatekeeper.
+
+### Linux
+
+| File                          | Description             |
+| ----------------------------- | ----------------------- |
+| `SLTerm-linux-x86_64-*.AppImage` | Portable (recommended) |
+| `SLTerm-linux-amd64-*.deb`       | Debian / Ubuntu        |
 
 ### Minimum Requirements
 
