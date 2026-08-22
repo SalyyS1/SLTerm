@@ -113,7 +113,6 @@
         "jotai": "2.9.3",
         "mermaid": "^11.14.0",
         "monaco-editor": "^0.55.1",
-        "monaco-yaml": "^5.4.0",
         "overlayscrollbars": "^2.14.0",
         "overlayscrollbars-react": "^0.5.6",
         "papaparse": "^5.5.3",
