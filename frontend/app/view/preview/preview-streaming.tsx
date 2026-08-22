@@ -4,7 +4,7 @@
 import { Button } from "@/app/element/button";
 import { CenteredDiv } from "@/app/element/quickelems";
 import { globalStore } from "@/store/global";
-import { getWebServerEndpoint } from "@/util/endpoints";
+import { getWebServerEndpoint, withAuthKey } from "@/util/endpoints";
 import { formatRemoteUri } from "@/util/waveutil";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
@@ -61,7 +61,7 @@ function StreamingPreview({ model }: SpecializedViewProps) {
     const remotePath = formatRemoteUri(filePath, conn);
     const usp = new URLSearchParams();
     usp.set("path", remotePath);
-    const streamingUrl = `${getWebServerEndpoint()}/wave/stream-file?${usp.toString()}`;
+    const streamingUrl = withAuthKey(`${getWebServerEndpoint()}/wave/stream-file?${usp.toString()}`);
     if (fileInfo.mimetype === "application/pdf") {
         return (
             <div className="flex flex-row h-full overflow-hidden items-center justify-center p-[5px]">

@@ -494,27 +494,7 @@ func RunWebServer(listener net.Listener) {
 	// Other routes without timeout
 	gr.PathPrefix(schemaPrefix).Handler(http.StripPrefix(schemaPrefix, schema.GetSchemaHandler()))
 
-	handler := http.Handler(gr)
-	if wavebase.IsDevMode() {
-		originalHandler := handler
-		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-			if origin != "" {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-			}
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Session-Id, X-AuthKey, Authorization, X-Requested-With, Accept, x-vercel-ai-ui-message-stream")
-			w.Header().Set("Access-Control-Expose-Headers", "X-ZoneFileInfo, Content-Length, Content-Type, x-vercel-ai-ui-message-stream")
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(204)
-				return
-			}
-
-			originalHandler.ServeHTTP(w, r)
-		})
-	}
+	handler := corsMiddleware(gr)
 	server := &http.Server{
 		ReadTimeout:    HttpReadTimeout,
 		WriteTimeout:   HttpWriteTimeout,
@@ -525,4 +505,50 @@ func RunWebServer(listener net.Listener) {
 	if err != nil {
 		log.Printf("ERROR: %v\n", err)
 	}
+}
+
+// shellWebviewOrigins are the origins a non-Electron shell serves the frontend
+// from. Tauri uses a custom protocol on macOS and Linux and a virtual host on
+// Windows; either way the app is a different origin from this loopback server,
+// so its requests need CORS even though both sides are the same program.
+//
+// Electron needed none of this: it loaded the frontend from file:// and injected
+// the auth header itself, so requests were never subject to a preflight.
+var shellWebviewOrigins = map[string]bool{
+	"tauri://localhost":       true,
+	"http://tauri.localhost":  true,
+	"https://tauri.localhost": true,
+}
+
+// corsMiddleware permits cross-origin calls from our own shell, and from
+// anywhere in dev mode where the Vite server's origin varies.
+//
+// Allowing an origin is not by itself access: every route still requires the
+// auth key (see pkg/authkey), which a page outside the app cannot know. What the
+// allowlist prevents is a random web page being able to *read* responses if it
+// ever did learn the key.
+func corsMiddleware(next http.Handler) http.Handler {
+	devMode := wavebase.IsDevMode()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		allowed := origin != "" && (devMode || shellWebviewOrigins[origin])
+		if allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Session-Id, X-AuthKey, Authorization, X-Requested-With, Accept, x-vercel-ai-ui-message-stream")
+			w.Header().Set("Access-Control-Expose-Headers", "X-ZoneFileInfo, Content-Length, Content-Type, x-vercel-ai-ui-message-stream")
+			if devMode {
+				// Kept for the dev server only; the shell authenticates with a
+				// header, so production has no reason to send credentials.
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
+		}
+		if r.Method == http.MethodOptions {
+			// A preflight carries no auth header, so it must be answered here
+			// rather than fall through to a route that would reject it.
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

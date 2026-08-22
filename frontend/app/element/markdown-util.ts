@@ -3,7 +3,7 @@
 
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { getWebServerEndpoint } from "@/util/endpoints";
+import { getWebServerEndpoint, withAuthKey } from "@/util/endpoints";
 import { formatRemoteUri } from "@/util/waveutil";
 import parseSrcSet from "parse-srcset";
 
@@ -165,7 +165,7 @@ export const resolveRemoteFile = async (filepath: string, resolveOpts: MarkdownR
         // console.log("markdown resolve", resolveOpts, filepath, "=>", baseDirUri, remoteUri);
         const usp = new URLSearchParams();
         usp.set("path", remoteUri);
-        return getWebServerEndpoint() + "/wave/stream-file?" + usp.toString();
+        return withAuthKey(getWebServerEndpoint() + "/wave/stream-file?" + usp.toString());
     } catch (err) {
         console.warn("Failed to resolve remote file:", filepath, err);
         return null;

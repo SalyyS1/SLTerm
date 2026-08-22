@@ -1,13 +1,13 @@
 // Copyright 2025, Salyvn.
 // SPDX-License-Identifier: Apache-2.0s
 
-import { getWebServerEndpoint } from "@/util/endpoints";
+import { getWebServerEndpoint, withAuthKey } from "@/util/endpoints";
 import { boundNumber, isBlank } from "@/util/util";
 
 function encodeFileURL(file: string) {
     const webEndpoint = getWebServerEndpoint();
     const fileUri = formatRemoteUri(file, "local");
-    return webEndpoint + `/wave/stream-file?path=${encodeURIComponent(fileUri)}&no404=1`;
+    return withAuthKey(webEndpoint + `/wave/stream-file?path=${encodeURIComponent(fileUri)}&no404=1`);
 }
 
 // Allow CSS color values, gradients, and local file url() backgrounds
