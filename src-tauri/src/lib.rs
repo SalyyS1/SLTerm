@@ -11,6 +11,7 @@
 //! contract is unchanged and this file deliberately holds no business logic.
 
 mod host;
+mod menu;
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -196,7 +197,13 @@ pub fn run() {
             host::host_open_native_path,
             host::host_set_fullscreen,
             host::host_log,
+            menu::host_show_context_menu,
         ])
+        .on_menu_event(|app, event| {
+            // The frontend owns what every entry does; it registered a handler
+            // under this id when it built the menu.
+            menu::emit_menu_click(app, event.id().as_ref());
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             let (child, endpoints) = match start_backend(&handle) {

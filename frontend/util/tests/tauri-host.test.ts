@@ -68,8 +68,17 @@ describe("findTauriHost", () => {
         stubShell(snapshot);
         const host = findTauriHost();
         expect(() => host.createTab()).toThrow(/createTab/);
-        expect(() => host.showContextMenu("ws", [])).toThrow(/showContextMenu/);
+        expect(() => host.setActiveTab("tab")).toThrow(/setActiveTab/);
         expect(() => host.switchWorkspace("ws")).toThrow(/switchWorkspace/);
+    });
+
+    it("sends a context menu to the shell rather than refusing", () => {
+        stubShell(snapshot);
+        const host = findTauriHost();
+        expect(() =>
+            host.showContextMenu("ws", [{ id: "1", label: "Copy", role: "copy" }])
+        ).not.toThrow();
+        expect(() => host.onContextMenuClick(() => {})).not.toThrow();
     });
 
     it("keeps the shell's own quiet features quiet rather than failing", () => {

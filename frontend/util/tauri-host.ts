@@ -38,6 +38,9 @@ function snapshot(): TauriHostSnapshot | null {
     return (globalThis.window as any)?.__SLTERM_HOST__ ?? null;
 }
 
+/** Must match CONTEXT_MENU_CLICK_EVENT in src-tauri/src/menu.rs. */
+const ContextMenuClickEvent = "host://contextmenu-click";
+
 /** True when this page is running inside the Tauri shell. */
 export function isTauriHost(): boolean {
     return snapshot() != null;
@@ -206,7 +209,15 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
         // for a shell with no native menus, no zoom and no updater: the feature is
         // simply quiet. onWaveInit is the exception and does real work.
 
-        onContextMenuClick: () => {},
+        onContextMenuClick: (callback: (id: string) => void) => {
+            // Rust hands back the id of whatever the user picked; the frontend
+            // already holds the handler it registered under that id.
+            void import("@tauri-apps/api/event")
+                .then(({ listen }) =>
+                    listen<string>(ContextMenuClickEvent, (event) => callback(event.payload))
+                )
+                .catch((e) => console.error("could not subscribe to menu clicks", e));
+        },
         onFullScreenChange: () => {},
         onZoomFactorChange: () => {},
         onUpdaterStatusChange: () => {},
@@ -236,7 +247,10 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
         // wiring these to the backend before it lands would move a tab the window
         // cannot then display.
 
-        showContextMenu: () => notImplemented("showContextMenu"),
+        // The workspace id Electron needed to pick a window has no use here: this
+        // shell has one window, and the menu pops where the pointer already is.
+        showContextMenu: (_workspaceId: string, items: ElectronContextMenuItem[]) =>
+            send("host_show_context_menu", { items }),
         showWorkspaceAppMenu: () => notImplemented("showWorkspaceAppMenu"),
         createTab: () => notImplemented("createTab"),
         closeTab: () => notImplemented("closeTab"),
