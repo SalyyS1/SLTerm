@@ -19,7 +19,9 @@ import debug from "debug";
 import * as jotai from "jotai";
 import * as React from "react";
 import { TermStickers } from "./termsticker";
+import { TermLiveOptions } from "./term-live-options";
 import { TermThemeUpdater } from "./termtheme";
+import { clampScrollback } from "./term-options";
 import { computeTheme } from "./termutil";
 import { TermWrap } from "./termwrap";
 import "./xterm.css";
@@ -180,6 +182,21 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     const termFontSize = jotai.useAtomValue(model.fontSizeAtom);
     const fullConfig = globalStore.get(atoms.fullConfigAtom);
     const connFontFamily = fullConfig.connections?.[blockData?.meta?.connection]?.["term:fontfamily"];
+    const termFontFamily = termSettings?.["term:fontfamily"] ?? connFontFamily ?? "Hack";
+    const termTransparency = jotai.useAtomValue(model.termTransparencyAtom);
+    const termMacOptionIsMeta = jotai.useAtomValue(getOverrideConfigAtom(blockId, "term:macoptionismeta")) ?? false;
+    const termAllowBPM = jotai.useAtomValue(model.termBPMAtom) ?? true;
+    // Options xterm cannot change after construction, or that decide which
+    // renderer runs. A change to one of these is the only reason to rebuild the
+    // terminal; everything else is applied in place by TermLiveOptions, because
+    // rebuilding replays the whole history into a fresh grid and that is where
+    // scrollback gets duplicated or lost.
+    const termScrollback = clampScrollback(termSettings?.["term:scrollback"], blockData?.meta?.["term:scrollback"]);
+    const termUseWebGl = !termSettings?.["term:disablewebgl"];
+    // WebGL's canvas is opaque, so anything behind the terminal only shows
+    // through on the slower canvas renderer.
+    const needsTransparency =
+        !!blockData?.meta?.["bg"] || (termTransparency != null && termTransparency > 0 && termTransparency < 1);
     const isFocused = jotai.useAtomValue(model.nodeModel.isFocused);
     const isMI = jotai.useAtomValue(tabModel.isTermMultiInput);
     const isBasicTerm = termMode != "vdom" && blockData?.meta?.controller != "cmd"; // needs to match isBasicTerm
@@ -257,29 +274,8 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     React.useEffect(() => {
         const fullConfig = globalStore.get(atoms.fullConfigAtom);
         const termThemeName = globalStore.get(model.termThemeNameAtom);
-        const termTransparency = globalStore.get(model.termTransparencyAtom);
-        const termMacOptionIsMetaAtom = getOverrideConfigAtom(blockId, "term:macoptionismeta");
         const [termTheme, _] = computeTheme(fullConfig, termThemeName, termTransparency);
-        let termScrollback = 2000; // default scrollback; configurable via term:scrollback setting
-        if (termSettings?.["term:scrollback"]) {
-            termScrollback = Math.floor(termSettings["term:scrollback"]);
-        }
-        if (blockData?.meta?.["term:scrollback"]) {
-            termScrollback = Math.floor(blockData.meta["term:scrollback"]);
-        }
-        if (termScrollback < 0) {
-            termScrollback = 0;
-        }
-        if (termScrollback > 50000) {
-            termScrollback = 50000;
-        }
-        const termAllowBPM = globalStore.get(model.termBPMAtom) ?? true;
-        const termMacOptionIsMeta = globalStore.get(termMacOptionIsMetaAtom) ?? false;
         const wasFocused = model.termRef.current != null && globalStore.get(model.nodeModel.isFocused);
-        // Only enable allowTransparency when user has transparency or a background configured
-        // When enabled, WebGL is skipped (opaque canvas) and canvas renderer is used (slower)
-        const hasBg = !!blockData?.meta?.["bg"];
-        const needsTransparency = hasBg || (termTransparency != null && termTransparency > 0 && termTransparency < 1);
         const termWrap = new TermWrap(
             tabModel.tabId,
             blockId,
@@ -287,7 +283,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             {
                 theme: termTheme,
                 fontSize: termFontSize,
-                fontFamily: termSettings?.["term:fontfamily"] ?? connFontFamily ?? "Hack",
+                fontFamily: termFontFamily,
                 drawBoldTextInBrightColors: false,
                 fontWeight: "normal",
                 fontWeightBold: "bold",
@@ -299,7 +295,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             },
             {
                 keydownHandler: model.handleTerminalKeydown.bind(model),
-                useWebGl: !termSettings?.["term:disablewebgl"],
+                useWebGl: termUseWebGl,
                 sendDataHandler: model.sendDataToController.bind(model),
                 nodeModel: model.nodeModel,
             }
@@ -324,7 +320,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             termWrap.dispose();
             rszObs.disconnect();
         };
-    }, [blockId, termSettings, termFontSize, connFontFamily]);
+    }, [blockId, termScrollback, needsTransparency, termUseWebGl]);
 
     React.useEffect(() => {
         if (termModeRef.current == "vdom" && termMode == "term") {
@@ -383,6 +379,13 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             {termBg && <div className="absolute inset-0 z-0 pointer-events-none" style={termBg} />}
             <TermResyncHandler blockId={blockId} model={model} />
             <TermThemeUpdater blockId={blockId} model={model} termRef={model.termRef} />
+            <TermLiveOptions
+                termRef={model.termRef}
+                fontSize={termFontSize}
+                fontFamily={termFontFamily}
+                macOptionIsMeta={termMacOptionIsMeta}
+                ignoreBracketedPasteMode={!termAllowBPM}
+            />
             <TermStickers config={stickerConfig} />
             <TermToolbarVDomNode key="vdom-toolbar" blockId={blockId} model={model} />
             <TermVDomNode key="vdom" blockId={blockId} model={model} />
