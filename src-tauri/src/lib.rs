@@ -10,13 +10,17 @@
 //! a child process and read its `WAVESRV-ESTART` handshake off stderr — so the
 //! contract is unchanged and this file deliberately holds no business logic.
 
+mod host;
+
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
 use rand::Rng;
-use tauri::{Manager, RunEvent};
+use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+
+use host::HostSnapshot;
 
 /// Endpoints the Go server picked, learned from its stderr handshake.
 #[derive(Clone, Debug, Default)]
@@ -162,51 +166,37 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(Child, Endpoints), String> {
     Ok((child, endpoints))
 }
 
-/// The `window.api` surface the frontend reads before anything else.
+/// The snapshot the frontend reads before anything else.
 ///
-/// `frontend/util/getenv.ts` resolves the server endpoints through
-/// `getApi().getEnv(...)`, so this has to exist before the bundle runs — hence an
-/// init script rather than a command. The rest of the ~46-method ElectronApi
-/// surface is filled in by the TypeScript host shim; anything still missing
-/// throws by name instead of silently returning undefined, so a gap shows up as
-/// a clear error rather than a mystery.
-fn host_init_script(e: &Endpoints) -> String {
+/// `frontend/util/tauri-host.ts` answers HostApi's synchronous getters from this
+/// object, so it has to exist before the bundle evaluates — `frontend/wave.ts`
+/// reads the platform at module scope. That is why it ships as an initialization
+/// script on the window rather than an `eval` after the fact or a command the
+/// frontend would have to await.
+fn host_init_script(snapshot: &HostSnapshot) -> String {
+    let json = serde_json::to_string(snapshot).unwrap_or_else(|_| "null".to_string());
     format!(
         r#"
 (() => {{
-  const env = {{
-    WAVE_SERVER_WEB_ENDPOINT: {web:?},
-    WAVE_SERVER_WS_ENDPOINT: {ws:?},
-    SLTERM_AUTH_KEY: {key:?},
-  }};
-  const notImplemented = (name) => (...args) => {{
-    throw new Error(`window.api.${{name}} is not implemented by the Tauri host yet`);
-  }};
-  const api = new Proxy(
-    {{
-      getEnv: (n) => env[n] ?? null,
-      getAuthKey: () => env.SLTERM_AUTH_KEY,
-processName: () => "tauri",
-    }},
-    {{
-      get(target, prop) {{
-        if (prop in target) return target[prop];
-        return notImplemented(String(prop));
-      }},
-    }}
-  );
-  Object.defineProperty(window, "api", {{ value: api, writable: false }});
+  Object.defineProperty(window, "__SLTERM_HOST__", {{
+    value: Object.freeze({json}),
+    writable: false,
+    configurable: false,
+  }});
 }})();
-"#,
-        web = e.web,
-        ws = e.ws,
-        key = e.auth_key,
+"#
     )
 }
 
 pub fn run() {
     tauri::Builder::default()
         .manage(Backend(Mutex::new(None)))
+        .invoke_handler(tauri::generate_handler![
+            host::host_open_external,
+            host::host_open_native_path,
+            host::host_set_fullscreen,
+            host::host_log,
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let (child, endpoints) = match start_backend(&handle) {
@@ -218,11 +208,29 @@ pub fn run() {
             };
             app.state::<Backend>().0.lock().unwrap().replace(child);
 
-            let window = app
-                .get_webview_window("main")
-                .ok_or("no main window in tauri.conf.json")?;
-            window.eval(&host_init_script(&endpoints))?;
-            window.show()?;
+            let (_, config_home) = data_dir_args();
+            let snapshot = HostSnapshot::new(
+                endpoints.web.clone(),
+                endpoints.ws.clone(),
+                endpoints.auth_key.clone(),
+                &config_home,
+            );
+
+            // The window is built here rather than declared in tauri.conf.json
+            // because the snapshot depends on endpoints only known after the
+            // backend handshake, and an initialization script has to be attached
+            // at construction to be guaranteed to run before the bundle. Tauri
+            // re-injects it on every navigation, so a reload is covered too.
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("SLTerm")
+                .inner_size(1400.0, 900.0)
+                .min_inner_size(900.0, 600.0)
+                .decorations(false)
+                .transparent(true)
+                .resizable(true)
+                .center()
+                .initialization_script(host_init_script(&snapshot))
+                .build()?;
             Ok(())
         })
         .build(tauri::generate_context!())

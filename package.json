@@ -13,7 +13,10 @@
         "appId": "dev.salyvn.slterm"
     },
     "private": true,
-    "sideEffects": ["**/*.css", "**/*.scss"],
+    "sideEffects": [
+        "**/*.css",
+        "**/*.scss"
+    ],
     "main": "./dist/main/index.js",
     "type": "module",
     "browserslist": [
@@ -24,6 +27,9 @@
         "start": "electron-vite preview",
         "build:dev": "electron-vite build --mode development",
         "build:prod": "electron-vite build --mode production",
+        "build:tauri": "npm run build:prod && node scripts/stage-tauri-frontend.mjs && tauri build",
+        "stage:tauri": "node scripts/stage-tauri-frontend.mjs",
+        "dev:tauri": "npm run build:dev && node scripts/stage-tauri-frontend.mjs && tauri dev",
         "coverage": "vitest run --coverage",
         "test": "vitest",
         "typecheck": "tsc --noEmit",
@@ -33,6 +39,7 @@
         "@eslint/js": "^8.57.0",
         "@rollup/plugin-node-resolve": "^16.0.3",
         "@tailwindcss/vite": "^4.1.18",
+        "@tauri-apps/cli": "2.11.1",
         "@types/color": "^4.2.0",
         "@types/css-tree": "^2",
         "@types/debug": "^4",
@@ -81,6 +88,7 @@
         "@table-nav/core": "^0.0.9",
         "@table-nav/react": "^0.0.9",
         "@tanstack/react-table": "^8.21.3",
+        "@tauri-apps/api": "2.11.1",
         "@xterm/addon-fit": "^0.11.0",
         "@xterm/addon-search": "^0.16.0",
         "@xterm/addon-serialize": "^0.14.0",
