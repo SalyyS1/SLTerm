@@ -31,6 +31,8 @@ import {
     handleOsc7Command,
     type ShellIntegrationStatus,
 } from "./osc-handlers";
+import { reconcileHeldData, waveFileDataStartIdx, type HeldChunk } from "./term-replay";
+import { BatchedWriter } from "./term-batched-writer";
 import { createTempFileFromBlob, extractAllClipboardData } from "./termutil";
 
 const dlog = debug("wave:termwrap");
@@ -38,6 +40,13 @@ const dlog = debug("wave:termwrap");
 const TermFileName = "term";
 const TermCacheFileName = "cache:term:full";
 const MinDataProcessedForCache = 100 * 1024;
+// Cap on output held while the initial replay is in flight. The window is two
+// loopback reads long, so this is only ever hit by a firehose; passing it drops
+// to a clean refetch rather than replaying a partial stream.
+const MaxHeldDataBytes = 1024 * 1024;
+// How many times to refetch when held output cannot be reconciled against the
+// read. One pass is enough unless output keeps overflowing the hold buffer.
+const MaxReplayRefetches = 3;
 export const SupportsImageInput = true;
 
 // Cached resolved promise to avoid GC pressure from creating new ones per write
@@ -64,53 +73,6 @@ type TermWrapOptions = {
     nodeModel?: BlockNodeModel;
 };
 
-// BatchedWriter coalesces terminal output writes at 16ms (one frame) intervals
-// to reduce render calls under high-throughput scenarios.
-// Only OUTPUT writes go through this — input (sendDataHandler) is never batched.
-class BatchedWriter {
-    private buffer: (string | Uint8Array)[] = [];
-    private timer: ReturnType<typeof setTimeout> | null = null;
-    private readonly BATCH_DELAY_MS = 16;
-    private readonly MAX_BATCH_SIZE = 100;
-
-    constructor(private terminal: Terminal) {}
-
-    write(data: string | Uint8Array): void {
-        this.buffer.push(data);
-        if (this.buffer.length >= this.MAX_BATCH_SIZE) {
-            this.flush();
-        } else if (!this.timer) {
-            this.timer = setTimeout(() => this.flush(), this.BATCH_DELAY_MS);
-        }
-    }
-
-    flush(): void {
-        if (this.buffer.length > 0) {
-            const chunks = this.buffer;
-            this.buffer = [];
-            if (chunks.length === 1) {
-                this.terminal.write(chunks[0] as any);
-            } else {
-                // Consolidate all chunks into a single string for one terminal.write() call
-                const decoder = new TextDecoder();
-                let merged = "";
-                for (const chunk of chunks) {
-                    merged += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
-                }
-                this.terminal.write(merged);
-            }
-        }
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
-    }
-
-    dispose(): void {
-        this.flush();
-    }
-}
-
 export class TermWrap {
     tabId: string;
     blockId: string;
@@ -126,7 +88,10 @@ export class TermWrap {
     batchedWriter: BatchedWriter;
     mainFileSubject: SubjectWithRef<WSFileEventData>;
     loaded: boolean;
-    heldData: Uint8Array[];
+    heldData: HeldChunk[];
+    heldDataBytes: number;
+    /** Set when held output was dropped and can no longer be replayed in full. */
+    heldDataUnusable: boolean;
     handleResize_debounced: () => void;
     hasResized: boolean;
     multiInputCallback: (data: string) => void;
@@ -241,6 +206,8 @@ export class TermWrap {
         this.connectElem = connectElem;
         this.mainFileSubject = null;
         this.heldData = [];
+        this.heldDataBytes = 0;
+        this.heldDataUnusable = false;
         this.handleResize_debounced = debounce(50, this.handleResize.bind(this));
         this.terminal.open(this.connectElem);
         this.handleResize();
@@ -342,9 +309,7 @@ export class TermWrap {
                 console.log("Error loading runtime info:", e);
                 return null;
             }),
-            this.loadInitialTerminalData().finally(() => {
-                this.loaded = true;
-            }),
+            this.replayInitialData(),
         ]);
 
         if (rtInfo && rtInfo["shell:integration"]) {
@@ -441,18 +406,117 @@ export class TermWrap {
     handleNewFileSubjectData(msg: WSFileEventData) {
         if (msg.fileop == "truncate") {
             this.terminal.clear();
-            this.heldData = [];
+            this.resetHeldData();
+            // The file restarts at zero, so a stale offset would make the next
+            // reload read past the end and restore nothing.
+            this.ptyOffset = 0;
+            this.dataBytesProcessed = 0;
         } else if (msg.fileop == "append") {
             const decodedData = base64ToArray(msg.data64);
             if (this.loaded) {
                 this.doTerminalWrite(decodedData, null);
             } else {
-                this.heldData.push(decodedData);
+                this.holdData(msg.offset, decodedData);
             }
         } else {
             console.log("bad fileop for terminal", msg);
             return;
         }
+    }
+
+    private resetHeldData() {
+        this.heldData = [];
+        this.heldDataBytes = 0;
+        this.heldDataUnusable = false;
+    }
+
+    /**
+     * Parks live output until the initial replay has finished writing.
+     *
+     * Nothing is written out of order and nothing is silently dropped: on
+     * overflow the buffer is discarded and flagged, which sends the caller to a
+     * full refetch instead of replaying a stream with a hole in it.
+     */
+    private holdData(offset: number | undefined, data: Uint8Array) {
+        if (offset == null) {
+            this.heldDataUnusable = true;
+            return;
+        }
+        if (this.heldDataBytes + data.length > MaxHeldDataBytes) {
+            this.heldData = [];
+            this.heldDataBytes = 0;
+            this.heldDataUnusable = true;
+            return;
+        }
+        this.heldData.push({ offset, data });
+        this.heldDataBytes += data.length;
+    }
+
+    /**
+     * Applies the output held during the initial replay, and reports whether it
+     * could be applied in full.
+     */
+    private drainHeldData(): boolean {
+        const held = this.heldData;
+        const unusable = this.heldDataUnusable;
+        this.heldData = [];
+        this.heldDataBytes = 0;
+        this.heldDataUnusable = false;
+        if (unusable) {
+            return false;
+        }
+        const { writes, ok } = reconcileHeldData(held, this.ptyOffset);
+        if (!ok) {
+            return false;
+        }
+        for (const write of writes) {
+            this.doTerminalWrite(write, null);
+        }
+        return true;
+    }
+
+    /**
+     * Puts the terminal on screen, then opens the gate to live output.
+     *
+     * The stream is subscribed before this runs, so appends that land while the
+     * read is in flight are held and then applied by offset once the read is on
+     * screen. Dropping them instead — which is what an undrained hold buffer
+     * does — can cut an escape sequence in half, and a half-parsed sequence is
+     * what turns Claude's in-place redraws into screenfuls of duplicate lines.
+     */
+    private async replayInitialData(): Promise<void> {
+        try {
+            await this.loadInitialTerminalData();
+            for (let refetch = 0; !this.drainHeldData(); refetch++) {
+                if (refetch >= MaxReplayRefetches) {
+                    console.log("terminal replay did not converge, continuing from the last read", this.blockId);
+                    break;
+                }
+                await this.reloadFromFile();
+            }
+        } catch (e) {
+            // Held output is worthless without the history it continues, and
+            // keeping it would pin its bytes for the life of the block.
+            console.log("error replaying terminal history", this.blockId, e);
+            this.resetHeldData();
+        } finally {
+            // Live output must flow even if the replay failed; a terminal that
+            // shows nothing is worse than one that starts mid-stream.
+            this.loaded = true;
+        }
+    }
+
+    /** Rereads the whole term file, which is authoritative, over a clean grid. */
+    private async reloadFromFile(): Promise<void> {
+        this.resetHeldData();
+        this.terminal.reset();
+        this.ptyOffset = 0;
+        const { data, fileInfo } = await fetchWaveFile(this.getZoneId(), TermFileName, 0);
+        if (fileInfo == null) {
+            return;
+        }
+        this.doTerminalWrite(data, fileInfo.size);
+        this.dataBytesProcessed += data?.length ?? 0;
     }
 
     doTerminalWrite(data: string | Uint8Array, setPtyOffset?: number): Promise<void> {
@@ -499,7 +563,19 @@ export class TermWrap {
         performance.mark(`${loadPerfId}-end`);
         performance.measure(`terminal-load-${this.blockId}`, `${loadPerfId}-start`, `${loadPerfId}-end`);
         if (mainFile != null) {
-            await this.doTerminalWrite(mainData, null);
+            // The server serves from its earliest retained byte when the asked-for
+            // offset has already scrolled out of the circular file. Appending a
+            // stream that starts later than the snapshot ended would splice two
+            // unrelated points together, so drop the snapshot and start clean.
+            if (waveFileDataStartIdx(mainFile) > ptyOffset) {
+                console.log("terminal history wrapped past the cached offset, restoring without the snapshot");
+                this.terminal.reset();
+            }
+            // Take the offset from the file rather than the byte count: they differ
+            // by exactly the bytes a wrap dropped, and the offset is what every
+            // later read and every held append is measured against.
+            this.doTerminalWrite(mainData, mainFile.size);
+            this.dataBytesProcessed += mainData?.length ?? 0;
         }
     }
 

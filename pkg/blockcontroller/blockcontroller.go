@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/SalyyS1/SLTerm/pkg/blocklogger"
 	"github.com/SalyyS1/SLTerm/pkg/filestore"
 	"github.com/SalyyS1/SLTerm/pkg/jobcontroller"
@@ -26,6 +25,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc/wshclient"
 	"github.com/SalyyS1/SLTerm/pkg/wslconn"
 	"github.com/SalyyS1/SLTerm/pkg/wstore"
+	"github.com/google/uuid"
 )
 
 const (
@@ -366,7 +366,7 @@ func getTermSize(bdata *waveobj.Block) waveobj.TermSize {
 func HandleAppendBlockFile(blockId string, blockFile string, data []byte) error {
 	ctx, cancelFn := context.WithTimeout(context.Background(), DefaultTimeout)
 	defer cancelFn()
-	err := filestore.WFS.AppendData(ctx, blockId, blockFile, data)
+	offset, err := filestore.WFS.AppendDataWithOffset(ctx, blockId, blockFile, data)
 	if err != nil {
 		return fmt.Errorf("error appending to blockfile: %w", err)
 	}
@@ -380,6 +380,7 @@ func HandleAppendBlockFile(blockId string, blockFile string, data []byte) error 
 			FileName: blockFile,
 			FileOp:   wps.FileOp_Append,
 			Data64:   base64.StdEncoding.EncodeToString(data),
+			Offset:   offset,
 		},
 	})
 	return nil

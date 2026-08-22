@@ -57,4 +57,9 @@ type WSFileEventData struct {
 	FileName string `json:"filename"`
 	FileOp   string `json:"fileop"`
 	Data64   string `json:"data64"`
+	// Offset is the absolute file offset Data64 was written at, for append
+	// events only. A subscriber that also range-reads the file needs it to tell
+	// an append it already read from one it still has to apply. Not omitempty:
+	// offset 0 is the first append of every new file and must stay on the wire.
+	Offset int64 `json:"offset"`
 }
