@@ -92,21 +92,30 @@ func GetConnNameFromContext(ctx context.Context) (string, error) {
 
 // ParseURI parses a connection URI and returns the connection type, host/path, and parameters.
 func ParseURI(uri string) (*Connection, error) {
-	split := strings.SplitN(uri, "://", 2)
 	var scheme string
 	var rest string
-	if len(split) > 1 {
-		scheme = split[0]
-		rest = strings.TrimPrefix(split[1], "//")
+	// "//host/path" is shorthand for "wsh://host/path". It has to be recognized
+	// before the "://" split, because that split would cut
+	// "//wsl://Ubuntu/path" into scheme "//wsl" and rest "Ubuntu/path", losing
+	// the "wsl://Distro" host form entirely.
+	isSchemelessShorthand := strings.HasPrefix(uri, "//")
+	if isSchemelessShorthand {
+		rest = strings.TrimPrefix(uri, "//")
 	} else {
-		rest = split[0]
+		split := strings.SplitN(uri, "://", 2)
+		if len(split) > 1 {
+			scheme = split[0]
+			rest = strings.TrimPrefix(split[1], "//")
+		} else {
+			rest = split[0]
+		}
 	}
 
 	var host string
 	var remotePath string
 
 	parseGenericPath := func() {
-		split = strings.SplitN(rest, "/", 2)
+		split := strings.SplitN(rest, "/", 2)
 		host = split[0]
 		if len(split) > 1 && split[1] != "" {
 			remotePath = split[1]
@@ -131,8 +140,7 @@ func ParseURI(uri string) (*Connection, error) {
 	if scheme == "" {
 		scheme = ConnectionTypeWsh
 		addPrecedingSlash = false
-		if len(rest) != len(uri) {
-			// This accounts for when the uri starts with "//", which would get trimmed in the first split.
+		if isSchemelessShorthand {
 			parseWshPath()
 		} else if strings.HasPrefix(rest, "/~") {
 			host = wshrpc.LocalConnName
