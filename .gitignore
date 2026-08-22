@@ -42,3 +42,7 @@ make-out/
 make/
 build-log*.txt
 *.py
+
+# Tauri shell build output
+src-tauri/target/
+src-tauri/gen/

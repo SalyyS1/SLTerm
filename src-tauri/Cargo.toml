@@ -1,0 +1,29 @@
+[package]
+name = "slterm"
+version = "0.19.1"
+description = "Open-Source Modern Terminal by Salyvn"
+edition = "2021"
+rust-version = "1.82"
+
+[lib]
+name = "slterm_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+
+[profile.release]
+# The whole point of moving off Electron is size, so optimize for it: fat LTO
+# and one codegen unit let the linker drop far more, panic=abort removes the
+# unwinding tables, and strip discards symbols.
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
