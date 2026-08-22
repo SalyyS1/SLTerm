@@ -210,7 +210,12 @@ export default defineConfig({
         },
         plugins: [
             tsconfigPaths(),
-            { ...ViteImageOptimizer(), apply: "build" },
+            // SVG only. The raster assets are committed pre-sized and pre-encoded,
+            // and the raster path needs `sharp`, which npm regularly declines to
+            // install — so pointing this at images meant ten "Cannot find package
+            // 'sharp'" lines per build and no optimization anyway. SVGO needs no
+            // native module.
+            { ...ViteImageOptimizer({ test: /\.svg$/i }), apply: "build" },
             svgr({
                 svgrOptions: { exportType: "default", ref: true, svgo: false, titleProp: true },
                 include: "**/*.svg",

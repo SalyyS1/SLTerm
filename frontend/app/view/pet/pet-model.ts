@@ -5,16 +5,16 @@ import * as jotai from "jotai";
 import type { PetBehavior, PetCatalogueEntry, PetInstance, PetPosition, PlayerProfile, SessionData } from "./pet-types";
 
 // Waifu pixel-art sprite imports (Vite resolves these to URL strings)
-import waifuAsunaUrl from "./waifu_asuna_1772301017996.png";
-import waifuEmiliaUrl from "./waifu_emilia_1772301065596.png";
-import waifuMeguminUrl from "./waifu_megumin_1772300992144.png";
-import waifuMikuUrl from "./waifu_miku_1772301115608.png";
-import waifuNezukoUrl from "./waifu_nezuko_1772301086037.png";
-import waifuRamUrl from "./waifu_ram_1772300977088.png";
-import waifuRemUrl from "./waifu_rem_1772301048541.png";
-import waifuRiasUrl from "./waifu_rias_1772301130751.png";
-import waifuTohruUrl from "./waifu_tohru_1772301145485.png";
-import waifuZerotwoUrl from "./waifu_zerotwo_1772300934783.png";
+import waifuAsunaUrl from "./waifu_asuna_1772301017996.webp";
+import waifuEmiliaUrl from "./waifu_emilia_1772301065596.webp";
+import waifuMeguminUrl from "./waifu_megumin_1772300992144.webp";
+import waifuMikuUrl from "./waifu_miku_1772301115608.webp";
+import waifuNezukoUrl from "./waifu_nezuko_1772301086037.webp";
+import waifuRamUrl from "./waifu_ram_1772300977088.webp";
+import waifuRemUrl from "./waifu_rem_1772301048541.webp";
+import waifuRiasUrl from "./waifu_rias_1772301130751.webp";
+import waifuTohruUrl from "./waifu_tohru_1772301145485.webp";
+import waifuZerotwoUrl from "./waifu_zerotwo_1772300934783.webp";
 
 // ============================================================
 // Hardcoded catalogue — 50 Pokemon with Pokedex numbers
