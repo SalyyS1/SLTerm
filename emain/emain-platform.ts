@@ -166,9 +166,12 @@ function getElectronAppResourcesPath(): string {
 const wavesrvBinName = `wavesrv.${unameArch}`;
 
 function getWaveSrvPath(): string {
-    const winBinName = `${wavesrvBinName}.exe`;
-    const appPath = path.join(getElectronAppUnpackedBasePath(), "bin", winBinName);
-    return `${appPath}`;
+    // Only Windows binaries carry the extension. This used to append ".exe"
+    // unconditionally, so the packaged macOS and Linux apps looked for
+    // "wavesrv.x64.exe", failed to spawn the backend with ENOENT, and started
+    // with no server at all.
+    const binName = unamePlatform === "win32" ? `${wavesrvBinName}.exe` : wavesrvBinName;
+    return path.join(getElectronAppUnpackedBasePath(), "bin", binName);
 }
 
 function getWaveSrvCwd(): string {
