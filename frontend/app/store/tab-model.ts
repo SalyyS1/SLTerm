@@ -9,6 +9,17 @@ import * as WOS from "./wos";
 const tabModelCache = new Map<string, TabModel>();
 export const activeTabIdAtom = atom<string>(null) as PrimitiveAtom<string>;
 
+/**
+ * Tabs whose views are mounted in this document.
+ *
+ * Only used by a shell without per-tab webviews. A tab joins the list the first
+ * time it is shown and stays: unmounting would dispose its terminals and force a
+ * replay on the way back, which is exactly the cost the per-tab webview used to
+ * absorb. The list therefore grows with tabs actually visited, not with tabs that
+ * exist — a workspace of 30 tabs costs nothing until they are opened.
+ */
+export const mountedTabIdsAtom = atom<string[]>([]) as PrimitiveAtom<string[]>;
+
 export class TabModel {
     tabId: string;
     tabAtom: Atom<Tab>;

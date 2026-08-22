@@ -239,24 +239,26 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
                 });
         },
 
-        // --- Still to build, and loud about it ---
-        //
-        // Native menus need Tauri's menu API and a channel to route clicks back.
-        // Tab and workspace switching are Electron's multi-tab-view model, which
-        // this shell replaces with in-DOM tabs — that work is its own phase, and
-        // wiring these to the backend before it lands would move a tab the window
-        // cannot then display.
-
         // The workspace id Electron needed to pick a window has no use here: this
         // shell has one window, and the menu pops where the pointer already is.
         showContextMenu: (_workspaceId: string, items: ElectronContextMenuItem[]) =>
             send("host_show_context_menu", { items }),
+
+        // --- Still to build, and loud about it ---
+        //
+        // The app menu needs the menu content Electron assembled in its main
+        // process. Creating and closing tabs and workspaces still goes through the
+        // shell under Electron; switching is handled in the document here (see
+        // util/host.hostSwitchesTabsInDocument), so only those paths are left.
+
         showWorkspaceAppMenu: () => notImplemented("showWorkspaceAppMenu"),
         createTab: () => notImplemented("createTab"),
         closeTab: () => notImplemented("closeTab"),
-        setActiveTab: () => notImplemented("setActiveTab"),
         createWorkspace: () => notImplemented("createWorkspace"),
         switchWorkspace: () => notImplemented("switchWorkspace"),
         deleteWorkspace: () => notImplemented("deleteWorkspace"),
+        // Reached only under a shell that owns the tab views. This one does not,
+        // and global.setActiveTab never routes here.
+        setActiveTab: () => notImplemented("setActiveTab"),
     };
 }

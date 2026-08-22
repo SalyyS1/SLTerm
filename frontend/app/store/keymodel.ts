@@ -16,6 +16,7 @@ import {
     recordTEvent,
     refocusNode,
     replaceBlock,
+    setActiveTab,
     WOS,
 } from "@/app/store/global";
 import { getActiveTabModel } from "@/app/store/tab-model";
@@ -185,7 +186,7 @@ function switchTabAbs(index: number) {
         return;
     }
     const newActiveTabId = tabids[newTabIdx];
-    getApi().setActiveTab(newActiveTabId);
+    setActiveTab(newActiveTabId);
 }
 
 function switchTab(offset: number) {
@@ -205,7 +206,7 @@ function switchTab(offset: number) {
     }
     const newTabIdx = (tabIdx + offset + tabids.length) % tabids.length;
     const newActiveTabId = tabids[newTabIdx];
-    getApi().setActiveTab(newActiveTabId);
+    setActiveTab(newActiveTabId);
 }
 
 function handleCmdI() {

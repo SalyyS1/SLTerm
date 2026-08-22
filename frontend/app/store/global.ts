@@ -16,7 +16,7 @@ import {
 } from "@/layout/lib/types";
 import { getWebServerEndpoint } from "@/util/endpoints";
 import { fetch } from "@/util/fetchutil";
-import { getHostApi } from "@/util/host";
+import { getHostApi, hostSwitchesTabsInDocument } from "@/util/host";
 import { setPlatform } from "@/util/platformutil";
 import {
     base64ToString,
@@ -30,7 +30,7 @@ import {
 import { atom, Atom, PrimitiveAtom, useAtomValue } from "jotai";
 import { globalStore } from "./jotaiStore";
 import { modalsModel } from "./modalmodel";
-import { ClientService, ObjectService } from "./services";
+import { ClientService, ObjectService, WorkspaceService } from "./services";
 import { activeTabIdAtom } from "./tab-model";
 import * as WOS from "./wos";
 import { getFileSubject, waveEventSubscribe } from "./wps";
@@ -927,6 +927,17 @@ function createTab() {
 }
 
 function setActiveTab(tabId: string) {
+    if (hostSwitchesTabsInDocument()) {
+        // There are no shell-side tab views to swap: point this document at the
+        // tab, and record the choice in the backend, which is the other half of
+        // what the shell's own handler used to do.
+        globalStore.set(activeTabIdAtom, tabId);
+        const workspaceId = globalStore.get(atoms.workspace)?.oid;
+        if (workspaceId != null) {
+            fireAndForget(() => WorkspaceService.SetActiveTab(workspaceId, tabId));
+        }
+        return;
+    }
     getApi().setActiveTab(tabId);
 }
 

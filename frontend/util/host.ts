@@ -41,3 +41,17 @@ export function getHostApi(): HostApi {
     }
     return host;
 }
+
+/**
+ * Whether tab switching has to happen inside this document.
+ *
+ * Electron gave every tab its own webview and swapped them natively, so a document
+ * only ever showed the one tab it was created for. Every other shell has a single
+ * webview, which means the frontend mounts the tabs and shows one at a time.
+ *
+ * A property of the shell, not of the contract it implements — which is why this
+ * lives here and not in HostApi.
+ */
+export function hostSwitchesTabsInDocument(): boolean {
+    return findTauriHost() != null;
+}
