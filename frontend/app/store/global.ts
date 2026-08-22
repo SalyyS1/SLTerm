@@ -16,6 +16,7 @@ import {
 } from "@/layout/lib/types";
 import { getWebServerEndpoint } from "@/util/endpoints";
 import { fetch } from "@/util/fetchutil";
+import { getHostApi } from "@/util/host";
 import { setPlatform } from "@/util/platformutil";
 import {
     base64ToString,
@@ -462,10 +463,13 @@ function readAtom<T>(atom: Atom<T>): T {
 }
 
 /**
- * Get the preload api.
+ * Get the shell hosting this frontend.
+ *
+ * Named for the `window.api` bridge it used to read directly; the resolution now
+ * lives in util/host so the shell can be swapped in one place.
  */
-function getApi(): ElectronApi {
-    return (window as any).api;
+function getApi(): HostApi {
+    return getHostApi();
 }
 
 async function createBlockSplitHorizontally(

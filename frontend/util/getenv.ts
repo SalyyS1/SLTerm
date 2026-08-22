@@ -1,16 +1,10 @@
 // Copyright 2025, Salyvn.
 // SPDX-License-Identifier: Apache-2.0
 
-function getWindow(): Window {
-    return globalThis.window;
-}
+import { findHostApi } from "./host";
 
 function getProcess(): NodeJS.Process {
     return globalThis.process;
-}
-
-function getApi(): ElectronApi {
-    return (window as any).api;
 }
 
 /**
@@ -19,13 +13,25 @@ function getApi(): ElectronApi {
  * @returns The value of the environment variable or null if not present.
  */
 export function getEnv(paramName: string): string {
-    const win = getWindow();
-    if (win != null) {
-        return getApi().getEnv(paramName);
+    const host = findHostApi();
+    if (host != null) {
+        return host.getEnv(paramName);
     }
+    // No shell bridge: this is the main process or a test runner, where the
+    // variables are simply in our own environment.
     const proc = getProcess();
     if (proc != null) {
         return proc.env[paramName];
     }
     return null;
+}
+
+/**
+ * Gets the shared secret every request to the local server has to present.
+ *
+ * The host process generates it and the server never accepts a request without
+ * it, so a page loaded outside the app cannot reach the API on the loopback port.
+ */
+export function getAuthKey(): string {
+    return findHostApi()?.getAuthKey() ?? null;
 }

@@ -66,25 +66,32 @@ declare global {
         primaryTabStartup?: boolean;
     };
 
-    type ElectronApi = {
+    /**
+     * Everything the frontend needs from whatever shell is hosting it.
+     *
+     * This is the seam that makes the shell replaceable. The frontend reaches the
+     * host only through `getApi()`, so a new shell has to provide exactly these
+     * members and nothing else — no member here is optional, and a member the
+     * frontend does not call does not belong here.
+     *
+     * Deliberately free of Electron types: `Electron.Point` and friends come from
+     * the electron package, and a contract that names them cannot outlive it.
+     */
+    type HostApi = {
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
-        getCursorPoint: () => Electron.Point; // get-cursor-point
+        getCursorPoint: () => Point; // get-cursor-point
         getPlatform: () => NodeJS.Platform; // get-platform
         getEnv: (varName: string) => string; // get-env
         getUserName: () => string; // get-user-name
         getHostName: () => string; // get-host-name
-        getDataDir: () => string; // get-data-dir
         getConfigDir: () => string; // get-config-dir
-        getHomeDir: () => string; // get-home-dir
         getWebviewPreload: () => string; // get-webview-preload
         getAboutModalDetails: () => AboutModalDetails; // get-about-modal-details
         getZoomFactor: () => number; // get-zoom-factor
         showWorkspaceAppMenu: (workspaceId: string) => void; // workspace-appmenu-show
         showContextMenu: (workspaceId: string, menu: ElectronContextMenuItem[]) => void; // contextmenu-show
         onContextMenuClick: (callback: (id: string) => void) => void; // contextmenu-click
-        onNavigate: (callback: (url: string) => void) => void;
-        onIframeNavigate: (callback: (url: string) => void) => void;
         downloadFile: (path: string) => void; // download
         openExternal: (url: string) => void; // open-external
         onFullScreenChange: (callback: (isFullScreen: boolean) => void) => void; // fullscreen-change
@@ -110,15 +117,38 @@ declare global {
         sendLog: (log: string) => void; // fe-log
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path
-        captureScreenshot(rect: Electron.Rectangle): Promise<string>; // capture-screenshot
+        captureScreenshot(rect: HostRect): Promise<string>; // capture-screenshot
         setKeyboardChordMode: () => void; // set-keyboard-chord-mode
         clearWebviewStorage: (webContentsId: number) => Promise<void>; // clear-webview-storage
-        setWaveAIOpen: (isOpen: boolean) => void; // set-waveai-open
         incrementTermCommands: (opts?: { isRemote?: boolean; isWsl?: boolean; isDurable?: boolean }) => void; // increment-term-commands
         nativePaste: () => void; // native-paste
         setFullScreen: (isFullScreen: boolean) => void; // set-fullscreen
-        doRefresh: () => void; // do-refresh
         getPathForFile: (file: File) => string; // webUtils.getPathForFile
+    };
+
+    /** A screen rectangle in device pixels, as the host's screen APIs use. */
+    type HostRect = {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+
+    /**
+     * The surface Electron's preload injects on `window.api`.
+     *
+     * A superset of HostApi: these extra members are wired over IPC but nothing in
+     * the frontend calls them, so a replacement shell does not owe them. Keep new
+     * members out of here unless the frontend genuinely cannot use HostApi for
+     * them — anything added here is work that will not survive the shell.
+     */
+    type ElectronApi = HostApi & {
+        getDataDir: () => string; // get-data-dir
+        getHomeDir: () => string; // get-home-dir
+        onNavigate: (callback: (url: string) => void) => void;
+        onIframeNavigate: (callback: (url: string) => void) => void;
+        setWaveAIOpen: (isOpen: boolean) => void; // set-waveai-open
+        doRefresh: () => void; // do-refresh
     };
 
     type ElectronContextMenuItem = {
