@@ -2,6 +2,29 @@
 
 **Est.** 3-4 weeks · **Done under Electron** · **Depends on:** Phase 0 benchmarks, Phase 1 carry-over, Phase 2 gate
 
+## Status
+
+| Item | State | Notes |
+|---|---|---|
+| 3.1 Dynamic tab identity | **done** | `atoms.staticTabId` derives from the active tab, so all ~50 readers follow a switch. Layout models subscribe per tab, not just for the one on screen. |
+| 3.2 One webview, warm tabs hidden | **done, unmeasured** | `StackedTabs` in `workspace.tsx`, gated on `hostSwitchesTabsInDocument()` so the Electron path is untouched. |
+| 3.3 Suspend/virtualization policy | open | Deliberately absent: a cap needs the numbers that justify where to put it. |
+| 3.4 Retire `emain-tabview.ts` | open | Only after the benchmarks below say the in-document path wins. |
+
+**The gate this phase asks for has not been cleared.** Benchmarks at 10 and 25 live
+terminal tabs, and jank with one high-throughput tab, need a running window; the machine this
+was built on has no display. What exists is a path that typechecks, builds, and cannot affect the
+Electron rendering path — not a measured replacement for it.
+
+Two things to look for first when someone does run it:
+
+- **A tab coming back blank or stale.** Nothing triggers an xterm refresh on becoming visible,
+  because no resize happens — the geometry never changed. If a tab returns unpainted, that is where
+  to look, and the fix belongs next to `TermResyncHandler`.
+- **Mounting cost with many visited tabs.** Every visited tab keeps its terminals, so a session that
+  cycles through twenty tabs holds twenty tabs' worth of xterm and Monaco on one heap. That is
+  precisely what 3.3 exists to bound, and precisely what the plan says to measure before trusting.
+
 ## Goal
 
 Remove the per-tab renderer architecture — simultaneously the biggest Electron memory win and the

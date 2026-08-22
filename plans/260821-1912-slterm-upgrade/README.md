@@ -84,7 +84,7 @@ the real weak seams rather than importing a fix for a bug SLTerm does not have.
 | 0.7 | CI repair + multi-platform release pipeline | done | No | [phase-0.7-ci-and-release.md](phase-0.7-ci-and-release.md) |
 | 1 | Terminal rendering hardening | in progress | No | [phase-1-terminal.md](phase-1-terminal.md) |
 | 2 | Host adapter + Tauri spike → gate | 2-3w | Prep | [phase-2-host-adapter.md](phase-2-host-adapter.md) |
-| 3 | Single-webview in-DOM tabs | 3-4w | No (done under Electron) | [phase-3-tabs.md](phase-3-tabs.md) |
+| 3 | Single-webview in-DOM tabs | in progress | No (done under Electron) | [phase-3-tabs.md](phase-3-tabs.md) |
 | 4 | Claude Code feature layer (Go) | 4-6w | No | [phase-4-claude-layer.md](phase-4-claude-layer.md) |
 | 5 | Project / VCS layer (Go) | 3-4w | No | [phase-5-vcs.md](phase-5-vcs.md) |
 | 6 | SLTerm strengths: pet, keybind, polish | 2-3w | No | [phase-6-slterm-polish.md](phase-6-slterm-polish.md) |
@@ -109,8 +109,14 @@ machine has no display. Still open in Phase 2: the spike checklist itself (WebGL
 clipboard, and `ws://` from the `tauri://` origin), the `electron` → `host` route rename, and the
 written decision.
 
-Native menus and tab/workspace switching are the two gaps that keep the Tauri shell from being usable
-rather than merely bootable. Tabs are Phase 3 by design; menus are shell work.
+Both gaps that kept the Tauri shell merely bootable are closed: native context menus are wired
+through Tauri's menu API, and tab switching happens in the document. What is left before it is
+trustworthy is measurement — Phase 3's benchmark gate needs a display, which the build machine does
+not have. Creating and closing tabs and workspaces, and the app menu, still go through the shell and
+are unimplemented there.
+
+A second round of size work followed: dropping Monaco's unused language services took the installer
+to **21 MB** and the unpacked frontend from 44 MB to 26 MB.
 
 Phases 0-6 are runtime-independent and keep Electron shippable. Phase 7 is the swap. Nothing built
 in 0-6 has to be redone in 7 — that is the point of the ordering.
