@@ -31,6 +31,7 @@ import { atom, Atom, PrimitiveAtom, useAtomValue } from "jotai";
 import { globalStore } from "./jotaiStore";
 import { modalsModel } from "./modalmodel";
 import { ClientService, ObjectService } from "./services";
+import { activeTabIdAtom } from "./tab-model";
 import * as WOS from "./wos";
 import { getFileSubject, waveEventSubscribe } from "./wps";
 
@@ -98,8 +99,13 @@ function initGlobalAtoms(initOpts: GlobalInitOptions) {
     const settingsAtom = atom((get) => {
         return get(fullConfigAtom)?.settings ?? {};
     }) as Atom<SettingsType>;
-    // this is *the* tab that this tabview represents.  it should never change.
-    const staticTabIdAtom: Atom<string> = atom(initOpts.tabId);
+    // The tab this document is showing.
+    //
+    // Named "static" from when the shell gave every tab its own webview, so one
+    // document really did mean one tab for its whole life. A shell that has a
+    // single webview switches tabs inside this document instead, so it follows the
+    // active tab — and the ~50 readers of it follow along without knowing.
+    const staticTabIdAtom: Atom<string> = atom((get) => get(activeTabIdAtom) ?? initOpts.tabId);
     const controlShiftDelayAtom = atom(false);
     const updaterStatusAtom = atom<UpdaterStatus>("up-to-date") as PrimitiveAtom<UpdaterStatus>;
     try {

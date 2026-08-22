@@ -23,15 +23,16 @@ function getLayoutModelForTab(tabAtom: Atom<Tab>): LayoutModel {
         }
     }
     const layoutModel = new LayoutModel(tabAtom, globalStore.get, globalStore.set);
-    
-    const staticTabId = globalStore.get(atoms.staticTabId);
-    if (tabId === staticTabId) {
-        const layoutStateAtom = getLayoutStateAtomFromTab(tabAtom, globalStore.get);
-        globalStore.sub(layoutStateAtom, () => {
-            layoutModel.onBackendUpdate();
-        });
-    }
-    
+
+    // Every tab's model follows backend layout changes, not just the one on screen.
+    // While each tab had its own webview only one model existed per document, so
+    // subscribing the active one was the same thing; with several mounted at once
+    // it is not, and a background tab would come back with a stale layout.
+    const layoutStateAtom = getLayoutStateAtomFromTab(tabAtom, globalStore.get);
+    globalStore.sub(layoutStateAtom, () => {
+        layoutModel.onBackendUpdate();
+    });
+
     layoutModelMap.set(tabId, layoutModel);
     return layoutModel;
 }
