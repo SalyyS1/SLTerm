@@ -82,7 +82,7 @@ the real weak seams rather than importing a fix for a bug SLTerm does not have.
 | 0.5 | Scope reduction — cut non-ADE subsystems | done | No | [phase-0.5-scope-cut.md](phase-0.5-scope-cut.md) |
 | 0.6 | ADE feature layer, build pipeline, release artifact | done | No | [phase-0.6-ade-layer-and-build.md](phase-0.6-ade-layer-and-build.md) |
 | 0.7 | CI repair + multi-platform release pipeline | done | No | [phase-0.7-ci-and-release.md](phase-0.7-ci-and-release.md) |
-| 1 | Terminal rendering hardening | 2-3w | No | [phase-1-terminal.md](phase-1-terminal.md) |
+| 1 | Terminal rendering hardening | in progress | No | [phase-1-terminal.md](phase-1-terminal.md) |
 | 2 | Host adapter + Tauri spike → gate | 2-3w | Prep | [phase-2-host-adapter.md](phase-2-host-adapter.md) |
 | 3 | Single-webview in-DOM tabs | 3-4w | No (done under Electron) | [phase-3-tabs.md](phase-3-tabs.md) |
 | 4 | Claude Code feature layer (Go) | 4-6w | No | [phase-4-claude-layer.md](phase-4-claude-layer.md) |
@@ -93,6 +93,24 @@ the real weak seams rather than importing a fix for a bug SLTerm does not have.
 Phase 0.6 delivered the first slice of Phase 4 (skills/MCP/agents/commands browser
 and the agent-teams read model). What remains in Phase 4 is session
 detection/resume and the OTLP cost HUD.
+
+Phase 1 has landed the output-fidelity half: the ordered replay, the wrap guard, live font changes,
+and the two real bugs the review turned up (held output was being discarded outright, and the batched
+writer was corrupting split UTF-8). Still open there: spawn-time PTY sizing, binary WS frames,
+layout-remount carry-over, background/renderer decoupling, and the view-transition regression suite.
+
+Phase 2 has landed 2.1, 2.3 and 2.4: the `HostApi` seam (46 members, one resolution point, an Electron
+and a Tauri implementation), the auth key off the header plus the production CORS the shell needs, and
+the secret store off Electron's safeStorage onto an OS-keyring-held master key — the one item that
+would have destroyed data if it slipped past the swap. The Tauri shell now compiles, spawns the
+sidecar, injects its startup snapshot and resolves its own `wave-init` handshake from the backend —
+release binary 19 MB against Electron's 285 MB of runtime. Nothing has been *observed* running: this
+machine has no display. Still open in Phase 2: the spike checklist itself (WebGL, Monaco, IME,
+clipboard, and `ws://` from the `tauri://` origin), the `electron` → `host` route rename, and the
+written decision.
+
+Native menus and tab/workspace switching are the two gaps that keep the Tauri shell from being usable
+rather than merely bootable. Tabs are Phase 3 by design; menus are shell work.
 
 Phases 0-6 are runtime-independent and keep Electron shippable. Phase 7 is the swap. Nothing built
 in 0-6 has to be redone in 7 — that is the point of the ordering.
@@ -105,7 +123,8 @@ in 0-6 has to be redone in 7 — that is the point of the ordering.
 3. Git status/stage/commit/push, changelists, worktrees usable without leaving the app.
 4. Pet XP/coins/inventory persist across restart and advance from real shell activity.
 5. Keybindings user-remappable; cheatsheet generated from live bindings.
-6. Installed size and idle RAM measured down vs the Phase 0 baseline.
+6. Installed size and idle RAM measured down vs the Phase 0 baseline. **Size: done** — 23 MB `.deb`
+   against Electron's 362 MB unpacked; the runtime alone goes 285 MB → 19 MB. RAM still unmeasured.
 7. Zero Wave brand strings in user-visible surfaces; SL artwork in all icon binaries.
 8. Ships on Windows, macOS, Linux without Electron.
 
@@ -115,3 +134,6 @@ in 0-6 has to be redone in 7 — that is the point of the ordering.
   freeze at a chosen upstream commit? Not blocking until Phase 7.
 - Telemetry: `pkg/wcloud` endpoints are placeholder `github.com/SalyyS1/SLTerm/central` URLs that
   are not real services. Stand up, or strip the subsystem?
+- Serve the frontend from `wavesrv` instead of the Tauri asset protocol? That makes everything
+  same-origin and retires both the auth-key query parameter and the CORS allowlist, at the cost of
+  teaching the Go server to serve the SPA. Decide before Phase 7 starts.
