@@ -9,6 +9,13 @@ import { addWSReconnectHandler, ElectronOverrideOpts, globalWS, initGlobalWS } f
 
 let DefaultRouter: WshRouter;
 
+/**
+ * The route the hosting shell answers on. Must match `wshutil.HostRoute` in Go:
+ * the backend addresses host capabilities — focus a window, ring the bell — to
+ * this id, and it is the shell that implements them, whichever shell that is.
+ */
+export const HostRouteId = "host";
+
 function setDefaultRouter(router: WshRouter) {
     DefaultRouter = router;
 }
@@ -116,7 +123,7 @@ function initElectronWshrpc(electronClient: WshClient, eoOpts: ElectronOverrideO
     const handleFn = (event: WSEventType) => {
         DefaultRouter.recvRpcMessage(event.data);
     };
-    initGlobalWS(getWSServerEndpoint(), "electron", handleFn, eoOpts);
+    initGlobalWS(getWSServerEndpoint(), HostRouteId, handleFn, eoOpts);
     globalWS.connectNow("connectWshrpc");
     setWpsRpcClient(electronClient);
     DefaultRouter.registerRoute(electronClient.routeId, electronClient);

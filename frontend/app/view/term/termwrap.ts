@@ -5,6 +5,7 @@ import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { getFileSubject } from "@/app/store/wps";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { HostRouteId } from "@/app/store/wshrpcutil-base";
 import {
     atoms,
     fetchWaveFile,
@@ -213,7 +214,7 @@ export class TermWrap {
                 const bellSoundEnabled =
                     globalStore.get(getOverrideConfigAtom(this.blockId, "term:bellsound")) ?? false;
                 if (bellSoundEnabled) {
-                    fireAndForget(() => RpcApi.ElectronSystemBellCommand(TabRpcClient, { route: "electron" }));
+                    fireAndForget(() => RpcApi.ElectronSystemBellCommand(TabRpcClient, { route: HostRouteId }));
                 }
                 const bellIndicatorEnabled =
                     globalStore.get(getOverrideConfigAtom(this.blockId, "term:bellindicator")) ?? false;

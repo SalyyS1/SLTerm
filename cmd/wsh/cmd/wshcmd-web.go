@@ -75,7 +75,7 @@ func webGetRun(cmd *cobra.Command, args []string) error {
 		},
 	}
 	output, err := wshclient.WebSelectorCommand(RpcClient, data, &wshrpc.RpcOpts{
-		Route:   wshutil.ElectronRoute,
+		Route:   wshutil.HostRoute,
 		Timeout: 5000,
 	})
 	if err != nil {

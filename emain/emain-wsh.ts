@@ -4,6 +4,7 @@
 import { WindowService } from "@/app/store/services";
 import { RpcResponseHelper, WshClient } from "@/app/store/wshclient";
 import { RpcApi } from "@/app/store/wshclientapi";
+import { HostRouteId } from "@/app/store/wshrpcutil-base";
 import { Notification, net, safeStorage, shell } from "electron";
 import { getResolvedUpdateChannel } from "emain/updater";
 import { unamePlatform } from "./emain-platform";
@@ -12,7 +13,7 @@ import { createBrowserWindow, getWaveWindowById, getWaveWindowByWorkspaceId } fr
 
 export class ElectronWshClientType extends WshClient {
     constructor() {
-        super("electron");
+        super(HostRouteId);
     }
 
     async handle_webselector(rh: RpcResponseHelper, data: CommandWebSelectorData): Promise<string[]> {
