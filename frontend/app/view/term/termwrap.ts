@@ -33,6 +33,7 @@ import {
 } from "./osc-handlers";
 import { reconcileHeldData, waveFileDataStartIdx, type HeldChunk } from "./term-replay";
 import { BatchedWriter } from "./term-batched-writer";
+import { canMeasureTermLayout } from "./term-spawn-gate";
 import { createTempFileFromBlob, extractAllClipboardData } from "./termutil";
 
 const dlog = debug("wave:termwrap");
@@ -47,6 +48,10 @@ const MaxHeldDataBytes = 1024 * 1024;
 // How many times to refetch when held output cannot be reconciled against the
 // read. One pass is enough unless output keeps overflowing the hold buffer.
 const MaxReplayRefetches = 3;
+// How long to wait for a layout before starting the shell anyway. A block that is
+// mounted but never laid out (hidden container, zero-size parent) would otherwise
+// never run its command at all.
+const SpawnFallbackTimeoutMs = 1000;
 export const SupportsImageInput = true;
 
 // Cached resolved promise to avoid GC pressure from creating new ones per write
@@ -117,6 +122,11 @@ export class TermWrap {
     // Idle timeout tracking
     private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
     private disposed: boolean = false;
+
+    // Spawn gating: the shell is started by the first resize, so that resize has to
+    // carry a real measurement. A block that never gets a layout still has to run,
+    // hence the fallback timer.
+    private spawnFallbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // Paste deduplication
     // xterm.js paste() method triggers onData event, which can cause duplicate sends
@@ -334,6 +344,10 @@ export class TermWrap {
         if (this.idleTimeoutId != null) {
             clearTimeout(this.idleTimeoutId);
             this.idleTimeoutId = null;
+        }
+        if (this.spawnFallbackTimeoutId != null) {
+            clearTimeout(this.spawnFallbackTimeoutId);
+            this.spawnFallbackTimeoutId = null;
         }
         this.batchedWriter.dispose();
         this.detachWebGL();
@@ -644,19 +658,64 @@ export class TermWrap {
         this.terminal.loadAddon(this.serializeAddon);
     }
 
+    /**
+     * Whether the connected element currently has a layout xterm can measure.
+     * See {@link canMeasureTermLayout} for why an empty box has to disqualify the
+     * measurement even when the fit addon proposes numbers.
+     */
+    private canMeasureLayout(): boolean {
+        return canMeasureTermLayout(
+            this.connectElem.clientWidth,
+            this.connectElem.clientHeight,
+            this.fitAddon.proposeDimensions()
+        );
+    }
+
+    /** Starts the shell with whatever size is known, if a real measurement never arrives. */
+    private armSpawnFallback() {
+        if (this.spawnFallbackTimeoutId != null || this.hasResized || this.disposed) {
+            return;
+        }
+        this.spawnFallbackTimeoutId = setTimeout(() => {
+            this.spawnFallbackTimeoutId = null;
+            if (this.hasResized || this.disposed) {
+                return;
+            }
+            dlog("spawn fallback: no layout to measure, starting at", `${this.terminal.rows}x${this.terminal.cols}`);
+            this.hasResized = true;
+            this.resyncController("spawn fallback");
+        }, SpawnFallbackTimeoutMs);
+    }
+
     handleResize() {
         const oldRows = this.terminal.rows;
         const oldCols = this.terminal.cols;
-        this.fitAddon.fit();
+        // Fitting against an unlaid-out element leaves the terminal at xterm's
+        // construction default, and starting the shell at that size makes it paint
+        // its first frame at the wrong width — the redraw that produces ghost
+        // characters after a clear. Wait for a size that means something instead.
+        const measurable = this.canMeasureLayout();
+        if (measurable) {
+            this.fitAddon.fit();
+        }
         if (oldRows !== this.terminal.rows || oldCols !== this.terminal.cols) {
             const termSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
             RpcApi.ControllerInputCommand(TabRpcClient, { blockid: this.blockId, termsize: termSize });
         }
         dlog("resize", `${this.terminal.rows}x${this.terminal.cols}`, `${oldRows}x${oldCols}`, this.hasResized);
-        if (!this.hasResized) {
-            this.hasResized = true;
-            this.resyncController("initial resize");
+        if (this.hasResized) {
+            return;
         }
+        if (!measurable) {
+            this.armSpawnFallback();
+            return;
+        }
+        if (this.spawnFallbackTimeoutId != null) {
+            clearTimeout(this.spawnFallbackTimeoutId);
+            this.spawnFallbackTimeoutId = null;
+        }
+        this.hasResized = true;
+        this.resyncController("initial resize");
     }
 
     processAndCacheData() {

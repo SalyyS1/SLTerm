@@ -352,15 +352,14 @@ func getBoolFromMeta(meta map[string]any, key string, def bool) bool {
 	return def
 }
 
+// getTermSize returns the size the block was last measured at, falling back to the
+// shared default. A stored zero counts as absent: RuntimeOpts can exist without a
+// size having ever been recorded, and starting a PTY at 0x0 is rejected downstream.
 func getTermSize(bdata *waveobj.Block) waveobj.TermSize {
-	if bdata.RuntimeOpts != nil {
+	if bdata.RuntimeOpts != nil && bdata.RuntimeOpts.TermSize.Rows > 0 && bdata.RuntimeOpts.TermSize.Cols > 0 {
 		return bdata.RuntimeOpts.TermSize
-	} else {
-		return waveobj.TermSize{
-			Rows: 25,
-			Cols: 80,
-		}
 	}
+	return shellutil.DefaultTermSize()
 }
 
 func HandleAppendBlockFile(blockId string, blockFile string, data []byte) error {

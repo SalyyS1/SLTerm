@@ -310,8 +310,14 @@ func (sc *ShellController) run(logCtx context.Context, bdata *waveobj.Block, blo
 			}()
 			defer sc.UnlockRunLock()
 			var termSize waveobj.TermSize
-			if rtOpts != nil {
+			if rtOpts != nil && rtOpts.TermSize.Rows > 0 && rtOpts.TermSize.Cols > 0 {
 				termSize = rtOpts.TermSize
+				// Record the size the shell is actually starting at, so a restart that
+				// arrives without runtime opts starts at the same width instead of at
+				// the default and repainting once the client resizes it.
+				if err := setTermSizeInDB(sc.BlockId, termSize); err != nil {
+					log.Printf("error recording spawn term size: %v\n", err)
+				}
 			} else {
 				termSize = getTermSize(bdata)
 			}
