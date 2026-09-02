@@ -12,7 +12,7 @@
 | 1.4 Spawn-time PTY sizing | **done** | The first resize is what starts the shell, so it is gated on a measurement that means something; a timer starts the shell anyway for a block that never gets a layout. Remote jobs no longer hard-code 80x24 at spawn. The spawn size is recorded so a restart without runtime opts starts where the block was. |
 | 1.5 Binary WS frames | **blocked — premise does not hold** | See below. The base64 round-trip is still there. Two real fixes landed on this path instead: a byte-corruption bug in the writer, and skipping the encode entirely when nothing is subscribed. |
 | 1.6 Carry-over on layout remount | **done** | The outgoing instance parks its serialized screen; the incoming one restores it instead of re-reading the term file. Parked with the offset xterm has *parsed*, not the one it was handed, so writes still in xterm's queue are re-read rather than lost. Single-use, 10s TTL, bounded. |
-| 1.7 Decouple background from renderer | open | |
+| 1.7 Decouple background from renderer | **done** | `allowTransparency` is now always on and no longer gates WebGL: addon-webgl 0.19 honours it. Every themed window was on the slow renderer by default, because the default transparency of 0.5 made the guard fire. Also removes a rebuild trigger — a background change no longer replays the scrollback. |
 | 1.8 Regression suite | **partly** | Unit tests cover the reconciliation, the writer and scrollback resolution. The view-transition suite is not built. |
 
 ### Two bugs found in the code, not in the plan
@@ -193,6 +193,26 @@ drops xterm to the slower canvas renderer (`term.tsx`). Every vibe background th
 rendering performance — a direct conflict between two things the user values.
 
 Move the background compositing so the renderer choice is independent of it.
+
+**Worse than the plan thought, and simpler to fix.** The guard was not limited to backgrounds:
+`term:transparency` defaults to `0.5`, so `needsTransparency` was true for a default install and
+**every terminal ran on the canvas renderer**. WebGL was effectively dead code unless the user
+explicitly set transparency to 0 or 1.
+
+The premise behind the guard no longer holds either. `@xterm/addon-webgl` 0.19 (shipped here with
+xterm 5.5) supports transparency: it forces colors opaque only when `allowTransparency` is *off*,
+builds its character atlas with an alpha channel when it is on, enables `SRC_ALPHA` blending, and
+never clears to an opaque color. Verified by reading the shipped bundle rather than the changelog —
+the exact code in `node_modules` is the authority for what this build does.
+
+So the coupling is simply removed: `allowTransparency` is always on — which is what the rest of the
+architecture already assumes, since `computeTheme` hands xterm a fully transparent background and
+returns the real color for the block frame to paint behind it — and WebGL attaches regardless.
+`term:disablewebgl` remains the escape hatch if a driver renders it badly.
+
+Two side effects, both wanted: a fully-opaque `term:transparency: 0` no longer paints an opaque black
+grid over the themed background, and background/transparency changes no longer rebuild the terminal,
+which is one fewer scrollback replay (the same class of churn 1.1 was about).
 
 ### 1.8 Regression suite
 

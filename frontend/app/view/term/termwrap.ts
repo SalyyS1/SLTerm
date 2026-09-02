@@ -713,11 +713,13 @@ export class TermWrap {
 
     async attachWebGL(): Promise<void> {
         if (this.webglAddon) return;
-        // Skip WebGL when transparency is enabled — WebGL canvas is always opaque
-        // and hides any background image/color set behind the terminal
-        if (this.terminal.options.allowTransparency) {
-            return;
-        }
+        // Transparency is deliberately not a reason to skip WebGL. @xterm/addon-webgl
+        // 0.19 honours allowTransparency: it only forces colors opaque when the option
+        // is off, creates its char atlas with an alpha channel when it is on, and
+        // enables SRC_ALPHA blending without clearing to an opaque color. The renderer
+        // and the background are independent, and every background this app draws sits
+        // behind the terminal, so tying them together cost every themed window the
+        // fast renderer for nothing.
         try {
             const { WebglAddon } = await import("@xterm/addon-webgl");
             this.webglAddon = new WebglAddon();

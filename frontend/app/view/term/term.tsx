@@ -193,10 +193,6 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     // scrollback gets duplicated or lost.
     const termScrollback = clampScrollback(termSettings?.["term:scrollback"], blockData?.meta?.["term:scrollback"]);
     const termUseWebGl = !termSettings?.["term:disablewebgl"];
-    // WebGL's canvas is opaque, so anything behind the terminal only shows
-    // through on the slower canvas renderer.
-    const needsTransparency =
-        !!blockData?.meta?.["bg"] || (termTransparency != null && termTransparency > 0 && termTransparency < 1);
     const isFocused = jotai.useAtomValue(model.nodeModel.isFocused);
     const isMI = jotai.useAtomValue(tabModel.isTermMultiInput);
     const isBasicTerm = termMode != "vdom" && blockData?.meta?.controller != "cmd"; // needs to match isBasicTerm
@@ -287,7 +283,12 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
                 drawBoldTextInBrightColors: false,
                 fontWeight: "normal",
                 fontWeightBold: "bold",
-                allowTransparency: needsTransparency,
+                // Always on, because the terminal's background is always drawn behind
+                // it: computeTheme hands xterm a fully transparent background and
+                // returns the real color separately for the block to paint. Deriving
+                // this from the current theme or bg instead made a background change
+                // rebuild the terminal — and rebuilding replays the scrollback.
+                allowTransparency: true,
                 scrollback: termScrollback,
                 allowProposedApi: true, // Required by @xterm/addon-search to enable search functionality and decorations
                 ignoreBracketedPasteMode: !termAllowBPM,
@@ -320,7 +321,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             termWrap.dispose();
             rszObs.disconnect();
         };
-    }, [blockId, termScrollback, needsTransparency, termUseWebGl]);
+    }, [blockId, termScrollback, termUseWebGl]);
 
     React.useEffect(() => {
         if (termModeRef.current == "vdom" && termMode == "term") {
