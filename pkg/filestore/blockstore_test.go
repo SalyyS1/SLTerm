@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/SalyyS1/SLTerm/pkg/ijson"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc"
+	"github.com/google/uuid"
 )
 
 func initDb(t *testing.T) {
@@ -772,5 +772,80 @@ func TestIJson(t *testing.T) {
 	}
 	if !jsonDeepEqual(ijson.M{"tag": "div", "class": "root", "children": ijson.A{ijson.M{"tag": "div", "class": "child"}}}, outData) {
 		t.Errorf("data mismatch: expected %v, got %v", rootSet["data"], outData)
+	}
+}
+
+func TestAppendDataWithOffset(t *testing.T) {
+	initDb(t)
+	defer cleanupDb(t)
+	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFn()
+	zoneId := uuid.NewString()
+	fileName := "t1"
+	err := WFS.MakeFile(ctx, zoneId, fileName, nil, wshrpc.FileOpts{})
+	if err != nil {
+		t.Fatalf("error creating file: %v", err)
+	}
+
+	offset, err := WFS.AppendDataWithOffset(ctx, zoneId, fileName, []byte("hello"))
+	if err != nil {
+		t.Fatalf("error appending data: %v", err)
+	}
+	if offset != 0 {
+		t.Errorf("first append offset mismatch: expected 0, got %d", offset)
+	}
+	offset, err = WFS.AppendDataWithOffset(ctx, zoneId, fileName, []byte(" world"))
+	if err != nil {
+		t.Fatalf("error appending data: %v", err)
+	}
+	if offset != 5 {
+		t.Errorf("second append offset mismatch: expected 5, got %d", offset)
+	}
+	checkFileData(t, ctx, zoneId, fileName, "hello world")
+}
+
+func TestAppendDataWithOffsetPastCircularWrap(t *testing.T) {
+	initDb(t)
+	defer cleanupDb(t)
+	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFn()
+	zoneId := uuid.NewString()
+	err := WFS.MakeFile(ctx, zoneId, "c1", nil, wshrpc.FileOpts{Circular: true, MaxSize: 50})
+	if err != nil {
+		t.Fatalf("error creating file: %v", err)
+	}
+	err = WFS.WriteFile(ctx, zoneId, "c1", []byte("123456789 123456789 123456789 123456789 123456789 "))
+	if err != nil {
+		t.Fatalf("error writing data: %v", err)
+	}
+
+	// The offset must stay an absolute position in the byte stream once the file
+	// has wrapped, not a position within the retained window. A reader compares
+	// it against the offset it last read, and a window-relative number would
+	// make already-read data look new.
+	offset, err := WFS.AppendDataWithOffset(ctx, zoneId, "c1", []byte("apple"))
+	if err != nil {
+		t.Fatalf("error appending data: %v", err)
+	}
+	if offset != 50 {
+		t.Errorf("append offset mismatch: expected 50, got %d", offset)
+	}
+	offset, err = WFS.AppendDataWithOffset(ctx, zoneId, "c1", []byte(" banana"))
+	if err != nil {
+		t.Fatalf("error appending data: %v", err)
+	}
+	if offset != 55 {
+		t.Errorf("append offset mismatch: expected 55, got %d", offset)
+	}
+
+	file, err := WFS.Stat(ctx, zoneId, "c1")
+	if err != nil {
+		t.Fatalf("error stating file: %v", err)
+	}
+	if file.DataStartIdx() != 12 {
+		t.Errorf("data start mismatch: expected 12, got %d", file.DataStartIdx())
+	}
+	if file.Size != 62 {
+		t.Errorf("size mismatch: expected 62, got %d", file.Size)
 	}
 }

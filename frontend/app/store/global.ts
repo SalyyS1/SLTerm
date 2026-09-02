@@ -16,6 +16,7 @@ import {
 } from "@/layout/lib/types";
 import { getWebServerEndpoint } from "@/util/endpoints";
 import { fetch } from "@/util/fetchutil";
+import { getHostApi, hostSwitchesTabsInDocument } from "@/util/host";
 import { setPlatform } from "@/util/platformutil";
 import {
     base64ToString,
@@ -29,7 +30,8 @@ import {
 import { atom, Atom, PrimitiveAtom, useAtomValue } from "jotai";
 import { globalStore } from "./jotaiStore";
 import { modalsModel } from "./modalmodel";
-import { ClientService, ObjectService } from "./services";
+import { ClientService, ObjectService, WorkspaceService } from "./services";
+import { activeTabIdAtom } from "./tab-model";
 import * as WOS from "./wos";
 import { getFileSubject, waveEventSubscribe } from "./wps";
 
@@ -97,8 +99,13 @@ function initGlobalAtoms(initOpts: GlobalInitOptions) {
     const settingsAtom = atom((get) => {
         return get(fullConfigAtom)?.settings ?? {};
     }) as Atom<SettingsType>;
-    // this is *the* tab that this tabview represents.  it should never change.
-    const staticTabIdAtom: Atom<string> = atom(initOpts.tabId);
+    // The tab this document is showing.
+    //
+    // Named "static" from when the shell gave every tab its own webview, so one
+    // document really did mean one tab for its whole life. A shell that has a
+    // single webview switches tabs inside this document instead, so it follows the
+    // active tab — and the ~50 readers of it follow along without knowing.
+    const staticTabIdAtom: Atom<string> = atom((get) => get(activeTabIdAtom) ?? initOpts.tabId);
     const controlShiftDelayAtom = atom(false);
     const updaterStatusAtom = atom<UpdaterStatus>("up-to-date") as PrimitiveAtom<UpdaterStatus>;
     try {
@@ -462,10 +469,13 @@ function readAtom<T>(atom: Atom<T>): T {
 }
 
 /**
- * Get the preload api.
+ * Get the shell hosting this frontend.
+ *
+ * Named for the `window.api` bridge it used to read directly; the resolution now
+ * lives in util/host so the shell can be swapped in one place.
  */
-function getApi(): ElectronApi {
-    return (window as any).api;
+function getApi(): HostApi {
+    return getHostApi();
 }
 
 async function createBlockSplitHorizontally(
@@ -917,6 +927,17 @@ function createTab() {
 }
 
 function setActiveTab(tabId: string) {
+    if (hostSwitchesTabsInDocument()) {
+        // There are no shell-side tab views to swap: point this document at the
+        // tab, and record the choice in the backend, which is the other half of
+        // what the shell's own handler used to do.
+        globalStore.set(activeTabIdAtom, tabId);
+        const workspaceId = globalStore.get(atoms.workspace)?.oid;
+        if (workspaceId != null) {
+            fireAndForget(() => WorkspaceService.SetActiveTab(workspaceId, tabId));
+        }
+        return;
+    }
     getApi().setActiveTab(tabId);
 }
 

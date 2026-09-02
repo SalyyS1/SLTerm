@@ -1,11 +1,8 @@
 // Copyright 2025, Salyvn.
 // SPDX-License-Identifier: Apache-2.0
 
-// Lazy Monaco loader — defers the ~300KB monaco-editor bundle and all web workers
-// until the first editor component mounts. Returns the monaco module instance.
-//
-// Before this change every worker and language contribution loaded at app startup.
-// Now they only load when an editor block is first opened.
+// Lazy Monaco loader — nothing here loads until the first editor component mounts.
+// Returns the monaco module instance.
 
 import type * as MonacoTypes from "monaco-editor";
 
@@ -18,46 +15,39 @@ export async function loadMonaco(): Promise<typeof MonacoTypes> {
     }
 
     loadPromise = (async () => {
-        // Load core monaco and language contributions in parallel with workers.
-        const [monacoModule, { MonacoSchemas }, { configureMonacoYaml }] = await Promise.all([
-            import("monaco-editor"),
+        // editor.api, not the "monaco-editor" entry point. That entry is
+        // editor.main, which bundles every language *service*: the TypeScript one
+        // alone pulls in the whole TS compiler as a 13 MB worker, to serve an
+        // editor whose semantic validation is switched off below anyway. Syntax
+        // highlighting comes from a different module and is kept in full.
+        //
+        // Cast because editor.api's own .d.ts declares a global namespace rather
+        // than exporting one. Callers keep the full monaco-editor types; the only
+        // members missing at runtime are the language services dropped here, and
+        // nothing outside this file touches them.
+        const [monacoModule, { MonacoSchemas }] = await Promise.all([
+            import("monaco-editor/esm/vs/editor/editor.api") as unknown as Promise<typeof MonacoTypes>,
             import("@/app/monaco/schemaendpoints"),
-            import("monaco-yaml"),
         ]);
 
-        // Language contributions must be imported (side-effect only) before workers start.
-        await Promise.all([
-            import("monaco-editor/esm/vs/language/css/monaco.contribution"),
-            import("monaco-editor/esm/vs/language/html/monaco.contribution"),
-            import("monaco-editor/esm/vs/language/json/monaco.contribution"),
-            import("monaco-editor/esm/vs/language/typescript/monaco.contribution"),
-        ]);
+        // Registers all ~90 basic languages behind lazy loaders, so every file type
+        // keeps its highlighting and none of them cost anything until one is opened.
+        await import("monaco-editor/esm/vs/basic-languages/_.contribution");
+        // The one language service worth its worker: it is what validates SLTerm's
+        // own config against the schemas set below.
+        await import("monaco-editor/esm/vs/language/json/monaco.contribution");
 
-        // Lazily import worker constructors.
-        const [
-            { default: EditorWorker },
-            { default: CssWorker },
-            { default: HtmlWorker },
-            { default: JsonWorker },
-            { default: TsWorker },
-            { default: YmlWorker },
-        ] = await Promise.all([
+        const [{ default: EditorWorker }, { default: JsonWorker }] = await Promise.all([
             import("monaco-editor/esm/vs/editor/editor.worker?worker"),
-            import("monaco-editor/esm/vs/language/css/css.worker?worker"),
-            import("monaco-editor/esm/vs/language/html/html.worker?worker"),
             import("monaco-editor/esm/vs/language/json/json.worker?worker"),
-            import("monaco-editor/esm/vs/language/typescript/ts.worker?worker"),
-            import("./yamlworker?worker"),
         ]);
 
         // MonacoEnvironment must be set before any monaco API call that spawns a worker.
         window.MonacoEnvironment = {
             getWorker(_, label) {
                 if (label === "json") return new JsonWorker();
-                if (label === "css" || label === "scss" || label === "less") return new CssWorker();
-                if (label === "yaml" || label === "yml") return new YmlWorker();
-                if (label === "html" || label === "handlebars" || label === "razor") return new HtmlWorker();
-                if (label === "typescript" || label === "javascript") return new TsWorker();
+                // Every other language runs on the base worker: highlighting and
+                // editing work, completions and diagnostics do not.
                 return new EditorWorker();
             },
         };
@@ -82,15 +72,7 @@ export async function loadMonaco(): Promise<typeof MonacoTypes> {
                 focusBorder: "#00000000",
             },
         });
-        configureMonacoYaml(monacoModule, {
-            validate: true,
-            schemas: [],
-        });
         monacoModule.editor.setTheme("wave-theme-dark");
-        // Disable default validation errors for typescript and javascript.
-        monacoModule.typescript.typescriptDefaults.setDiagnosticsOptions({
-            noSemanticValidation: true,
-        });
         monacoModule.json.jsonDefaults.setDiagnosticsOptions({
             validate: true,
             allowComments: false,

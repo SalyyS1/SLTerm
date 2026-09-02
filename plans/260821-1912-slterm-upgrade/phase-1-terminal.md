@@ -2,6 +2,36 @@
 
 **Est.** 2-3 weeks · **Runtime-independent** · **Depends on:** Phase 0 benchmarks
 
+## Status
+
+| Item | State | Notes |
+|---|---|---|
+| 1.1 Stop recreating xterm on settings change | **done** | Rebuild deps narrowed to `blockId`, scrollback, transparency, WebGL. Font size/family, `macOptionIsMeta` and bracketed paste apply in place via `term-live-options.ts`. |
+| 1.2 Explicit ordered-replay invariant | **done** | `replayInitialData` in `termwrap.ts`; held appends reconciled by absolute file offset in `term-replay.ts`. |
+| 1.3 Circular-filestore wrap guard | **done** | Wrap detected from the file's own `DataStartIdx`; snapshot dropped and the grid reset rather than spliced. |
+| 1.4 Spawn-time PTY sizing | open | |
+| 1.5 Binary WS frames | **partly** | The base64 round-trip is still there. What *was* fixed is a byte-corruption bug the review missed — see below. |
+| 1.6 Carry-over on layout remount | open | |
+| 1.7 Decouple background from renderer | open | |
+| 1.8 Regression suite | **partly** | Unit tests cover the reconciliation, the writer and scrollback resolution. The view-transition suite is not built. |
+
+### Two bugs found in the code, not in the plan
+
+**Held output was discarded, never replayed.** `handleNewFileSubjectData` pushed live appends into
+`heldData` while the initial read was in flight, and nothing ever drained it. Every byte that
+arrived during the read window was dropped on the floor — the exact failure this phase was written
+to prevent, already present. Fixed by giving append events their absolute file offset
+(`WSFileEventData.Offset`, from the new `filestore.AppendDataWithOffset`) so the held bytes can be
+reconciled against the read instead of guessed at: already-read chunks are skipped, a partly-read
+chunk is written from where the read stopped, and a gap forces a clean reread.
+
+**`BatchedWriter` decoded bytes to a string per flush.** It built a `TextDecoder` inside `flush()`
+and fed chunks through it with `{stream: true}`. The streaming state died with the decoder at the
+end of each flush, so a UTF-8 character split across a flush boundary lost its leading bytes and the
+continuation arrived as `U+FFFD`. One dropped byte wedges xterm's escape parser — which is precisely
+the mechanism this phase identified as the cause of stacked duplicate lines. The writer now
+concatenates adjacent byte chunks and never decodes.
+
 ## Goal
 
 Make the output path provably duplicate-free and byte-faithful under every view transition, before

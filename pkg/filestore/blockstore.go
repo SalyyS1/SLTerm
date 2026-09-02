@@ -262,7 +262,19 @@ func (s *FileStore) WriteAt(ctx context.Context, zoneId string, name string, off
 }
 
 func (s *FileStore) AppendData(ctx context.Context, zoneId string, name string, data []byte) error {
-	return withLock(s, zoneId, name, func(entry *CacheEntry) error {
+	_, err := s.AppendDataWithOffset(ctx, zoneId, name, data)
+	return err
+}
+
+// AppendDataWithOffset appends data and reports the absolute file offset the
+// data landed at. Size is monotonic even for circular files, so the returned
+// offset stays a stable coordinate after a wrap — which is what lets a reader
+// tell whether a live append it received is already covered by a range read it
+// issued concurrently. Reading the offset back with a separate Stat would race
+// against the next append; taking it from inside the lock cannot.
+func (s *FileStore) AppendDataWithOffset(ctx context.Context, zoneId string, name string, data []byte) (int64, error) {
+	var writeOffset int64
+	err := withLock(s, zoneId, name, func(entry *CacheEntry) error {
 		err := entry.loadFileIntoCache(ctx)
 		if err != nil {
 			return err
@@ -275,9 +287,14 @@ func (s *FileStore) AppendData(ctx context.Context, zoneId string, name string, 
 				return err
 			}
 		}
+		writeOffset = entry.File.Size
 		entry.writeAt(entry.File.Size, data, false)
 		return nil
 	})
+	if err != nil {
+		return 0, err
+	}
+	return writeOffset, nil
 }
 
 func metaIncrement(file *WaveFile, key string, amount int) int {

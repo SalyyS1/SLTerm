@@ -17,6 +17,9 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
+# Only for the "user@host" string the UI shows. Reading HOSTNAME from the
+# environment is unreliable on macOS and in non-interactive shells.
+hostname = "0.4"
 
 [profile.release]
 # The whole point of moving off Electron is size, so optimize for it: fat LTO
