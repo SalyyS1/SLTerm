@@ -34,6 +34,7 @@ import {
 import { reconcileHeldData, waveFileDataStartIdx, type HeldChunk } from "./term-replay";
 import { BatchedWriter } from "./term-batched-writer";
 import { canMeasureTermLayout } from "./term-spawn-gate";
+import { parkCarriedTerminal, takeCarriedTerminal } from "./term-carry-over";
 import { createTempFileFromBlob, extractAllClipboardData } from "./termutil";
 
 const dlog = debug("wave:termwrap");
@@ -82,6 +83,15 @@ export class TermWrap {
     tabId: string;
     blockId: string;
     ptyOffset: number;
+    /**
+     * The offset xterm has finished parsing, as opposed to the offset handed to it.
+     * xterm's write is asynchronous, so a snapshot taken right after a write does not
+     * contain that write. Parking a snapshot with the optimistic offset would leave
+     * the bytes in between on neither the old screen nor the new one.
+     */
+    private renderedPtyOffset: number;
+    /** Post-write absolute offsets, one per queued chunk, consumed as xterm parses them. */
+    private pendingOffsetMarks: number[];
     dataBytesProcessed: number;
     terminal: Terminal;
     connectElem: HTMLDivElement;
@@ -146,6 +156,8 @@ export class TermWrap {
         this.sendDataHandler = waveOptions.sendDataHandler;
         this.nodeModel = waveOptions.nodeModel;
         this.ptyOffset = 0;
+        this.renderedPtyOffset = 0;
+        this.pendingOffsetMarks = [];
         this.dataBytesProcessed = 0;
         this.hasResized = false;
         this.lastUpdated = Date.now();
@@ -159,7 +171,7 @@ export class TermWrap {
         this.searchAddon = null;
         this.serializeAddon = null;
         this.webglAddon = null;
-        this.batchedWriter = new BatchedWriter(this.terminal);
+        this.batchedWriter = new BatchedWriter(this.terminal, this.handleWriteParsed);
         this.terminal.loadAddon(this.fitAddon);
         this.terminal.loadAddon(
             new WebLinksAddon((e, uri) => {
@@ -336,6 +348,10 @@ export class TermWrap {
         if (measure) {
             dlog(`[perf] terminal init ${this.blockId}: ${measure.duration.toFixed(1)}ms`);
         }
+        // Loaded up front rather than on the first idle save, because it is also what
+        // lets the screen be parked for a remount — and a remount can happen before
+        // enough output has flowed to trigger a save.
+        fireAndForget(this.loadSerializeAddon.bind(this));
         this.runProcessIdleTimeout();
     }
 
@@ -349,6 +365,10 @@ export class TermWrap {
             clearTimeout(this.spawnFallbackTimeoutId);
             this.spawnFallbackTimeoutId = null;
         }
+        // Park the screen for whatever instance replaces this one. A move or swap in
+        // the layout tree, and any option xterm can only take at construction, tear
+        // this instance down and build another against the same block.
+        this.parkScreenForRemount();
         this.batchedWriter.dispose();
         this.detachWebGL();
         this.promptMarkers.forEach((marker) => {
@@ -423,7 +443,7 @@ export class TermWrap {
             this.resetHeldData();
             // The file restarts at zero, so a stale offset would make the next
             // reload read past the end and restore nothing.
-            this.ptyOffset = 0;
+            this.resetWriteTracking(0);
             this.dataBytesProcessed = 0;
         } else if (msg.fileop == "append") {
             const decodedData = base64ToArray(msg.data64);
@@ -524,7 +544,7 @@ export class TermWrap {
     private async reloadFromFile(): Promise<void> {
         this.resetHeldData();
         this.terminal.reset();
-        this.ptyOffset = 0;
+        this.resetWriteTracking(0);
         const { data, fileInfo } = await fetchWaveFile(this.getZoneId(), TermFileName, 0);
         if (fileInfo == null) {
             return;
@@ -542,38 +562,43 @@ export class TermWrap {
             this.ptyOffset += data.length;
             this.dataBytesProcessed += data.length;
         }
+        // One mark per queued chunk, matching what the writer counts, so the parse
+        // callback can say which offset is now actually on the screen.
+        this.pendingOffsetMarks.push(this.ptyOffset);
         this.lastUpdated = Date.now();
         return RESOLVED_PROMISE;
+    }
+
+    /** Advances the rendered offset as xterm finishes parsing each batch. */
+    private handleWriteParsed = (chunkCount: number) => {
+        if (chunkCount <= 0 || this.pendingOffsetMarks.length === 0) {
+            return;
+        }
+        const taken = Math.min(chunkCount, this.pendingOffsetMarks.length);
+        this.renderedPtyOffset = this.pendingOffsetMarks[taken - 1];
+        this.pendingOffsetMarks.splice(0, taken);
+    };
+
+    /** Forgets write bookkeeping after the grid has been thrown away. */
+    private resetWriteTracking(offset: number) {
+        this.ptyOffset = offset;
+        this.renderedPtyOffset = offset;
+        this.pendingOffsetMarks = [];
     }
 
     async loadInitialTerminalData(): Promise<void> {
         const loadPerfId = `terminal-load-${this.blockId}`;
         performance.mark(`${loadPerfId}-start`);
         const zoneId = this.getZoneId();
-        const { data: cacheData, fileInfo: cacheFile } = await fetchWaveFile(zoneId, TermCacheFileName);
-        let ptyOffset = 0;
-        if (cacheFile != null) {
-            ptyOffset = cacheFile.meta["ptyoffset"] ?? 0;
-            if (cacheData.byteLength > 0) {
-                const curTermSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
-                const fileTermSize: TermSize = cacheFile.meta["termsize"];
-                let didResize = false;
-                if (
-                    fileTermSize != null &&
-                    (fileTermSize.rows != curTermSize.rows || fileTermSize.cols != curTermSize.cols)
-                ) {
-                    console.log("terminal restore size mismatch, temp resize", fileTermSize, curTermSize);
-                    this.terminal.resize(fileTermSize.cols, fileTermSize.rows);
-                    didResize = true;
-                }
-                this.doTerminalWrite(cacheData, ptyOffset);
-                if (didResize) {
-                    this.terminal.resize(curTermSize.cols, curTermSize.rows);
-                }
-            }
+        // A screen parked by the instance this one replaces is both cheaper and more
+        // complete than the cache file: it is already in memory, and it holds lines
+        // the term file's circular window may have dropped.
+        let ptyOffset = this.restoreFromCarryOver();
+        if (ptyOffset == null) {
+            ptyOffset = await this.restoreFromCacheFile(zoneId);
         }
         const { data: mainData, fileInfo: mainFile } = await fetchWaveFile(zoneId, TermFileName, ptyOffset);
-        console.log(`terminal loaded cachefile:${cacheData?.byteLength ?? 0} main:${mainData?.byteLength ?? 0} bytes`);
+        console.log(`terminal loaded main:${mainData?.byteLength ?? 0} bytes from offset ${ptyOffset}`);
         performance.mark(`${loadPerfId}-end`);
         performance.measure(`terminal-load-${this.blockId}`, `${loadPerfId}-start`, `${loadPerfId}-end`);
         if (mainFile != null) {
@@ -584,6 +609,7 @@ export class TermWrap {
             if (waveFileDataStartIdx(mainFile) > ptyOffset) {
                 console.log("terminal history wrapped past the cached offset, restoring without the snapshot");
                 this.terminal.reset();
+                this.resetWriteTracking(ptyOffset);
             }
             // Take the offset from the file rather than the byte count: they differ
             // by exactly the bytes a wrap dropped, and the offset is what every
@@ -591,6 +617,82 @@ export class TermWrap {
             this.doTerminalWrite(mainData, mainFile.size);
             this.dataBytesProcessed += mainData?.length ?? 0;
         }
+    }
+
+    /**
+     * Writes a snapshot that was serialized at a possibly different geometry.
+     *
+     * xterm reflows on resize, so a snapshot taken at another width has to be written
+     * at *its* width and the terminal put back afterwards — otherwise the restored
+     * lines wrap differently than they did when they were produced.
+     */
+    private writeSnapshotAtSize(snapshot: string | Uint8Array, snapshotSize: TermSize | null, ptyOffset: number) {
+        const curTermSize: TermSize = { rows: this.terminal.rows, cols: this.terminal.cols };
+        const needsResize =
+            snapshotSize != null &&
+            (snapshotSize.rows !== curTermSize.rows || snapshotSize.cols !== curTermSize.cols);
+        if (needsResize) {
+            this.terminal.resize(snapshotSize.cols, snapshotSize.rows);
+        }
+        this.doTerminalWrite(snapshot, ptyOffset);
+        if (needsResize) {
+            this.terminal.resize(curTermSize.cols, curTermSize.rows);
+        }
+    }
+
+    /** Restores a screen parked by the outgoing instance; null when there is none. */
+    private restoreFromCarryOver(): number | null {
+        const carried = takeCarriedTerminal(this.blockId);
+        if (carried == null) {
+            return null;
+        }
+        dlog("restoring carried screen", this.blockId, carried.snapshot.length, carried.ptyOffset);
+        if (carried.snapshot.length > 0) {
+            this.writeSnapshotAtSize(carried.snapshot, carried.termSize, carried.ptyOffset);
+        } else {
+            this.resetWriteTracking(carried.ptyOffset);
+        }
+        return carried.ptyOffset;
+    }
+
+    /**
+     * Parks the current screen so the instance replacing this one can restore it
+     * instead of re-reading the whole term file.
+     *
+     * The offset parked is the one xterm has *parsed*, not the one it was handed:
+     * bytes still in its write queue are not in the snapshot, and claiming they were
+     * would drop them from the screen entirely. The replacement reads on from the
+     * parsed offset, so anything in flight is simply read again.
+     */
+    private parkScreenForRemount() {
+        if (this.serializeAddon == null) {
+            // Nothing loaded to serialize with; the file replay still restores the
+            // block, so this is a missed optimisation rather than lost output.
+            return;
+        }
+        try {
+            const snapshot = this.serializeAddon.serialize();
+            parkCarriedTerminal(this.blockId, {
+                snapshot,
+                ptyOffset: this.renderedPtyOffset,
+                termSize: { rows: this.terminal.rows, cols: this.terminal.cols },
+            });
+        } catch (e) {
+            dlog("could not park terminal screen", this.blockId, e);
+        }
+    }
+
+    /** Restores the periodically-saved snapshot from the block's cache file. */
+    private async restoreFromCacheFile(zoneId: string): Promise<number> {
+        const { data: cacheData, fileInfo: cacheFile } = await fetchWaveFile(zoneId, TermCacheFileName);
+        if (cacheFile == null) {
+            return 0;
+        }
+        const ptyOffset = cacheFile.meta["ptyoffset"] ?? 0;
+        if (cacheData.byteLength > 0) {
+            this.writeSnapshotAtSize(cacheData, cacheFile.meta["termsize"] ?? null, ptyOffset);
+        }
+        return ptyOffset;
     }
 
     async resyncController(reason: string) {

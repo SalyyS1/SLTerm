@@ -7,11 +7,23 @@ import { BatchedWriter } from "../term-batched-writer";
 /** Collects what xterm would have been handed, without instantiating xterm. */
 function fakeTerminal() {
     const writes: (string | Uint8Array)[] = [];
+    const callbacks: (() => void)[] = [];
     return {
         writes,
+        /** xterm's write is async; nothing is "parsed" until this is drained. */
+        callbacks,
+        drain: () => {
+            const pending = callbacks.splice(0, callbacks.length);
+            for (const cb of pending) {
+                cb();
+            }
+        },
         terminal: {
-            write: (data: string | Uint8Array) => {
+            write: (data: string | Uint8Array, callback?: () => void) => {
                 writes.push(data);
+                if (callback != null) {
+                    callbacks.push(callback);
+                }
             },
         },
     };
@@ -131,5 +143,75 @@ describe("BatchedWriter", () => {
         writer.write(new Uint8Array([42]));
         writer.dispose();
         expect(concatBytes(writes)).toEqual([42]);
+    });
+
+    describe("parse reporting", () => {
+        it("reports nothing until xterm has finished parsing", () => {
+            const { terminal, drain } = fakeTerminal();
+            const parsed: number[] = [];
+            const writer = new BatchedWriter(terminal, (n) => parsed.push(n));
+            writer.write(new Uint8Array([1]));
+            writer.flush();
+            // Handed over, not yet parsed — the distinction a snapshot depends on.
+            expect(parsed).toEqual([]);
+            drain();
+            expect(parsed).toEqual([1]);
+        });
+
+        it("reports the chunk count it was given, not the write count", () => {
+            const { writes, terminal, drain } = fakeTerminal();
+            const parsed: number[] = [];
+            const writer = new BatchedWriter(terminal, (n) => parsed.push(n));
+            writer.write(new Uint8Array([1]));
+            writer.write(new Uint8Array([2]));
+            writer.write(new Uint8Array([3]));
+            writer.flush();
+            drain();
+            // Three chunks coalesced into one write; the caller tracks chunks.
+            expect(writes).toHaveLength(1);
+            expect(parsed).toEqual([3]);
+        });
+
+        it("counts interleaved strings and bytes as separate chunks", () => {
+            const { terminal, drain } = fakeTerminal();
+            const parsed: number[] = [];
+            const writer = new BatchedWriter(terminal, (n) => parsed.push(n));
+            writer.write(new Uint8Array([1]));
+            writer.write("text");
+            writer.write(new Uint8Array([2]));
+            writer.flush();
+            drain();
+            expect(parsed).toEqual([3]);
+        });
+
+        it("reports once per flush", () => {
+            const { terminal, drain } = fakeTerminal();
+            const parsed: number[] = [];
+            const writer = new BatchedWriter(terminal, (n) => parsed.push(n));
+            writer.write(new Uint8Array([1]));
+            writer.flush();
+            writer.write(new Uint8Array([2]));
+            writer.write(new Uint8Array([3]));
+            writer.flush();
+            drain();
+            expect(parsed).toEqual([1, 2]);
+        });
+
+        it("says nothing when a flush had nothing to write", () => {
+            const { terminal, drain } = fakeTerminal();
+            const parsed: number[] = [];
+            const writer = new BatchedWriter(terminal, (n) => parsed.push(n));
+            writer.flush();
+            drain();
+            expect(parsed).toEqual([]);
+        });
+
+        it("still delivers bytes when no reporter is attached", () => {
+            const { writes, terminal } = fakeTerminal();
+            const writer = new BatchedWriter(terminal);
+            writer.write(new Uint8Array([7]));
+            writer.flush();
+            expect(concatBytes(writes)).toEqual([7]);
+        });
     });
 });

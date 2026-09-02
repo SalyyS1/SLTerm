@@ -3,7 +3,7 @@
 
 /** The slice of xterm's Terminal a writer needs, so tests need no real one. */
 type WritableTerminal = {
-    write(data: string | Uint8Array): void;
+    write(data: string | Uint8Array, callback?: () => void): void;
 };
 
 /**
@@ -20,7 +20,16 @@ export class BatchedWriter {
     private readonly BATCH_DELAY_MS = 16;
     private readonly MAX_BATCH_SIZE = 100;
 
-    constructor(private terminal: WritableTerminal) {}
+    /**
+     * @param onParsed called with the number of chunks xterm has finished parsing.
+     *   xterm's own write is asynchronous, so "handed to the terminal" and "on the
+     *   screen" are different moments. A caller that has to know what the screen
+     *   actually contains — snapshotting it, for instance — needs the second one.
+     */
+    constructor(
+        private terminal: WritableTerminal,
+        private onParsed?: (chunkCount: number) => void
+    ) {}
 
     write(data: string | Uint8Array): void {
         this.buffer.push(data);
@@ -43,14 +52,15 @@ export class BatchedWriter {
             // what turns an in-place redraw into stacked duplicate lines.
             // Adjacent byte chunks are still concatenated so a batch costs one
             // write.
+            const writes: (string | Uint8Array)[] = [];
             let pending: Uint8Array[] = [];
             let pendingLen = 0;
-            const writePending = () => {
+            const takePending = () => {
                 if (pendingLen === 0) {
                     return;
                 }
                 if (pending.length === 1) {
-                    this.terminal.write(pending[0]);
+                    writes.push(pending[0]);
                 } else {
                     const merged = new Uint8Array(pendingLen);
                     let at = 0;
@@ -58,21 +68,33 @@ export class BatchedWriter {
                         merged.set(chunk, at);
                         at += chunk.length;
                     }
-                    this.terminal.write(merged);
+                    writes.push(merged);
                 }
                 pending = [];
                 pendingLen = 0;
             };
             for (const chunk of chunks) {
                 if (typeof chunk === "string") {
-                    writePending();
-                    this.terminal.write(chunk);
+                    takePending();
+                    writes.push(chunk);
                 } else {
                     pending.push(chunk);
                     pendingLen += chunk.length;
                 }
             }
-            writePending();
+            takePending();
+            // The callback rides the last write, so it fires once xterm has parsed
+            // everything this flush handed over.
+            const notify = this.onParsed;
+            const chunkCount = chunks.length;
+            for (let i = 0; i < writes.length; i++) {
+                const isLast = i === writes.length - 1;
+                if (isLast && notify != null) {
+                    this.terminal.write(writes[i], () => notify(chunkCount));
+                } else {
+                    this.terminal.write(writes[i]);
+                }
+            }
         }
         if (this.timer) {
             clearTimeout(this.timer);

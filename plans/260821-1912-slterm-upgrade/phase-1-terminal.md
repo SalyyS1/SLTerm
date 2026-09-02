@@ -11,7 +11,7 @@
 | 1.3 Circular-filestore wrap guard | **done** | Wrap detected from the file's own `DataStartIdx`; snapshot dropped and the grid reset rather than spliced. |
 | 1.4 Spawn-time PTY sizing | **done** | The first resize is what starts the shell, so it is gated on a measurement that means something; a timer starts the shell anyway for a block that never gets a layout. Remote jobs no longer hard-code 80x24 at spawn. The spawn size is recorded so a restart without runtime opts starts where the block was. |
 | 1.5 Binary WS frames | **blocked — premise does not hold** | See below. The base64 round-trip is still there. Two real fixes landed on this path instead: a byte-corruption bug in the writer, and skipping the encode entirely when nothing is subscribed. |
-| 1.6 Carry-over on layout remount | open | |
+| 1.6 Carry-over on layout remount | **done** | The outgoing instance parks its serialized screen; the incoming one restores it instead of re-reading the term file. Parked with the offset xterm has *parsed*, not the one it was handed, so writes still in xterm's queue are re-read rather than lost. Single-use, 10s TTL, bounded. |
 | 1.7 Decouple background from renderer | open | |
 | 1.8 Regression suite | **partly** | Unit tests cover the reconciliation, the writer and scrollback resolution. The view-transition suite is not built. |
 
@@ -166,6 +166,25 @@ producing output while the window is closed.
 `frontend/layout`'s `treeReducer` move/swap actions genuinely unmount a block's view. Snapshot via
 `SerializeAddon` and replay verbatim on remount, matching what claude-terminal's `carryOverBuffer`
 does for its tab→grid→split transitions.
+
+**Landed as `term-carry-over.ts`.** The outgoing instance parks its serialized screen keyed by block
+id; the incoming one takes it in `loadInitialTerminalData` ahead of the cache file, then range-reads
+the term file from where the snapshot ends. Restores are single-use with a 10s TTL, capped at 16
+screens and 4 MB each, so a closed block's screen cannot be resurrected later or held indefinitely.
+
+Two things this had to get right that the plan did not mention:
+
+- **xterm's `write` is asynchronous.** Serializing right after handing bytes over produces a screen
+  that does not contain them, while `ptyOffset` says it does — and the replacement would then read
+  *past* those bytes and never display them. So the writer now reports back when xterm has finished
+  parsing a batch, and the parked offset is the parsed one. Anything in flight is read again, which
+  is safe; anything skipped would have been a silent hole.
+- **A snapshot has a width.** It is written at the geometry it was taken at and the terminal is put
+  back afterwards, because xterm reflows on resize and restoring at the new width would rewrap lines
+  that were already wrapped.
+
+It also covers the remaining half of 1.1: scrollback, transparency and renderer changes rebuild
+`TermWrap` by construction, and those transitions now carry the screen across too.
 
 ### 1.7 Decouple background from renderer choice
 
