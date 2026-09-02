@@ -8,7 +8,7 @@
 |---|---|---|
 | 3.1 Dynamic tab identity | **done** | `atoms.staticTabId` derives from the active tab, so all ~50 readers follow a switch. Layout models subscribe per tab, not just for the one on screen. |
 | 3.2 One webview, warm tabs hidden | **done, unmeasured** | `StackedTabs` in `workspace.tsx`, gated on `hostSwitchesTabsInDocument()` so the Electron path is untouched. |
-| 3.3 Suspend/virtualization policy | open | Deliberately absent: a cap needs the numbers that justify where to put it. |
+| 3.3 Suspend/virtualization policy | **done, cap unmeasured** | Least-recently-shown eviction in `tab-mount-policy.ts`, capped by the existing `window:maxtabcachesize` (default 10 — the same knob and the same number the Electron tab-view cache already used). Where the cap *should* be still needs the benchmarks below; that it exists no longer does. |
 | 3.4 Retire `emain-tabview.ts` | open | Only after the benchmarks below say the in-document path wins. |
 
 **The gate this phase asks for has not been cleared.** Benchmarks at 10 and 25 live
@@ -66,6 +66,22 @@ on tab switch. That is what makes their tab switching lossless.
 
 Replaces the `WebContentsView` LRU. Cold-tab teardown of xterm and Monaco instances with
 `SerializeAddon` snapshot restore (built in Phase 1). Memory guardrails with an explicit cap.
+
+**Landed.** The dependency this was waiting on is Phase 1.6: a tab can only be unmounted safely once
+its terminals hand their screens over instead of dropping them, and they now do. Eviction is
+least-recently-shown, the shown tab is never evicted, and tabs that no longer exist go immediately.
+
+The cap reuses `window:maxtabcachesize` rather than inventing a second setting — it configures exactly
+this idea for the Electron tab-view cache, and its default of 10 is the number the app already ships.
+Reusing it means one knob whichever shell is hosting, and it means the number can be tuned from
+settings once there is a display to measure on. The status note said a cap needs the numbers that
+justify it; that argues for making the number adjustable, not for shipping no bound at all — an
+unbounded warm set is the leak this phase's own risk section describes.
+
+The policy is a pure function (`resolveMountedTabs`) with the recency list passed in, so the eviction
+order is tested without a DOM: cap changes, closed tabs, never-evict-the-active, and tabs with no
+recorded recency going first. Survivor order is preserved deliberately — reordering mounted tabs would
+move DOM nodes, and moving a node reloads an iframe.
 
 ### 3.4 Retire `emain-tabview.ts`
 
