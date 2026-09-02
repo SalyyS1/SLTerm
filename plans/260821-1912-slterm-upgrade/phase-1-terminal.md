@@ -9,8 +9,8 @@
 | 1.1 Stop recreating xterm on settings change | **done** | Rebuild deps narrowed to `blockId`, scrollback, transparency, WebGL. Font size/family, `macOptionIsMeta` and bracketed paste apply in place via `term-live-options.ts`. |
 | 1.2 Explicit ordered-replay invariant | **done** | `replayInitialData` in `termwrap.ts`; held appends reconciled by absolute file offset in `term-replay.ts`. |
 | 1.3 Circular-filestore wrap guard | **done** | Wrap detected from the file's own `DataStartIdx`; snapshot dropped and the grid reset rather than spliced. |
-| 1.4 Spawn-time PTY sizing | open | |
-| 1.5 Binary WS frames | **partly** | The base64 round-trip is still there. What *was* fixed is a byte-corruption bug the review missed — see below. |
+| 1.4 Spawn-time PTY sizing | **done** | The first resize is what starts the shell, so it is gated on a measurement that means something; a timer starts the shell anyway for a block that never gets a layout. Remote jobs no longer hard-code 80x24 at spawn. The spawn size is recorded so a restart without runtime opts starts where the block was. |
+| 1.5 Binary WS frames | **blocked — premise does not hold** | See below. The base64 round-trip is still there. Two real fixes landed on this path instead: a byte-corruption bug in the writer, and skipping the encode entirely when nothing is subscribed. |
 | 1.6 Carry-over on layout remount | open | |
 | 1.7 Decouple background from renderer | open | |
 | 1.8 Regression suite | **partly** | Unit tests cover the reconciliation, the writer and scrollback resolution. The view-transition suite is not built. |
@@ -131,6 +131,35 @@ Today output is base64-encoded in Go (`HandleAppendBlockFile` publishes `Data64`
 `pkg/web/ws.go`'s `WSBatcher` already has a binary batch format
 (`[count:4B LE][len:4B LE][msg bytes]...`, decoded by `decodeBinaryBatch`). Route terminal output
 through it and drop the base64 round-trip.
+
+**That premise is wrong, and the item is blocked on a decision, not on effort.** The batch format
+frames *JSON messages* — it saves per-frame WebSocket overhead, not the encode. Terminal output does
+not reach `WSBatcher` as a payload it could carry raw; it arrives as already-marshalled JSON, because
+the event goes `wps.Broker` → `wshrpc` → `OutputCh chan []byte` → `WriteLoop`. Routing it "through
+the batcher" changes nothing about base64.
+
+Removing the encode means one of three things, each with a cost the plan did not price:
+
+1. **Teach `wshrpc` to carry a binary payload alongside the JSON envelope.** This is the clean
+   answer and it is a protocol change to a transport that is also spoken over ssh/pty to remote
+   hosts. `AdaptOutputChToStream` delimits messages with `\n`, so a raw payload containing `\n`
+   corrupts framing for every remote connection. Payload encoding would have to become
+   transport-aware.
+2. **Publish appends on a second, binary-only channel straight to the browser socket.** Cheaper, but
+   it splits one ordered stream in two: `truncate` still arrives over RPC while `append` arrives over
+   the new path, so a `clear` can be applied out of order against the output around it. That is a
+   correctness regression traded for throughput.
+3. **Leave it.** The encode costs one 4/3-sized allocation per PTY read on a path that already
+   works, and no measurement on this machine says it is the bottleneck — there is no display to
+   benchmark a renderer against.
+
+What landed instead, both real: the writer no longer corrupts UTF-8 split across a flush (below), and
+`HandleAppendBlockFile` now asks `wps.Broker.HasSubscribers` before encoding, so a server with no
+window attached stops paying for events the broker would drop. An attached window subscribes to
+`blockfile` for all scopes, so that saving is the no-client case only — durable shells and jobs
+producing output while the window is closed.
+
+**Decide 1 vs 3 with a profile, on a machine with a display.** Do not take 2.
 
 ### 1.6 Carry-over on layout-tree remount
 

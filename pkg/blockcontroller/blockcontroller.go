@@ -369,10 +369,19 @@ func HandleAppendBlockFile(blockId string, blockFile string, data []byte) error 
 	if err != nil {
 		return fmt.Errorf("error appending to blockfile: %w", err)
 	}
+	// The file is the durable copy — a client rereads it on attach — so an event
+	// nobody is subscribed to is dropped by the broker after being built. Skip
+	// building it. In practice this is the no-client case (a closed window with
+	// durable shells or jobs still producing output), because an attached window
+	// subscribes to blockfile for all scopes at once.
+	scope := waveobj.MakeORef(waveobj.OType_Block, blockId).String()
+	if !wps.Broker.HasSubscribers(wps.Event_BlockFile, []string{scope}) {
+		return nil
+	}
 	wps.Broker.Publish(wps.WaveEvent{
 		Event: wps.Event_BlockFile,
 		Scopes: []string{
-			waveobj.MakeORef(waveobj.OType_Block, blockId).String(),
+			scope,
 		},
 		Data: &wps.WSFileEventData{
 			ZoneId:   blockId,
