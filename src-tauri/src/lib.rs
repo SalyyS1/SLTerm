@@ -43,6 +43,21 @@ fn new_auth_key() -> String {
     (0..64).map(|_| HEX[rng.gen_range(0..16)] as char).collect()
 }
 
+/// Locates the directory that holds the app's `bin/` and `schema/` trees.
+///
+/// The backend needs this as `SLTERM_APP_PATH`: it resolves the `wsh` binary from
+/// `<app path>/bin` and copies it into the user's data dir for shell integration and
+/// remote connections. Without it that lookup is relative and silently fails, which
+/// shows up as a non-fatal "could not resolve wsh binary" line and a missing CLI.
+fn app_root(app: &tauri::AppHandle) -> PathBuf {
+    if let Ok(dir) = app.path().resource_dir() {
+        if dir.join("bin").is_dir() {
+            return dir;
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("dist")
+}
+
 /// Locates the packaged `wavesrv` binary. Falls back to the repo's dist/ tree so
 /// `cargo run` works from a source checkout without packaging first.
 fn wavesrv_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -112,6 +127,9 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(Child, Endpoints), String> {
         .env("SLTERM_AUTH_KEY", &auth_key)
         .env("SLTERM_DATA_HOME", &data_home)
         .env("SLTERM_CONFIG_HOME", &config_home)
+        // Where the backend finds bin/ and schema/. It copies wsh out of bin/ for
+        // shell integration and remote connections.
+        .env("SLTERM_APP_PATH", app_root(app))
         // The server terminates itself when stdin reaches EOF, which is how it
         // gets cleaned up if this process dies without killing it.
         .stdin(Stdio::piped())
