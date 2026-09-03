@@ -246,16 +246,26 @@ pub fn run() {
             // backend handshake, and an initialization script has to be attached
             // at construction to be guaranteed to run before the bundle. Tauri
             // re-injects it on every navigation, so a reload is covered too.
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("SLTerm")
-                .inner_size(1400.0, 900.0)
-                .min_inner_size(900.0, 600.0)
-                .decorations(false)
-                .transparent(true)
-                .resizable(true)
-                .center()
-                .initialization_script(host_init_script(&snapshot))
-                .build()?;
+            #[allow(unused_mut)]
+            let mut builder =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("SLTerm")
+                    .inner_size(1400.0, 900.0)
+                    .min_inner_size(900.0, 600.0)
+                    .decorations(false)
+                    .resizable(true)
+                    .center()
+                    .initialization_script(host_init_script(&snapshot));
+            // On macOS `transparent` only exists behind Tauri's `macos-private-api`
+            // feature, and turning that on makes the app ineligible for the Mac App
+            // Store. Transparency here is cosmetic — the frameless titlebar it was
+            // meant to serve is not built yet — so it is not worth depending on a
+            // private API for. Revisit when that titlebar lands and it matters.
+            #[cfg(not(target_os = "macos"))]
+            {
+                builder = builder.transparent(true);
+            }
+            builder.build()?;
             Ok(())
         })
         .build(tauri::generate_context!())
