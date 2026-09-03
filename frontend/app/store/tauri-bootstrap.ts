@@ -25,9 +25,22 @@ const InitialWinSize: WinSize = { width: 1400, height: 900 };
  * whose workspace somehow has no active tab still has to show one — so the caller
  * can treat the result as ready to render.
  */
+/**
+ * The window this webview opened. Recorded at startup because the host layer needs
+ * it for every tab and workspace operation, and it cannot reach into the store to
+ * ask — that import cycle is the reason this module is loaded lazily to begin with.
+ */
+let bootstrappedWindowId: string | null = null;
+
+/** The window id resolved at startup, or null before the handshake has run. */
+export function getBootstrappedWindowId(): string | null {
+    return bootstrappedWindowId;
+}
+
 export async function resolveInitOpts(): Promise<WaveInitOpts> {
     const client = await ClientService.GetClientData();
     const window = await resolveWindow(client);
+    bootstrappedWindowId = window.oid;
     const workspace = await WorkspaceService.GetWorkspace(window.workspaceid);
     let tabId = workspace.activetabid;
     if (!tabId) {
