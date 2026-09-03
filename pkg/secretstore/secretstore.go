@@ -169,7 +169,7 @@ var decryptViaShell = func(fileData []byte) ([]byte, error) {
 	rpcClient := wshclient.GetBareRpcClient()
 	result, err := wshclient.ElectronDecryptCommand(rpcClient,
 		wshrpc.CommandElectronDecryptData{CipherText: string(fileData)},
-		&wshrpc.RpcOpts{Route: wshutil.ElectronRoute, Timeout: EncryptionTimeout})
+		&wshrpc.RpcOpts{Route: wshutil.HostRoute, Timeout: EncryptionTimeout})
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt secrets: %w", err)
 	}

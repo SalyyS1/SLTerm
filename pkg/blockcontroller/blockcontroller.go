@@ -352,15 +352,14 @@ func getBoolFromMeta(meta map[string]any, key string, def bool) bool {
 	return def
 }
 
+// getTermSize returns the size the block was last measured at, falling back to the
+// shared default. A stored zero counts as absent: RuntimeOpts can exist without a
+// size having ever been recorded, and starting a PTY at 0x0 is rejected downstream.
 func getTermSize(bdata *waveobj.Block) waveobj.TermSize {
-	if bdata.RuntimeOpts != nil {
+	if bdata.RuntimeOpts != nil && bdata.RuntimeOpts.TermSize.Rows > 0 && bdata.RuntimeOpts.TermSize.Cols > 0 {
 		return bdata.RuntimeOpts.TermSize
-	} else {
-		return waveobj.TermSize{
-			Rows: 25,
-			Cols: 80,
-		}
 	}
+	return shellutil.DefaultTermSize()
 }
 
 func HandleAppendBlockFile(blockId string, blockFile string, data []byte) error {
@@ -370,10 +369,19 @@ func HandleAppendBlockFile(blockId string, blockFile string, data []byte) error 
 	if err != nil {
 		return fmt.Errorf("error appending to blockfile: %w", err)
 	}
+	// The file is the durable copy — a client rereads it on attach — so an event
+	// nobody is subscribed to is dropped by the broker after being built. Skip
+	// building it. In practice this is the no-client case (a closed window with
+	// durable shells or jobs still producing output), because an attached window
+	// subscribes to blockfile for all scopes at once.
+	scope := waveobj.MakeORef(waveobj.OType_Block, blockId).String()
+	if !wps.Broker.HasSubscribers(wps.Event_BlockFile, []string{scope}) {
+		return nil
+	}
 	wps.Broker.Publish(wps.WaveEvent{
 		Event: wps.Event_BlockFile,
 		Scopes: []string{
-			waveobj.MakeORef(waveobj.OType_Block, blockId).String(),
+			scope,
 		},
 		Data: &wps.WSFileEventData{
 			ZoneId:   blockId,

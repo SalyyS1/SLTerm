@@ -22,8 +22,11 @@ import (
 )
 
 const (
-	DefaultRoute     = "wavesrv"
-	ElectronRoute    = "electron"
+	DefaultRoute = "wavesrv"
+	// HostRoute is whichever shell is hosting the app — Electron today, Tauri
+	// next. Commands the backend sends here are host capabilities (focus a
+	// window, ring the system bell), not Electron's specifically.
+	HostRoute        = "host"
 	ControlRoute     = "$control"      // control plane route
 	ControlRootRoute = "$control:root" // control plane route to root router
 

@@ -39,7 +39,7 @@ func notifyRun(cmd *cobra.Command, args []string) (rtnErr error) {
 		Body:   message,
 		Silent: notifySilent,
 	}
-	err := wshclient.NotifyCommand(RpcClient, *notificationOptions, &wshrpc.RpcOpts{Timeout: 2000, Route: wshutil.ElectronRoute})
+	err := wshclient.NotifyCommand(RpcClient, *notificationOptions, &wshrpc.RpcOpts{Timeout: 2000, Route: wshutil.HostRoute})
 	if err != nil {
 		return fmt.Errorf("sending notification: %w", err)
 	}

@@ -163,7 +163,7 @@ func (dsc *DurableShellController) Start(ctx context.Context, blockMeta waveobj.
 
 	if jobId == "" {
 		log.Printf("block %q starting new durable shell\n", dsc.BlockId)
-		newJobId, err := dsc.startNewJob(ctx, blockMeta, dsc.ConnName)
+		newJobId, err := dsc.startNewJob(ctx, blockMeta, dsc.ConnName, termSizeFromRuntimeOpts(rtOpts, blockData))
 		if err != nil {
 			return fmt.Errorf("failed to start new job: %w", err)
 		}
@@ -218,11 +218,18 @@ func (dsc *DurableShellController) SendInput(inputUnion *BlockInputUnion) error 
 	return jobcontroller.SendInput(context.Background(), data)
 }
 
-func (dsc *DurableShellController) startNewJob(ctx context.Context, blockMeta waveobj.MetaMapType, connName string) (string, error) {
-	termSize := waveobj.TermSize{
-		Rows: shellutil.DefaultTermRows,
-		Cols: shellutil.DefaultTermCols,
+// termSizeFromRuntimeOpts picks the size a remote job's PTY should start at: the
+// client's live measurement when it sent one, else the block's last recorded size,
+// else the default. Starting at a fixed size and resizing afterwards makes the
+// remote shell paint its first frame at the wrong width.
+func termSizeFromRuntimeOpts(rtOpts *waveobj.RuntimeOpts, bdata *waveobj.Block) waveobj.TermSize {
+	if rtOpts != nil && rtOpts.TermSize.Rows > 0 && rtOpts.TermSize.Cols > 0 {
+		return rtOpts.TermSize
 	}
+	return getTermSize(bdata)
+}
+
+func (dsc *DurableShellController) startNewJob(ctx context.Context, blockMeta waveobj.MetaMapType, connName string, termSize waveobj.TermSize) (string, error) {
 	cmdStr := blockMeta.GetString(waveobj.MetaKey_Cmd, "")
 	cwd := blockMeta.GetString(waveobj.MetaKey_CmdCwd, "")
 	opts, err := remote.ParseOpts(connName)

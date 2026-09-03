@@ -13,10 +13,12 @@ export const activeTabIdAtom = atom<string>(null) as PrimitiveAtom<string>;
  * Tabs whose views are mounted in this document.
  *
  * Only used by a shell without per-tab webviews. A tab joins the list the first
- * time it is shown and stays: unmounting would dispose its terminals and force a
- * replay on the way back, which is exactly the cost the per-tab webview used to
- * absorb. The list therefore grows with tabs actually visited, not with tabs that
- * exist — a workspace of 30 tabs costs nothing until they are opened.
+ * time it is shown, and leaves once it is among the least recently used past the
+ * cap — every mounted tab holds its own terminals and editors on one heap, so an
+ * unbounded list is a leak with a friendly name. Coming back replays from the
+ * parked screen or the term file, which is the cost the per-tab webview used to
+ * absorb. The list grows with tabs actually visited, not with tabs that exist, so
+ * a workspace of 30 tabs costs nothing until they are opened.
  */
 export const mountedTabIdsAtom = atom<string[]>([]) as PrimitiveAtom<string[]>;
 

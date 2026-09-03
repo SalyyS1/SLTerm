@@ -248,6 +248,38 @@ func (b *BrokerType) SendUpdateEvents(updates waveobj.UpdatesRtnType) {
 	}
 }
 
+// HasSubscribers reports whether any route would receive an event with this name
+// and these scopes. It exists so a publisher whose payload is expensive to build
+// can skip building it: Publish drops an unmatched event, so encoding it first is
+// pure waste. Only meaningful for events that are not persisted — a persisted
+// event is kept regardless of who is listening.
+func (b *BrokerType) HasSubscribers(eventName string, scopes []string) bool {
+	// GetClient takes the same lock, so ask before holding it.
+	if b.GetClient() == nil {
+		return false
+	}
+	b.Lock.Lock()
+	defer b.Lock.Unlock()
+	bs := b.SubMap[eventName]
+	if bs == nil {
+		return false
+	}
+	if len(bs.AllSubs) > 0 {
+		return true
+	}
+	for _, scope := range scopes {
+		if len(bs.ScopeSubs[scope]) > 0 {
+			return true
+		}
+		for starScope := range bs.StarSubs {
+			if utilfn.StarMatchString(starScope, scope, ":") && len(bs.StarSubs[starScope]) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (b *BrokerType) getMatchingRouteIds(event WaveEvent) []string {
 	b.Lock.Lock()
 	defer b.Lock.Unlock()

@@ -12,7 +12,7 @@ is still running, and settle the runtime with measured data rather than argument
 | Item | State | Notes |
 |---|---|---|
 | 2.1 `HostApi` interface | **done** | 46 members in `types/custom.d.ts`; `ElectronApi = HostApi & {6 extras nothing calls}`. Resolution in `util/host.ts`, implementations in `util/electron-host.ts` and `util/tauri-host.ts`. No `getApi()` call site changed. |
-| 2.2 Server as a library | open | Not needed while the backend runs as a sidecar; the handshake already works. |
+| 2.2 Server as a library | **done** | `pkg/waveserver.Start(Options) (Addrs, error)` owns the startup sequence; `cmd/server` is a 45-line `main` that stamps the version, prints the `WAVESRV-ESTART` line and blocks. Verified by running the binary in an isolated data dir: handshake line, 401 without the auth key, 200 with it. |
 | 2.3 Auth key without the header | **done** | Plus the production CORS the shell needs — see below. |
 | 2.4 safeStorage → OS keyring | **done** | Migrates on first read under Electron, backs the old file up, and never needs the shell again. |
 | 2.5 Tauri spike | **partly** | The shell compiles, spawns the sidecar, injects the snapshot and can resolve its own startup handshake. Nothing on the checklist below has been *observed* — this environment has no display. |
@@ -109,6 +109,28 @@ func Start() (webAddr, wsAddr string, err error)
 `pkg/web/ws.go:44` already take a plain `net.Listener`. So this is ~50 lines of glue and **zero
 `pkg/` changes**. Keep the `WAVESRV-ESTART` stderr emission so the Electron path still works.
 
+**Landed as `pkg/waveserver`.** The estimate was wrong about where the work was: the listeners were
+never the problem, the ~450 lines of startup sequence around them were, and they lived in `package
+main` where nothing could import them. That whole sequence moved into `pkg/waveserver`; `cmd/server`
+is now a `main` that stamps the version, calls `Start`, prints the handshake, and blocks.
+
+Three things the move had to decide rather than copy:
+
+- **Errors instead of `log.Printf` + bare `return`.** A `main` can log and quit; a library has to
+  tell its caller. Each startup failure is now a wrapped error, and any failure after the
+  single-instance lock is acquired hands the lock back — otherwise a caller that recovers could never
+  start a server again.
+- **The web server no longer blocks.** `RunWebServer` runs in a goroutine so `Start` can return the
+  addresses. Nothing else holds the process up, so `main` blocks on `select{}` and shutdown continues
+  to go through the signal handlers, which exit.
+- **The stdin watch became an option.** Killing the server when stdin closes is the contract with a
+  supervising parent process. For a host running the server in-process, stdin belongs to the host and
+  that watch would be a bug, so `Options.WatchStdin` gates it.
+
+Verified by running the built binary against an isolated `SLTERM_DATA_HOME`: it prints
+`WAVESRV-ESTART ws:… web:…`, serves HTTP, answers 401 without the auth key and 200 with it, and shuts
+itself down when stdin closes.
+
 ### 2.3 Auth key via query param  ← easy to miss, security-relevant
 
 **Done.** `pkg/authkey` accepts the key from the `authkey` query parameter as well as the
@@ -130,7 +152,12 @@ today — and it is worth deciding before Phase 7 rather than after.
 
 ### 2.4 safeStorage → OS keyring, **under Electron**
 
-**Done**, except the route rename.
+**Done.** The route rename that was outstanding here has landed too: `wshutil.ElectronRoute`
+(`"electron"`) is now `wshutil.HostRoute` (`"host"`), with one `HostRouteId` constant on the TypeScript
+side so the wire value is written once rather than in three literals. The route always meant "whichever
+shell is hosting" — it carries window focus and the system bell, not anything Electron-specific — and
+naming it after Electron would have been actively misleading once Tauri answers on it. Server and
+client ship together, so there is no version-skew concern in changing the value.
 
 The store used to hand its whole blob to Electron's `safeStorage` over the `electron` wshrpc route,
 which means the file is only openable by a key the shell held. Now it seals the blob itself with
