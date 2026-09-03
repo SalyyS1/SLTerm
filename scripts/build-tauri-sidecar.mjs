@@ -15,13 +15,15 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const VERSION = require("../version.cjs");
 const BIN_DIR = "dist/bin";
+const SCHEMA_SRC = "schema";
+const SCHEMA_DIR = "dist/schema";
 
 /** `YYYYMMDDHHmm`, matching what the Taskfile stamps into BuildTime. */
 function buildTime() {
@@ -108,6 +110,22 @@ function buildWsh(stamp) {
     }
 }
 
+/**
+ * Generates the JSON schemas for the config files and stages them where the
+ * bundler's resource glob expects them.
+ *
+ * The schemas are derived from the Go config structs, so they are build output,
+ * not source — `dist/schema` is not in git, and a fresh checkout does not have it.
+ * The Taskfile's build:schema does this for Electron; the Tauri bundle declares
+ * `../dist/schema/*` as a resource and refuses to build without it.
+ */
+function buildSchema() {
+    console.log(`build-tauri-sidecar: schema -> ${SCHEMA_DIR}`);
+    run({}, ["run", "cmd/generateschema/main-generateschema.go"]);
+    rmSync(SCHEMA_DIR, { recursive: true, force: true });
+    cpSync(SCHEMA_SRC, SCHEMA_DIR, { recursive: true });
+}
+
 // A stale binary from a previous version would ship alongside the new one and the
 // backend picks by exact version, so clear the directory first.
 mkdirSync(BIN_DIR, { recursive: true });
@@ -118,6 +136,7 @@ for (const name of readdirSync(BIN_DIR)) {
 }
 
 const stamp = buildTime();
+buildSchema();
 buildServer(stamp);
 buildWsh(stamp);
 console.log(`build-tauri-sidecar: done (version ${VERSION}, build ${stamp})`);
