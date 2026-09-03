@@ -51,10 +51,6 @@ import (
 	_ "net/http/pprof"
 )
 
-// these are set by the caller, from its own build-time values
-var WaveVersion = "0.0.0"
-var BuildTime = "0"
-
 // Options is what the process knows and this package cannot work out for itself.
 type Options struct {
 	// Version and BuildTime are the caller's build stamps. They end up in
@@ -291,7 +287,7 @@ func startupActivityUpdate(firstLaunch bool) {
 		shellVersion = ""
 	}
 	userSetOnce := &telemetrydata.TEventUserProps{
-		ClientInitialVersion: "v" + WaveVersion,
+		ClientInitialVersion: "v" + wavebase.WaveVersion,
 	}
 	tosTs := telemetry.GetTosAgreedTs()
 	var cohortTime time.Time
@@ -426,15 +422,14 @@ func maybeStartPprofServer() {
 // test. Shutdown still goes through the signal handlers installed here, and those
 // end the process, so a caller that only wants the server running can simply block.
 func Start(opts Options) (Addrs, error) {
-	WaveVersion = opts.Version
-	BuildTime = opts.BuildTime
 	if envFilePath := os.Getenv("SLTERM_ENVFILE"); envFilePath != "" {
 		log.Printf("applying env file: %s\n", envFilePath)
 		_ = godotenv.Load(envFilePath)
 	}
 
-	wavebase.WaveVersion = WaveVersion
-	wavebase.BuildTime = BuildTime
+	// wavebase holds the build stamps for everything that reports them.
+	wavebase.WaveVersion = opts.Version
+	wavebase.BuildTime = opts.BuildTime
 	wshutil.DefaultRouter = wshutil.NewWshRouter()
 	wshutil.DefaultRouter.SetAsRootRouter()
 
@@ -483,7 +478,7 @@ func Start(opts Options) (Addrs, error) {
 		}
 		heldLock = nil
 	}
-	log.Printf("wave version: %s (%s)\n", WaveVersion, BuildTime)
+	log.Printf("wave version: %s (%s)\n", wavebase.WaveVersion, wavebase.BuildTime)
 	log.Printf("wave data dir: %s\n", wavebase.GetWaveDataDir())
 	log.Printf("wave config dir: %s\n", wavebase.GetWaveConfigDir())
 	// Parallelize filestore + wstore init (separate SQLite databases: filestore.db / slterm.db)
