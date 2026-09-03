@@ -1,6 +1,7 @@
 // Copyright 2025, Salyvn.
 // SPDX-License-Identifier: Apache-2.0
 
+import { withAuthKey } from "@/util/endpoints";
 import { type WebSocket, newWebSocket } from "@/util/wsutil";
 import debug from "debug";
 import { sprintf } from "sprintf-js";
@@ -80,8 +81,13 @@ class WSControl {
         this.lastReconnectTime = Date.now();
         dlog("try reconnect:", desc);
         this.opening = true;
+        // Electron's net module can set headers on a WebSocket handshake; the
+        // browser API cannot, and every other shell only has the browser API. So
+        // the key rides the URL there, which is the same fallback the server
+        // already accepts for subresource loads.
+        const url = this.baseHostPort + "/ws?stableid=" + encodeURIComponent(this.stableId);
         this.wsConn = newWebSocket(
-            this.baseHostPort + "/ws?stableid=" + encodeURIComponent(this.stableId),
+            this.eoOpts ? url : withAuthKey(url),
             this.eoOpts
                 ? {
                       [AuthKeyHeader]: this.eoOpts.authKey,

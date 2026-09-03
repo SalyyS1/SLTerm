@@ -64,6 +64,20 @@ function send(command: string, args?: Record<string, unknown>): void {
 }
 
 /**
+ * Fire-and-forget for the tab and workspace operations.
+ *
+ * The module is imported lazily for the same reason `onWaveInit` imports its
+ * bootstrap lazily: it reaches the service layer, which imports the store, which
+ * imports the host resolver that loaded this module. A static import would close
+ * that cycle while this module is still evaluating.
+ */
+function windowOp(name: string, run: (ops: typeof import("@/app/store/tauri-window-ops")) => Promise<void>): void {
+    void import("@/app/store/tauri-window-ops")
+        .then((ops) => run(ops))
+        .catch((e) => console.error(`host ${name} failed`, e));
+}
+
+/**
  * Last pointer position, in window coordinates.
  *
  * The tiling layout asks for this synchronously while a drag is in flight, as a
@@ -244,21 +258,30 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
         showContextMenu: (_workspaceId: string, items: ElectronContextMenuItem[]) =>
             send("host_show_context_menu", { items }),
 
+        // --- Tabs and workspaces ---
+        //
+        // These went to Electron's main process because it owned a WebContentsView
+        // per tab and a window-to-workspace map, so it had to build and tear those
+        // down itself. This shell owns none of that: the backend holds the tabs and
+        // the document follows them, so each of these is a service call. See
+        // store/tauri-window-ops.
+
+        createTab: () => windowOp("createTab", (ops) => ops.createTab()),
+        closeTab: (workspaceId: string, tabId: string) =>
+            windowOp("closeTab", (ops) => ops.closeTab(workspaceId, tabId)),
+        createWorkspace: () => windowOp("createWorkspace", (ops) => ops.createWorkspace()),
+        switchWorkspace: (workspaceId: string) =>
+            windowOp("switchWorkspace", (ops) => ops.switchWorkspace(workspaceId)),
+        deleteWorkspace: (workspaceId: string) =>
+            windowOp("deleteWorkspace", (ops) => ops.deleteWorkspace(workspaceId)),
+        setActiveTab: (tabId: string) => windowOp("setActiveTab", (ops) => ops.setActiveTab(tabId)),
+
         // --- Still to build, and loud about it ---
         //
-        // The app menu needs the menu content Electron assembled in its main
-        // process. Creating and closing tabs and workspaces still goes through the
-        // shell under Electron; switching is handled in the document here (see
-        // util/host.hostSwitchesTabsInDocument), so only those paths are left.
+        // The application menu is the one native surface with no in-document
+        // equivalent yet: Electron assembled its content in the main process, and
+        // porting it means moving that assembly into the frontend first.
 
         showWorkspaceAppMenu: () => notImplemented("showWorkspaceAppMenu"),
-        createTab: () => notImplemented("createTab"),
-        closeTab: () => notImplemented("closeTab"),
-        createWorkspace: () => notImplemented("createWorkspace"),
-        switchWorkspace: () => notImplemented("switchWorkspace"),
-        deleteWorkspace: () => notImplemented("deleteWorkspace"),
-        // Reached only under a shell that owns the tab views. This one does not,
-        // and global.setActiveTab never routes here.
-        setActiveTab: () => notImplemented("setActiveTab"),
     };
 }

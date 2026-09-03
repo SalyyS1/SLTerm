@@ -70,7 +70,12 @@ func EnsureInitialData() (bool, error) {
 	wsId := ""
 	if firstLaunch {
 		log.Println("client has no windows and first launch, creating starter workspace")
-		starterWs, err := CreateWorkspace(ctx, "Starter workspace", "terminal", "#00CED1", false, true)
+		// The tab gets its layout now rather than being left empty for an
+		// onboarding modal to fill in later. That modal was removed with the rest
+		// of the upstream onboarding flow, and nothing has called AgreeTos —
+		// which is what used to apply the starter layout — since. The result was a
+		// fresh install opening on an empty tab with no terminal in it.
+		starterWs, err := CreateWorkspace(ctx, "Starter workspace", "terminal", "#00CED1", false, false)
 		if err != nil {
 			return firstLaunch, fmt.Errorf("error creating starter workspace: %w", err)
 		}

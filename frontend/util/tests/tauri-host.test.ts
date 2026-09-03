@@ -67,9 +67,23 @@ describe("findTauriHost", () => {
     it("names the member when something is not implemented yet", () => {
         stubShell(snapshot);
         const host = findTauriHost();
-        expect(() => host.createTab()).toThrow(/createTab/);
-        expect(() => host.setActiveTab("tab")).toThrow(/setActiveTab/);
-        expect(() => host.switchWorkspace("ws")).toThrow(/switchWorkspace/);
+        // The application menu is the last native surface without an in-document
+        // equivalent: its content was assembled in Electron's main process.
+        expect(() => host.showWorkspaceAppMenu("ws")).toThrow(/showWorkspaceAppMenu/);
+    });
+
+    it("does not refuse tab and workspace operations", () => {
+        stubShell(snapshot);
+        const host = findTauriHost();
+        // These are service calls against the backend, not shell operations, so they
+        // must return rather than throw. They are fire-and-forget by HostApi's own
+        // signature, so the assertion is that nothing is thrown at the call.
+        expect(() => host.createTab()).not.toThrow();
+        expect(() => host.closeTab("ws", "tab")).not.toThrow();
+        expect(() => host.createWorkspace()).not.toThrow();
+        expect(() => host.switchWorkspace("ws")).not.toThrow();
+        expect(() => host.deleteWorkspace("ws")).not.toThrow();
+        expect(() => host.setActiveTab("tab")).not.toThrow();
     });
 
     it("sends a context menu to the shell rather than refusing", () => {

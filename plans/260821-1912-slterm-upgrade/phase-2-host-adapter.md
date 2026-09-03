@@ -15,9 +15,50 @@ is still running, and settle the runtime with measured data rather than argument
 | 2.2 Server as a library | **done** | `pkg/waveserver.Start(Options) (Addrs, error)` owns the startup sequence; `cmd/server` is a 45-line `main` that stamps the version, prints the `WAVESRV-ESTART` line and blocks. Verified by running the binary in an isolated data dir: handshake line, 401 without the auth key, 200 with it. |
 | 2.3 Auth key without the header | **done** | Plus the production CORS the shell needs — see below. |
 | 2.4 safeStorage → OS keyring | **done** | Migrates on first read under Electron, backs the old file up, and never needs the shell again. |
-| 2.5 Tauri spike | **partly** | The shell compiles, spawns the sidecar, injects the snapshot and can resolve its own startup handshake. Nothing on the checklist below has been *observed* — this environment has no display. |
-| 2.6 Wails comparison | open | |
-| 2.7 Written decision | open | Blocked on 2.5's checklist. |
+| 2.5 Tauri spike | **passed on Linux** | Run under Xvfb and its framebuffer read back: the shell reaches a live terminal prompt in an xterm block, the WebSocket connects from the `tauri://` origin, and the packaged `.deb` starts and installs `wsh`. Windows and macOS still unobserved — see below. |
+| 2.6 Wails comparison | **dropped** | The Tauri spike passed its hard blocker. A comparison spike exists to pick between two candidates; with one proven there is nothing left to compare against. |
+| 2.7 Written decision | **done** | Tauri. See "Spike result" below. |
+
+### Spike result (Linux/WebKitGTK, 2026-09-03)
+
+The "no display" premise was wrong: `Xvfb` is installed here. Starting it with `-fbdir` writes the
+framebuffer to a file, and an 80-line XWD→PNG converter turns that into a screenshot with no image
+libraries. So the shell was *run*, and three bugs that could only be found that way fell out:
+
+- **The startup handshake threw before it began.** `callBackendService` read
+  `window.globalAtoms.uiContext` unconditionally, and a shell that resolves its window by asking the
+  backend calls services before `initGlobal` has installed the atoms. Guarded; none of the methods the
+  handshake calls takes a UI context.
+- **Every WebSocket attempt was rejected.** Electron's `net` module can set headers on the WS
+  handshake; the browser API cannot, so the auth key never arrived and the server refused in a loop.
+  The key now rides the URL — the same fallback the server already accepted for subresources. This
+  *was* the `ws://`-from-`tauri://` blocker, and it was a header problem, not an origin problem.
+- **A fresh install opened on an empty tab.** First launch skipped applying a layout, on the promise
+  that dismissing an onboarding modal would apply it — but that modal went with the upstream
+  onboarding flow, and nothing has called `AgreeTos` since. **The Electron build had this too.**
+
+Also done because running it showed they were needed: `SLTERM_APP_PATH` is now passed to the sidecar
+(without it `wsh` never got installed), and tab/workspace create/close/switch/delete are implemented as
+plain service calls in `store/tauri-window-ops.ts` — zero Rust, per the hard rule.
+
+Checklist, Linux only: **WebSocket** ✔ · **fonts/layout** ✔ (the prompt renders in Hack, the widget
+rail and pet draw) · **WebGL** — unobservable under Xvfb, which has no GPU (`libEGL` cannot open
+`/dev/dri/card0`); xterm fell back to canvas as designed, so the app *works* without WebGL, which is
+the fallback path the user hits on a bad driver · **Monaco, IME, clipboard, `backdrop-filter`** —
+untested; each needs an interactive session.
+
+**Decision: Tauri, on the evidence of a working Linux build.** The Windows-first priority in the
+original decision still stands and Windows has still not been run — but the fallback rule was "if
+both spikes fail on Windows, stop", and the failure mode that rule guarded against (the shell cannot
+reach the backend at all) is now known not to exist. The remaining risk is engine fidelity per
+platform, and that is Phase 7.8's matrix, not a reason to keep two candidates alive.
+
+**Size, packaged:** the `.deb` is **24.7 MB**. That carries the stripped 14.7 MB `wavesrv` (unstripped
+it was 23 MB and the deb 27 MB), the 12 MB shell with the 25 MB frontend embedded, and `wsh` for the
+host plus both Linux architectures. Electron shipped all six `wsh` targets — 63 MB raw, 18 MB
+compressed — which is most of what made its installer 97 MB. Carrying only Linux remotes is a product
+call: connecting to a Windows or macOS remote still works, only the automatic `wsh` install on it does
+not, and the backend says so plainly.
 
 ### First size measurement (Linux x64, this machine)
 

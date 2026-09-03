@@ -1,0 +1,145 @@
+# Builds the Tauri shell's installers on a `tauri-v*` tag and publishes them as a
+# prerelease.
+#
+# Kept separate from release.yml on purpose. That workflow ships the Electron build,
+# which is the fallback the runtime swap is not allowed to break; this one ships the
+# replacement while it is still being proven. One tag, one runtime, one set of
+# artifacts — a failure here cannot take the shippable build down with it.
+#
+# Each runner builds its own platform natively, because wavesrv is a CGO build
+# (sqlite). Windows cross-compiles its C with zig, the same way release.yml does.
+
+name: Release (Tauri)
+
+run-name: Release Tauri ${{ github.ref_name }}
+
+on:
+    push:
+        tags:
+            - "tauri-v[0-9]+.[0-9]+.[0-9]+*"
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+env:
+    GO_VERSION: "1.25.6"
+    NODE_VERSION: "22"
+    GOTOOLCHAIN: local
+    NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+    build:
+        name: Build ${{ matrix.label }}
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            # One platform failing still publishes the others. Only Linux has been
+            # observed running; the other two are expected to need work the first
+            # time someone runs what they produce.
+            fail-fast: false
+            matrix:
+                include:
+                    - label: linux-x64
+                      runner: ubuntu-latest
+                      bundles: deb,rpm
+                    - label: windows-x64
+                      runner: windows-latest
+                      bundles: nsis
+                    - label: macos-arm64
+                      runner: macos-latest
+                      bundles: dmg
+        steps:
+            - uses: actions/checkout@v6
+
+            - uses: actions/setup-go@v6
+              with:
+                  go-version: ${{ env.GO_VERSION }}
+                  cache-dependency-path: go.sum
+
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri
+
+            # Windows needs a C cross-compiler for the CGO sqlite build.
+            - name: Install Zig
+              if: runner.os == 'Windows'
+              uses: mlugg/setup-zig@v2
+              with:
+                  version: 0.14.0
+
+            # WebKitGTK and the libraries Tauri links against on Linux.
+            - name: Install Linux build dependencies
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+                      librsvg2-dev patchelf libssl-dev
+
+            - uses: nick-fields/retry@v3
+              name: npm ci
+              with:
+                  command: npm ci --no-audit --no-fund
+                  retry_on: error
+                  max_attempts: 3
+                  timeout_minutes: 10
+
+            # Same npm optional-dependency gap release.yml works around.
+            - name: Repair skipped native binaries
+              run: node scripts/repair-native-deps.mjs
+
+            - name: Build the Go sidecar and the wsh CLI
+              run: node scripts/build-tauri-sidecar.mjs
+
+            # `tauri build` runs the frontend build and the staging step itself,
+            # through beforeBuildCommand in tauri.conf.json.
+            - name: Build and bundle
+              run: npx tauri build --bundles ${{ matrix.bundles }}
+
+            - name: Collect installers
+              shell: bash
+              run: |
+                  mkdir -p artifacts
+                  find src-tauri/target/release/bundle -type f \
+                      \( -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \
+                         -o -name '*-setup.exe' \) \
+                      -exec cp {} artifacts/ \;
+                  ls -la artifacts
+
+            - uses: actions/upload-artifact@v5
+              with:
+                  name: tauri-installers-${{ matrix.label }}
+                  path: artifacts/
+                  if-no-files-found: error
+                  retention-days: 7
+
+    release:
+        name: Publish Prerelease
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/download-artifact@v6
+              with:
+                  path: staging
+                  merge-multiple: true
+
+            - name: List what will be published
+              run: ls -la staging
+
+            - name: Create or update the prerelease
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: staging/*
+                  draft: false
+                  # Prerelease until the engine matrix has been checked on Windows
+                  # and macOS. Only the Linux/WebKitGTK build has been run.
+                  prerelease: true
+                  generate_release_notes: true
+                  fail_on_unmatched_files: true
