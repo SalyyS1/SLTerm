@@ -82,9 +82,9 @@ the real weak seams rather than importing a fix for a bug SLTerm does not have.
 | 0.5 | Scope reduction — cut non-ADE subsystems | done | No | [phase-0.5-scope-cut.md](phase-0.5-scope-cut.md) |
 | 0.6 | ADE feature layer, build pipeline, release artifact | done | No | [phase-0.6-ade-layer-and-build.md](phase-0.6-ade-layer-and-build.md) |
 | 0.7 | CI repair + multi-platform release pipeline | done | No | [phase-0.7-ci-and-release.md](phase-0.7-ci-and-release.md) |
-| 1 | Terminal rendering hardening | in progress | No | [phase-1-terminal.md](phase-1-terminal.md) |
-| 2 | Host adapter + Tauri spike → gate | 2-3w | Prep | [phase-2-host-adapter.md](phase-2-host-adapter.md) |
-| 3 | Single-webview in-DOM tabs | in progress | No (done under Electron) | [phase-3-tabs.md](phase-3-tabs.md) |
+| 1 | Terminal rendering hardening | done (one item blocked) | No | [phase-1-terminal.md](phase-1-terminal.md) |
+| 2 | Host adapter + Tauri spike → gate | spike blocked on a display | Prep | [phase-2-host-adapter.md](phase-2-host-adapter.md) |
+| 3 | Single-webview in-DOM tabs | built, gate unmeasured | No (done under Electron) | [phase-3-tabs.md](phase-3-tabs.md) |
 | 4 | Claude Code feature layer (Go) | 4-6w | No | [phase-4-claude-layer.md](phase-4-claude-layer.md) |
 | 5 | Project / VCS layer (Go) | 3-4w | No | [phase-5-vcs.md](phase-5-vcs.md) |
 | 6 | SLTerm strengths: pet, keybind, polish | 2-3w | No | [phase-6-slterm-polish.md](phase-6-slterm-polish.md) |
@@ -94,24 +94,35 @@ Phase 0.6 delivered the first slice of Phase 4 (skills/MCP/agents/commands brows
 and the agent-teams read model). What remains in Phase 4 is session
 detection/resume and the OTLP cost HUD.
 
-Phase 1 has landed the output-fidelity half: the ordered replay, the wrap guard, live font changes,
-and the two real bugs the review turned up (held output was being discarded outright, and the batched
-writer was corrupting split UTF-8). Still open there: spawn-time PTY sizing, binary WS frames,
-layout-remount carry-over, background/renderer decoupling, and the view-transition regression suite.
+Phase 1 is done except one item, and that one is blocked on a decision rather than on work. Landed:
+the ordered replay, the wrap guard, live font changes, the two bugs the review turned up (held output
+discarded outright, and the batched writer corrupting split UTF-8), spawn-time PTY sizing,
+layout-remount carry-over, background/renderer decoupling, and the transition regression suite.
 
-Phase 2 has landed 2.1, 2.3 and 2.4: the `HostApi` seam (46 members, one resolution point, an Electron
-and a Tauri implementation), the auth key off the header plus the production CORS the shell needs, and
-the secret store off Electron's safeStorage onto an OS-keyring-held master key — the one item that
-would have destroyed data if it slipped past the swap. The Tauri shell now compiles, spawns the
-sidecar, injects its startup snapshot and resolves its own `wave-init` handshake from the backend —
-release binary 19 MB against Electron's 285 MB of runtime. Nothing has been *observed* running: this
-machine has no display. Still open in Phase 2: the spike checklist itself (WebGL, Monaco, IME,
-clipboard, and `ws://` from the `tauri://` origin), the `electron` → `host` route rename, and the
-written decision.
+Three of those turned out bigger than their line in the plan. **Every terminal was running on the slow
+canvas renderer** — the WebGL guard keyed off transparency, and transparency defaults to 0.5, so the
+fast renderer was dead code on a default install. **Carry-over had to respect xterm's write queue**: a
+snapshot taken right after handing bytes over does not contain them, and parking the optimistic offset
+would have made the replacement read straight past them. And **1.5's premise was simply wrong** — the
+batcher's binary format frames JSON, so it cannot carry raw output; removing the base64 round-trip needs
+either a transport-aware `wshrpc` payload or a second channel that would split `truncate` from `append`
+ordering. That is a decision to take with a profile, on a machine with a display, and the item says so.
+
+Phase 2 has landed 2.1, 2.2, 2.3 and 2.4: the `HostApi` seam (46 members, one resolution point, an
+Electron and a Tauri implementation), the backend startable as a library (`pkg/waveserver.Start`, with
+`cmd/server` reduced to a 45-line `main`), the auth key off the header plus the production CORS the shell
+needs, and the secret store off Electron's safeStorage onto an OS-keyring-held master key — the one item
+that would have destroyed data if it slipped past the swap. The `electron` → `host` route rename is done
+too. The Tauri shell compiles, spawns the sidecar, injects its startup snapshot and resolves its own
+`wave-init` handshake — release binary 19 MB against Electron's 285 MB of runtime. Still open in Phase 2:
+the spike checklist (WebGL, Monaco, IME, clipboard, and `ws://` from the `tauri://` origin) and the
+written decision that depends on it. Both need a display; nothing has been *observed* running.
 
 Both gaps that kept the Tauri shell merely bootable are closed: native context menus are wired
-through Tauri's menu API, and tab switching happens in the document. What is left before it is
-trustworthy is measurement — Phase 3's benchmark gate needs a display, which the build machine does
+through Tauri's menu API, and tab switching happens in the document. Phase 3.3 now bounds the warm-tab
+set — least-recently-shown eviction under the existing `window:maxtabcachesize`, which is safe only
+because a terminal parks its screen on unmount. What is left before the phase is trustworthy is
+measurement: where the cap belongs, and the 10/25-tab benchmarks, need a display the build machine does
 not have. Creating and closing tabs and workspaces, and the app menu, still go through the shell and
 are unimplemented there.
 
@@ -125,6 +136,9 @@ in 0-6 has to be redone in 7 — that is the point of the ordering.
 
 1. No duplicated or lost scrollback across: font change, theme change, tile drag, split, tab
    switch, resize during heavy output, `clear` after burst, SSH block. Asserted by tests.
+   **Done at the stream level** — one case per transition in `view-transitions.test.ts`, driving the
+   real writer, carry-over store and reconciler. The browser half (a real drag, a real
+   `ResizeObserver`, a real SSH block) needs a display.
 2. Skills / MCP / Agents / Commands manageable in-app; agent teams + task board visible.
 3. Git status/stage/commit/push, changelists, worktrees usable without leaving the app.
 4. Pet XP/coins/inventory persist across restart and advance from real shell activity.
