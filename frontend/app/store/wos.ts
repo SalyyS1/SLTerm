@@ -92,7 +92,17 @@ function callBackendService(service: string, method: string, args: any[], noUICo
     const startTs = Date.now();
     let uiContext: UIContext = null;
     if (!noUIContext && globalThis.window != null) {
-        uiContext = globalStore.get(((window as any).globalAtoms as GlobalAtomsType).uiContext);
+        // The atoms are installed by initGlobal, which cannot run until the shell's
+        // startup handshake has resolved — and a shell that does not track windows
+        // itself resolves that handshake *by calling services*, to ask the backend
+        // which window and tab to open. So this runs before the atoms exist, and a
+        // missing UI context is a legitimate state rather than a bug. Every method
+        // that needs one is reached after init; the server rejects a call that needs
+        // a context and does not get one, by name.
+        const hostAtoms = (window as any).globalAtoms as GlobalAtomsType | undefined;
+        if (hostAtoms != null) {
+            uiContext = globalStore.get(hostAtoms.uiContext);
+        }
     }
     const waveCall: WebCallType = {
         service: service,
