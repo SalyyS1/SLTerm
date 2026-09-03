@@ -13,7 +13,7 @@
 | 1.5 Binary WS frames | **blocked — premise does not hold** | See below. The base64 round-trip is still there. Two real fixes landed on this path instead: a byte-corruption bug in the writer, and skipping the encode entirely when nothing is subscribed. |
 | 1.6 Carry-over on layout remount | **done** | The outgoing instance parks its serialized screen; the incoming one restores it instead of re-reading the term file. Parked with the offset xterm has *parsed*, not the one it was handed, so writes still in xterm's queue are re-read rather than lost. Single-use, 10s TTL, bounded. |
 | 1.7 Decouple background from renderer | **done** | `allowTransparency` is now always on and no longer gates WebGL: addon-webgl 0.19 honours it. Every themed window was on the slow renderer by default, because the default transparency of 0.5 made the guard fire. Also removes a rebuild trigger — a background change no longer replays the scrollback. |
-| 1.8 Regression suite | **partly** | Unit tests cover the reconciliation, the writer and scrollback resolution. The view-transition suite is not built. |
+| 1.8 Regression suite | **done for the stream, GUI half blocked** | `view-transitions.test.ts` asserts no duplicated and no lost scrollback across every transition in the list, by driving the real writer, carry-over store and reconciler. A mutation check confirms it fails when the parked offset stops respecting xterm's write queue. Real tile drags and SSH blocks still need a window. |
 
 ### Two bugs found in the code, not in the plan
 
@@ -232,13 +232,34 @@ Retain the existing IME and paste dedup guards in `termwrap.ts` (composition-sta
 dedup window vs `lastComposedText`, paste dedup via `lastPasteData`/`lastPasteTime`) — those are
 input-side and unrelated to this work, but easy to break by accident.
 
+**Landed as `tests/view-transitions.test.ts`, for the byte stream.** Every transition in the list
+above has a case, and each asserts the same two things: the output appears exactly once and in order.
+The suite drives the real modules that decide it — `BatchedWriter`, `term-carry-over`, `reconcileHeldData`
+— composed the way `TermWrap` composes them, against a terminal that records bytes instead of painting
+them and that parses asynchronously like the real one.
+
+It has teeth: reverting the writer to report parse completion synchronously (the pre-1.6 behaviour)
+fails exactly the two cases about writes in flight, and fails them with *lost* output, which is the
+bug class the phase exists for.
+
+What it does not cover, and cannot here: the browser half. A real tile drag, a real tab switch through
+the layout tree, a real SSH block and the resize that comes from a real `ResizeObserver` need a window.
+That is the same gate Phase 3's benchmarks are behind — `testdriver/` runs in CI against a built app,
+and this machine has no display to run it locally.
+
 ## Validation
 
-- Full regression suite green.
-- Font/theme change no longer disposes `TermWrap` (assert via instance identity in a test).
-- WebGL renderer confirmed active **with** a background enabled.
+- Full regression suite green. **Done** for the stream-level suite (`npx vitest run frontend/`).
+- Font/theme change no longer disposes `TermWrap` — font size, family, `macOptionIsMeta` and bracketed
+  paste apply in place via `term-live-options.ts`, and theme goes through `TermThemeUpdater`, so none of
+  them is in the rebuild deps any more. **Instance-identity assertion still needs a DOM.**
+- WebGL renderer confirmed active **with** a background enabled. **Needs a display** — the coupling that
+  prevented it is gone (1.7) and the addon's transparency support was verified by reading the shipped
+  bundle, but nothing has watched it paint.
 - Throughput check: `yes | head -c 50M` in a terminal, no dropped or duplicated lines, UI responsive.
-- Benchmark comparison against Phase 0 for the base64 removal.
+  **Needs a display.**
+- Benchmark comparison against Phase 0 for the base64 removal. **Moot** — the base64 removal is blocked
+  on the decision in 1.5, not on measurement of a change that was not made.
 
 ## Risk / rollback
 
