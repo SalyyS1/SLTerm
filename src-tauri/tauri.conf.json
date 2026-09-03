@@ -4,7 +4,9 @@
     "version": "0.20.0",
     "identifier": "dev.salyvn.slterm",
     "build": {
-        "frontendDist": "../dist/frontend-tauri"
+        "frontendDist": "../dist/frontend-tauri",
+        "beforeBuildCommand": "npm run build:prod && node scripts/stage-tauri-frontend.mjs",
+        "beforeDevCommand": "npm run build:dev && node scripts/stage-tauri-frontend.mjs"
     },
     "app": {
         "withGlobalTauri": false,

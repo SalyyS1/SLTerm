@@ -2,6 +2,25 @@
 
 **Est.** 6-10 weeks · **Depends on:** Phase 2 gate passed, Phase 3 landed
 
+## Status
+
+| Item | State | Notes |
+|---|---|---|
+| 7.1 Rust shell + sidecar | **done** | Spawns `wavesrv`, parses the handshake, passes auth key, data/config homes and `SLTERM_APP_PATH`. Kills the sidecar on exit. |
+| 7.2 `tauri-host.ts` | **done except the app menu** | 45 of 46 `HostApi` members. Tab and workspace ops are service calls in `store/tauri-window-ops.ts`. `showWorkspaceAppMenu` throws by name. |
+| 7.3 Native surface | **context menus only** | Context menus go through Tauri's menu API. App menu, dialogs, tray, global shortcuts, display enumeration, single-instance lock, multi-window: not built. |
+| 7.4 Frameless titlebar | **not built** | The window is `decorations(false)`, so there is no titlebar at all yet — no drag region, no close button. On Linux that means the WM's own controls are absent. |
+| 7.5 Key interception | **not built** | Chord mode and webview key reinjection still assume Electron's `before-input-event`. |
+| 7.6 Web block resolution | **degrades silently** | The web block renders an iframe; nothing offers "open in system browser" yet. |
+| 7.7 Build and release pipeline | **done for Linux, wired for all three** | `scripts/build-tauri-sidecar.mjs` + `release-tauri.yml` on a `tauri-v*` tag, publishing a **prerelease**. Unsigned, no updater. |
+| 7.8 Cross-engine QA | **Linux only** | See Phase 2's spike result. Windows and macOS have not been run. |
+
+**What "publishable" means here:** the Linux build starts, connects, and gives you a shell, and it is
+24.7 MB. It does not yet have a titlebar, an app menu, or any of the polish 7.3–7.6 describe. It ships
+as a **prerelease under its own tag** so that the Electron build — which has all of those — stays the
+release people get by default. That is the "keep Electron shippable until parity" rule from the goal,
+applied literally.
+
 ## Goal
 
 Replace the ~4,474 LOC of `emain/` with a Tauri 2 (Rust) shell, keeping Electron shippable until
