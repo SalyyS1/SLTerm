@@ -23,18 +23,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kevinburke/ssh_config"
-	"github.com/skeema/knownhosts"
 	"github.com/SalyyS1/SLTerm/pkg/blocklogger"
 	"github.com/SalyyS1/SLTerm/pkg/panichandler"
 	"github.com/SalyyS1/SLTerm/pkg/secretstore"
 	"github.com/SalyyS1/SLTerm/pkg/trimquotes"
 	"github.com/SalyyS1/SLTerm/pkg/userinput"
+	"github.com/SalyyS1/SLTerm/pkg/util/procutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/shellutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/utilfn"
 	"github.com/SalyyS1/SLTerm/pkg/utilds"
 	"github.com/SalyyS1/SLTerm/pkg/wavebase"
 	"github.com/SalyyS1/SLTerm/pkg/wconfig"
+	"github.com/kevinburke/ssh_config"
+	"github.com/skeema/knownhosts"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	xknownhosts "golang.org/x/crypto/ssh/knownhosts"
@@ -962,7 +963,7 @@ func findSshConfigKeywords(hostPattern string) (connKeywords *wconfig.ConnKeywor
 			sshKeywords.SshIdentityAgent = utilfn.Ptr(`\\.\pipe\openssh-ssh-agent`)
 		} else {
 			shellPath := shellutil.DetectLocalShellPath()
-			authSockCommand := exec.Command(shellPath, "-c", "echo ${SSH_AUTH_SOCK}")
+			authSockCommand := procutil.Hide(exec.Command(shellPath, "-c", "echo ${SSH_AUTH_SOCK}"))
 			sshAuthSock, err := authSockCommand.Output()
 			if err == nil {
 				trimmedSock := strings.TrimSpace(string(sshAuthSock))

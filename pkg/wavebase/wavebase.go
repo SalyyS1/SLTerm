@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SalyyS1/SLTerm/pkg/util/procutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/utilfn"
 )
 
@@ -286,7 +287,7 @@ func TryMkdirs(dirName string, perm os.FileMode, dirDesc string) error {
 }
 
 func listValidLangs(ctx context.Context) []string {
-	out, err := exec.CommandContext(ctx, "locale", "-a").CombinedOutput()
+	out, err := procutil.Hide(exec.CommandContext(ctx, "locale", "-a")).CombinedOutput()
 	if err != nil {
 		log.Printf("error running 'locale -a': %s\n", err)
 		return []string{}
@@ -304,7 +305,7 @@ func determineLang() string {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelFn()
 	if runtime.GOOS == "darwin" {
-		out, err := exec.CommandContext(ctx, "defaults", "read", "-g", "AppleLocale").CombinedOutput()
+		out, err := procutil.Hide(exec.CommandContext(ctx, "defaults", "read", "-g", "AppleLocale")).CombinedOutput()
 		if err != nil {
 			log.Printf("error executing 'defaults read -g AppleLocale', will use default 'en_US.UTF-8': %v\n", err)
 			return defaultLang
@@ -356,7 +357,7 @@ func unameKernelRelease() string {
 	}
 	ctx, cancelFn := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelFn()
-	out, err := exec.CommandContext(ctx, "uname", "-r").CombinedOutput()
+	out, err := procutil.Hide(exec.CommandContext(ctx, "uname", "-r")).CombinedOutput()
 	if err != nil {
 		log.Printf("error executing uname -r: %v\n", err)
 		return "-"
@@ -401,7 +402,7 @@ func getSystemSummary(ctx context.Context) string {
 
 	switch osName {
 	case "darwin":
-		out, _ := exec.CommandContext(ctx, "sw_vers", "-productVersion").Output()
+		out, _ := procutil.Hide(exec.CommandContext(ctx, "sw_vers", "-productVersion")).Output()
 		return fmt.Sprintf("macOS %s (%s)", strings.TrimSpace(string(out)), runtime.GOARCH)
 	case "linux":
 		// Read /etc/os-release directly (standard location since 2012)
@@ -424,7 +425,7 @@ func getSystemSummary(ctx context.Context) string {
 		return fmt.Sprintf("%s (%s)", prettyName, runtime.GOARCH)
 	case "windows":
 		var details string
-		out, err := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_OperatingSystem).Caption").Output()
+		out, err := procutil.Hide(exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_OperatingSystem).Caption")).Output()
 		if err == nil && len(out) > 0 {
 			details = strings.TrimSpace(string(out))
 		} else {

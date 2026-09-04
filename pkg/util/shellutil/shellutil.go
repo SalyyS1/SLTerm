@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/SalyyS1/SLTerm/pkg/util/envutil"
+	"github.com/SalyyS1/SLTerm/pkg/util/procutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/utilfn"
 	"github.com/SalyyS1/SLTerm/pkg/utilds"
 	"github.com/SalyyS1/SLTerm/pkg/wavebase"
@@ -124,7 +125,7 @@ func internalMacUserShell() string {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelFn()
 	userStr := "/Users/" + osUser.Username
-	out, err := exec.CommandContext(ctx, "dscl", ".", "-read", userStr, "UserShell").CombinedOutput()
+	out, err := procutil.Hide(exec.CommandContext(ctx, "dscl", ".", "-read", userStr, "UserShell")).CombinedOutput()
 	if err != nil {
 		return DefaultShellPath
 	}
@@ -516,20 +517,20 @@ func getShellVersion(shellPath string, shellType string) (string, error) {
 
 	switch shellType {
 	case ShellType_bash:
-		cmd = exec.CommandContext(ctx, shellPath, "--version")
 		versionRegex = bashVersionRegexp
 	case ShellType_zsh:
-		cmd = exec.CommandContext(ctx, shellPath, "--version")
 		versionRegex = zshVersionRegexp
 	case ShellType_fish:
-		cmd = exec.CommandContext(ctx, shellPath, "--version")
 		versionRegex = fishVersionRegexp
 	case ShellType_pwsh:
-		cmd = exec.CommandContext(ctx, shellPath, "--version")
 		versionRegex = pwshVersionRegexp
 	default:
 		return "", fmt.Errorf("unsupported shell type: %s", shellType)
 	}
+	// Every branch ran the same command; only the regex differs. Hidden because
+	// this probe happens at startup, and a console window flashing then is the
+	// first thing a Windows user would see.
+	cmd = procutil.Hide(exec.CommandContext(ctx, shellPath, "--version"))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -600,7 +601,7 @@ func FixupWaveZshHistory() error {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelFn()
 
-	cmd := exec.CommandContext(ctx, "zsh", "-f", "-i", "-c", script)
+	cmd := procutil.Hide(exec.CommandContext(ctx, "zsh", "-f", "-i", "-c", script))
 	cmd.Stdin = nil
 	envStr := envutil.SliceToEnv(os.Environ())
 	envStr = envutil.RmEnv(envStr, "ZDOTDIR")

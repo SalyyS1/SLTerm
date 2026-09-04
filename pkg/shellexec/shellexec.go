@@ -19,12 +19,12 @@ import (
 
 	"maps"
 
-	"github.com/creack/pty"
 	"github.com/SalyyS1/SLTerm/pkg/blocklogger"
 	"github.com/SalyyS1/SLTerm/pkg/jobcontroller"
 	"github.com/SalyyS1/SLTerm/pkg/panichandler"
 	"github.com/SalyyS1/SLTerm/pkg/remote/conncontroller"
 	"github.com/SalyyS1/SLTerm/pkg/util/pamparse"
+	"github.com/SalyyS1/SLTerm/pkg/util/procutil"
 	"github.com/SalyyS1/SLTerm/pkg/util/shellutil"
 	"github.com/SalyyS1/SLTerm/pkg/wavebase"
 	"github.com/SalyyS1/SLTerm/pkg/waveobj"
@@ -32,6 +32,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc/wshclient"
 	"github.com/SalyyS1/SLTerm/pkg/wshutil"
 	"github.com/SalyyS1/SLTerm/pkg/wslconn"
+	"github.com/creack/pty"
 )
 
 const DefaultGracefulKillWait = 400 * time.Millisecond
@@ -156,7 +157,7 @@ func StartWslShellProcNoWsh(ctx context.Context, termSize waveobj.TermSize, cmdS
 	client := conn.GetClient()
 	conn.Infof(ctx, "WSL-NEWSESSION (StartWslShellProcNoWsh)")
 
-	ecmd := exec.Command("wsl.exe", "~", "-d", client.Name())
+	ecmd := procutil.Hide(exec.Command("wsl.exe", "~", "-d", client.Name()))
 
 	if termSize.Rows == 0 || termSize.Cols == 0 {
 		termSize.Rows = shellutil.DefaultTermRows
@@ -274,7 +275,7 @@ func StartWslShellProc(ctx context.Context, termSize waveobj.TermSize, cmdStr st
 		cmdCombined = fmt.Sprintf(`%s=%s %s`, wavebase.WaveJwtTokenVarName, jwtToken, cmdCombined)
 	}
 	log.Printf("full combined command: %s", cmdCombined)
-	ecmd := exec.Command("wsl.exe", "~", "-d", client.Name(), "--", "sh", "-c", cmdCombined)
+	ecmd := procutil.Hide(exec.Command("wsl.exe", "~", "-d", client.Name(), "--", "sh", "-c", cmdCombined))
 	if termSize.Rows == 0 || termSize.Cols == 0 {
 		termSize.Rows = shellutil.DefaultTermRows
 		termSize.Cols = shellutil.DefaultTermCols

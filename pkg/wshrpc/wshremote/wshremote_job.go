@@ -16,11 +16,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shirou/gopsutil/v4/process"
+	"github.com/SalyyS1/SLTerm/pkg/util/procutil"
 	"github.com/SalyyS1/SLTerm/pkg/wavebase"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc/wshclient"
 	"github.com/SalyyS1/SLTerm/pkg/wshutil"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 func isProcessRunning(pid int, pidStartTs int64) (*process.Process, error) {
@@ -149,7 +150,7 @@ func (impl *ServerImpl) RemoteStartJobCommand(ctx context.Context, data wshrpc.C
 	defer readyPipeRead.Close()
 	defer readyPipeWrite.Close()
 
-	cmd := exec.Command(wshPath, "jobmanager", "--jobid", data.JobId, "--clientid", data.ClientId)
+	cmd := procutil.Hide(exec.Command(wshPath, "jobmanager", "--jobid", data.JobId, "--clientid", data.ClientId))
 	if data.PublicKeyBase64 != "" {
 		cmd.Env = append(os.Environ(), "SLTERM_PUBLICKEY="+data.PublicKeyBase64)
 	}
