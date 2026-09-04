@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use rand::Rng;
-use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use host::HostSnapshot;
 
@@ -37,12 +37,26 @@ pub fn set_update_in_progress(in_progress: bool) {
     UPDATE_IN_PROGRESS.store(in_progress, Ordering::SeqCst);
 }
 
-/// Whether a close request should be confirmed with the user.
+/// Set once the page has decided the window may close.
 ///
-/// False during an update: see `UPDATE_IN_PROGRESS`. The frontend owns the
-/// confirm-or-not decision from settings; this only reports the one case where
-/// the shell knows a prompt must not appear.
-pub fn update_in_progress() -> bool {
+/// Without it, `host_close_window` would trip the close handler again and the
+/// window would ask the page a second time — a loop, not a prompt.
+static CLOSE_CONFIRMED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_close_confirmed(confirmed: bool) {
+    CLOSE_CONFIRMED.store(confirmed, Ordering::SeqCst);
+}
+
+/// Whether the close request may proceed without asking the page.
+///
+/// True once the page has confirmed, and true during an update — the updater
+/// force-quits with nobody at the keyboard, so a prompt there would either block
+/// the install or let it run against a live process.
+fn close_may_proceed() -> bool {
+    CLOSE_CONFIRMED.load(Ordering::SeqCst) || update_in_progress()
+}
+
+fn update_in_progress() -> bool {
     UPDATE_IN_PROGRESS.load(Ordering::SeqCst)
 }
 
@@ -271,6 +285,7 @@ pub fn run() {
             host::host_set_fullscreen,
             host::host_log,
             host::host_set_update_in_progress,
+            host::host_close_window,
             menu::host_show_context_menu,
         ])
         .on_menu_event(|app, event| {
@@ -397,11 +412,38 @@ pub fn run() {
             {
                 let data_home = data_home.clone();
                 let tracked = win.clone();
+                let asker = win.clone();
                 win.on_window_event(move |event| {
-                    if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
-                        if let Some(bounds) = window::capture_bounds(&tracked) {
-                            window::save_bounds(&data_home, &bounds);
+                    match event {
+                        WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                            if let Some(bounds) = window::capture_bounds(&tracked) {
+                                window::save_bounds(&data_home, &bounds);
+                            }
                         }
+                        // Alt+F4, the window's own close button, and the OS window
+                        // menu all arrive here — not as a webview key — so this is
+                        // the only place a confirm-on-quit prompt can cover every
+                        // route out of the app.
+                        //
+                        // The shell cannot decide whether to prompt: that depends
+                        // on window:confirmclose and on whether the workspace has
+                        // unsaved tabs, which live in the backend and the page. So
+                        // it asks the page and stops the close; the page replies by
+                        // calling host_close_window.
+                        WindowEvent::CloseRequested { api, .. } => {
+                            if close_may_proceed() {
+                                return;
+                            }
+                            api.prevent_close();
+                            if let Err(e) = asker.emit(host::CLOSE_REQUESTED_EVENT, ()) {
+                                // A page that cannot be asked must not become a
+                                // window that cannot be closed.
+                                eprintln!("[slterm] could not ask the page about closing: {e}");
+                                set_close_confirmed(true);
+                                let _ = asker.close();
+                            }
+                        }
+                        _ => {}
                     }
                 });
             }

@@ -9,6 +9,7 @@ import {
     registerControlShiftStateUpdateHandler,
     registerGlobalKeys,
 } from "@/app/store/keymodel";
+import { registerCloseHandler } from "@/app/store/close-window";
 import { installWebviewKeyGuards } from "@/app/store/webview-keys";
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -194,6 +195,9 @@ async function initWave(initOpts: WaveInitOpts) {
     // which reloads the document and takes every open terminal's scrollback with
     // it. Installed after the keymap so the app's own handlers see keys first.
     installWebviewKeyGuards();
+    // Alt+F4 and the window's close button reach the shell, not the page, so the
+    // shell asks before closing and this is what answers.
+    registerCloseHandler();
     const fullConfig = await RpcApi.GetFullConfigCommand(TabRpcClient);
     console.log("fullconfig", fullConfig);
     globalStore.set(atoms.fullConfigAtom, fullConfig);

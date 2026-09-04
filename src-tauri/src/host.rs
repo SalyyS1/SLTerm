@@ -53,9 +53,18 @@ impl HostSnapshot {
             host_name: host_name(),
             config_dir: config_dir.to_string_lossy().to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
-            build_time: 0,
+            build_time: build_time(),
         }
     }
+}
+
+/// Unix seconds this binary was built at, stamped by build.rs.
+///
+/// Was hardcoded to 0, which the About modal rendered as the Unix epoch — worse
+/// than showing nothing, because it looks like a real answer and makes it
+/// impossible to tell which build a bug report came from.
+fn build_time() -> i64 {
+    env!("SLTERM_BUILD_TIME").parse().unwrap_or(0)
 }
 
 /// Maps the build target to the platform names Node uses, which is what the
@@ -130,6 +139,25 @@ pub fn host_set_fullscreen(window: tauri::Window, is_fullscreen: bool) -> Result
 #[tauri::command]
 pub fn host_log(message: String) {
     eprintln!("[frontend] {message}");
+}
+
+/// Event asking the page whether the window may close.
+///
+/// The shell cannot answer this itself: whether to confirm depends on
+/// `window:confirmclose`, on whether the workspace has unsaved tabs, and on how
+/// many windows are open — all of which live in the backend and the page. So the
+/// shell asks, and the page replies by calling `host_close_window`.
+pub const CLOSE_REQUESTED_EVENT: &str = "host://close-requested";
+
+/// Closes the window for real, bypassing the confirm round trip.
+///
+/// Called by the page once it has decided — either because no confirmation was
+/// needed or because the user confirmed. Sets a flag the close handler reads so
+/// the request is not bounced back to the page a second time.
+#[tauri::command]
+pub fn host_close_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    crate::set_close_confirmed(true);
+    window.close().map_err(|e| e.to_string())
 }
 
 /// Marks an update as installing, so the close path stops asking questions.
