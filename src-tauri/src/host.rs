@@ -131,3 +131,15 @@ pub fn host_set_fullscreen(window: tauri::Window, is_fullscreen: bool) -> Result
 pub fn host_log(message: String) {
     eprintln!("[frontend] {message}");
 }
+
+/// Marks an update as installing, so the close path stops asking questions.
+///
+/// The updater force-quits the app to hand over to its installer, with nobody at
+/// the keyboard. Any confirm-on-quit prompt in that path either blocks the
+/// install or lets the installer run against a live process; both end with a
+/// half-installed app. The frontend sets this immediately before it asks the
+/// updater to install, and `close_requested_should_confirm` reads it.
+#[tauri::command]
+pub fn host_set_update_in_progress(in_progress: bool) {
+    crate::set_update_in_progress(in_progress);
+}

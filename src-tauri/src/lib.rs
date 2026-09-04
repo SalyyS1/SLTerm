@@ -12,16 +12,39 @@
 
 mod host;
 mod menu;
+mod window;
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use rand::Rng;
-use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use host::HostSnapshot;
+
+/// Set while an update is installing.
+///
+/// The updater force-quits the app to run its installer, and it does so with
+/// nobody at the keyboard. A confirm-on-quit prompt in that path would either
+/// block the install or let it proceed against a live process, so the close
+/// handler checks this and skips straight to shutdown.
+static UPDATE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+pub fn set_update_in_progress(in_progress: bool) {
+    UPDATE_IN_PROGRESS.store(in_progress, Ordering::SeqCst);
+}
+
+/// Whether a close request should be confirmed with the user.
+///
+/// False during an update: see `UPDATE_IN_PROGRESS`. The frontend owns the
+/// confirm-or-not decision from settings; this only reports the one case where
+/// the shell knows a prompt must not appear.
+pub fn update_in_progress() -> bool {
+    UPDATE_IN_PROGRESS.load(Ordering::SeqCst)
+}
 
 /// Endpoints the Go server picked, learned from its stderr handshake.
 #[derive(Clone, Debug, Default)]
@@ -34,6 +57,27 @@ struct Endpoints {
 /// Owns the sidecar so it can be killed when the app exits. Without this the Go
 /// process outlives the window and keeps the data-dir lock held.
 struct Backend(Mutex<Option<Child>>);
+
+impl Backend {
+    /// Kills the sidecar and waits for it, so the data-dir lock is released
+    /// before this function returns.
+    ///
+    /// `RunEvent::Exit` is not enough on its own: whether it fires when the
+    /// updater terminates the app is unverified, and an installer that starts
+    /// while `wavesrv` still holds `wave.lock` produces a post-update launch
+    /// that cannot acquire it. So this is called explicitly on the paths that
+    /// end the process, with `RunEvent::Exit` kept only as a backstop.
+    /// Idempotent — whichever path runs first takes the child.
+    fn shutdown(&self) {
+        let child = self.0.lock().ok().and_then(|mut guard| guard.take());
+        if let Some(mut child) = child {
+            let _ = child.kill();
+            // Waiting is the point: kill() only asks. Returning before the
+            // process is reaped is what leaves the lock held.
+            let _ = child.wait();
+        }
+    }
+}
 
 /// Generates the shared secret the frontend presents on every request. Electron
 /// created this the same way and handed it to the server via env.
@@ -209,12 +253,24 @@ fn host_init_script(snapshot: &HostSnapshot) -> String {
 
 pub fn run() {
     tauri::Builder::default()
+        // Registered first, which the plugin requires. Without it a second
+        // launch spawns a second wavesrv that cannot take the data-dir lock, and
+        // the user sees a lock error instead of their existing window.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_dialog::init())
         .manage(Backend(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             host::host_open_external,
             host::host_open_native_path,
             host::host_set_fullscreen,
             host::host_log,
+            host::host_set_update_in_progress,
             menu::host_show_context_menu,
         ])
         .on_menu_event(|app, event| {
@@ -224,22 +280,52 @@ pub fn run() {
         })
         .setup(|app| {
             let handle = app.handle().clone();
+            let (data_home, config_home) = data_dir_args();
             let (child, endpoints) = match start_backend(&handle) {
                 Ok(v) => v,
                 Err(e) => {
+                    // A dialog, not just stderr: the previous behaviour printed
+                    // to a stream nobody reads and exited, so a failed launch
+                    // looked like the app simply not starting. The data-dir lock
+                    // is the failure a user is most likely to hit, and it is the
+                    // one whose raw message ("acquiring wave lock") says nothing
+                    // about the actual cause, so it gets named.
+                    let detail = if e.contains("lock") {
+                        format!(
+                            "{e}\n\nAnother copy of SLTerm is already running, or an older \
+                             install is still open. Close it and try again."
+                        )
+                    } else {
+                        e.clone()
+                    };
                     eprintln!("[slterm] fatal: {e}");
+                    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                    handle
+                        .dialog()
+                        .message(detail)
+                        .title("SLTerm could not start")
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
                     return Err(e.into());
                 }
             };
             app.state::<Backend>().0.lock().unwrap().replace(child);
 
-            let (_, config_home) = data_dir_args();
             let snapshot = HostSnapshot::new(
                 endpoints.web.clone(),
                 endpoints.ws.clone(),
                 endpoints.auth_key.clone(),
                 &config_home,
             );
+
+            let settings = window::ShellSettings::load(&config_home);
+            // Decorations are per-OS, not per-app. macOS draws the traffic
+            // lights in the window frame itself, so an undecorated window there
+            // has no controls at all and the frontend has nothing it can put
+            // back; it keeps its decorations and the frontend fills the inset.
+            // Windows and Linux get a fully undecorated window and the frontend
+            // draws all three buttons.
+            let decorations = settings.native_titlebar || window::keeps_decorations_with_custom_titlebar();
 
             // The window is built here rather than declared in tauri.conf.json
             // because the snapshot depends on endpoints only known after the
@@ -250,34 +336,123 @@ pub fn run() {
             let mut builder =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                     .title("SLTerm")
-                    .inner_size(1400.0, 900.0)
-                    .min_inner_size(900.0, 600.0)
-                    .decorations(false)
+                    .inner_size(window::DEFAULT_WIDTH, window::DEFAULT_HEIGHT)
+                    .min_inner_size(window::MIN_WIDTH, window::MIN_HEIGHT)
+                    .decorations(decorations)
                     .resizable(true)
                     .center()
+                    // WebView2 eats these for the browser's own features, and a
+                    // reload destroys every open terminal in the document. The
+                    // window is built in Rust, so the config defaults do not
+                    // apply and both have to be passed explicitly.
+                    .zoom_hotkeys_enabled(false)
+                    .devtools(cfg!(debug_assertions))
                     .initialization_script(host_init_script(&snapshot));
-            // On macOS `transparent` only exists behind Tauri's `macos-private-api`
-            // feature, and turning that on makes the app ineligible for the Mac App
-            // Store. Transparency here is cosmetic — the frameless titlebar it was
-            // meant to serve is not built yet — so it is not worth depending on a
-            // private API for. Revisit when that titlebar lands and it matters.
-            #[cfg(not(target_os = "macos"))]
+
+            // Restore geometry before the window is shown, so it does not appear
+            // centered and then jump. Clamped against the monitors that exist
+            // now: a window restored onto an unplugged display is invisible and
+            // cannot be dragged back.
+            let restored = window::load_bounds(&data_home).map(|saved| {
+                let monitors = app.available_monitors().unwrap_or_default();
+                window::clamp_to_visible(saved, &monitors)
+            });
+            if let Some(bounds) = restored {
+                let scale = app
+                    .primary_monitor()
+                    .ok()
+                    .flatten()
+                    .map(|m| m.scale_factor())
+                    .unwrap_or(1.0);
+                let (size, position) = window::logical_from_saved(bounds, scale);
+                builder = builder.inner_size(size.width, size.height).position(position.x, position.y);
+            }
+
+            // Transparency is only worth its cost when something behind the
+            // window is meant to show through. It also rules out DWM's rounded
+            // corners on Windows — a window with per-pixel alpha can never be
+            // rounded — and the titlebar this was reserved for is opaque, so
+            // Windows keeps an opaque window and Linux keeps transparency for
+            // its compositor-side effects.
+            #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
             {
                 builder = builder.transparent(true);
             }
-            builder.build()?;
+
+            let win = builder.build()?;
+
+            #[cfg(target_os = "windows")]
+            if !decorations {
+                // Undecorated windows lose DWM's rounded corners, which is what
+                // makes a frameless window look like a 1990s dialog on Win11.
+                // Asking for them back is a hint, not a guarantee — DWM refuses
+                // for windows using per-pixel alpha, which is why this pairs
+                // with an opaque window above.
+                round_window_corners(&win);
+            }
+
+            // Persist geometry as it changes rather than at exit: the process can
+            // be terminated by the updater, and a size the user never sees again
+            // is a small but constant annoyance.
+            {
+                let data_home = data_home.clone();
+                let tracked = win.clone();
+                win.on_window_event(move |event| {
+                    if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+                        if let Some(bounds) = window::capture_bounds(&tracked) {
+                            window::save_bounds(&data_home, &bounds);
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error building the SLTerm Tauri app")
-        .run(|app, event| {
-            // Kill the sidecar on exit; otherwise it keeps the data-dir lock and
-            // the next launch cannot acquire it.
-            if let RunEvent::Exit = event {
-                if let Some(mut child) = app.state::<Backend>().0.lock().unwrap().take() {
-                    let _ = child.kill();
-                    let _ = child.wait();
+        .run(|app, event| match event {
+            // The window is closing. Shut the sidecar down here rather than
+            // waiting for Exit: whether Exit fires when the updater terminates
+            // the app is unverified, and a surviving wavesrv holds the data-dir
+            // lock so the post-update launch fails.
+            RunEvent::ExitRequested { .. } => {
+                if update_in_progress() {
+                    eprintln!("[slterm] shutting down for an update");
                 }
+                app.state::<Backend>().shutdown();
             }
+            // Backstop for any path that reaches exit without the above.
+            // `shutdown` is idempotent, so running twice costs nothing.
+            RunEvent::Exit => {
+                app.state::<Backend>().shutdown();
+            }
+            _ => {}
         });
+}
+
+/// Asks DWM for rounded corners on an undecorated window.
+///
+/// Windows 11 only, and a request rather than a guarantee: DWM ignores it for
+/// windows using per-pixel alpha or a window region. Best-effort by design —
+/// square corners are cosmetic, and there is nothing useful to do on failure.
+#[cfg(target_os = "windows")]
+fn round_window_corners(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+    };
+
+    let Ok(handle) = window.hwnd() else {
+        return;
+    };
+    let preference = DWMWCP_ROUND;
+    unsafe {
+        // Return value ignored on purpose: on Windows 10 this attribute does not
+        // exist and the call fails, which is not a problem worth reporting.
+        DwmSetWindowAttribute(
+            handle.0 as HWND,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            &preference as *const _ as *const _,
+            std::mem::size_of_val(&preference) as u32,
+        );
+    }
 }

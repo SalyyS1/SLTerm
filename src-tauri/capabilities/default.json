@@ -1,7 +1,15 @@
 {
     "$schema": "../gen/schemas/desktop-schema.json",
     "identifier": "default",
-    "description": "Minimal capability set for the SLTerm shell. All data access goes through the Go backend over loopback HTTP/WS, so the webview needs no filesystem or shell permissions of its own.",
+    "description": "Capability set for the SLTerm shell. Data access goes through the Go backend over loopback HTTP/WS, so the webview needs no filesystem or shell permissions of its own. What it does need is the window actions its own titlebar performs: core:window:default is getters only, so dragging, minimising, maximising and closing are each granted explicitly. Nothing here lets the page create a webview — a page that could would be able to point one at a URL of its choosing and have the backend auth key injected into it.",
     "windows": ["main"],
-    "permissions": ["core:default"]
+    "permissions": [
+        "core:default",
+        "core:window:allow-start-dragging",
+        "core:window:allow-minimize",
+        "core:window:allow-toggle-maximize",
+        "core:window:allow-unmaximize",
+        "core:window:allow-close",
+        "dialog:default"
+    ]
 }
