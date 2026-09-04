@@ -16,6 +16,9 @@ import { IconButton } from "../element/iconbutton";
 import { WorkspaceService } from "../store/services";
 import { Tab } from "./tab";
 import "./tabbar.scss";
+import { handleTitlebarDoubleClick, handleTitlebarMouseDown } from "./titlebar/drag-region";
+import "./titlebar/titlebar.scss";
+import { ControlWidth, WindowControls } from "./titlebar/window-controls";
 
 import { WorkspaceSwitcher } from "./workspaceswitcher";
 
@@ -175,6 +178,9 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
     const isFullScreen = useAtomValue(atoms.isFullScreen);
     const zoomFactor = useAtomValue(atoms.zoomFactorAtom);
     const settings = useAtomValue(atoms.settingsAtom);
+    // When the OS draws the titlebar, the page must not draw a second set of
+    // controls or reserve space for one.
+    const nativeTitleBar = settings["window:nativetitlebar"] ?? false;
 
     let prevDelta: number;
     let prevDragDirection: string;
@@ -599,7 +605,8 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
     const tabsWrapperWidth = tabIds.length * tabWidthRef.current;
     const showAppMenuButton = isWindows() || (!isMacOS() && !settings["window:showmenubar"]);
 
-    // Calculate window drag left width based on platform and state
+    // Space for macOS's native traffic lights, which sit inside the window frame
+    // at its top-left. Full screen hides them, so the inset goes away with them.
     let windowDragLeftWidth = 10;
     if (isMacOS() && !isFullScreen) {
         if (zoomFactor > 0) {
@@ -609,14 +616,17 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
         }
     }
 
-    // Calculate window drag right width
+    // Space for the window controls this page draws itself.
+    //
+    // Linux needs the same reservation Windows does: under the Tauri shell the
+    // frontend draws the controls on both, and reading this off `isWindows()`
+    // alone is what left Linux with a 6px gap and three buttons on top of the
+    // tab strip. macOS keeps its native traffic lights on the left instead, so
+    // it reserves nothing here.
     let windowDragRightWidth = 6;
-    if (isWindows()) {
-        if (zoomFactor > 0) {
-            windowDragRightWidth = 139 / zoomFactor;
-        } else {
-            windowDragRightWidth = 139;
-        }
+    if (!isMacOS() && !nativeTitleBar) {
+        const controlsWidth = ControlWidth * 3;
+        windowDragRightWidth = zoomFactor > 0 ? controlsWidth / zoomFactor : controlsWidth;
     }
 
     const addtabButtonDecl: IconButtonDecl = {
@@ -626,7 +636,12 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
         title: "Add Tab",
     };
     return (
-        <div ref={tabbarWrapperRef} className="tab-bar-wrapper">
+        <div
+            ref={tabbarWrapperRef}
+            className="tab-bar-wrapper"
+            onMouseDown={handleTitlebarMouseDown}
+            onDoubleClick={handleTitlebarDoubleClick}
+        >
             <div
                 ref={draggerLeftRef}
                 className="h-full shrink-0 z-window-drag"
@@ -680,9 +695,11 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
                 </div>
                 <div
                     ref={draggerRightRef}
-                    className="h-full shrink-0 z-window-drag"
-                    style={{ width: windowDragRightWidth, WebkitAppRegion: "drag" } as any}
-                />
+                    className="h-full shrink-0 z-window-drag flex justify-end"
+                    style={{ width: windowDragRightWidth }}
+                >
+                    {!nativeTitleBar && <WindowControls />}
+                </div>
             </div>
         </div>
     );

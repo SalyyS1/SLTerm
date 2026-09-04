@@ -64,12 +64,14 @@ describe("findTauriHost", () => {
         expect(findTauriHost()).toBe(findTauriHost());
     });
 
-    it("names the member when something is not implemented yet", () => {
+    it("opens the application menu rather than refusing", () => {
         stubShell(snapshot);
         const host = findTauriHost();
-        // The application menu is the last native surface without an in-document
-        // equivalent: its content was assembled in Electron's main process.
-        expect(() => host.showWorkspaceAppMenu("ws")).toThrow(/showWorkspaceAppMenu/);
+        // The menu tree used to be assembled in Electron's main process, which
+        // left this member with nothing to call. It now builds the tree in the
+        // page and hands it to the shell, the same path a context menu takes, so
+        // the call must return rather than throw.
+        expect(() => host.showWorkspaceAppMenu("ws")).not.toThrow();
     });
 
     it("does not refuse tab and workspace operations", () => {

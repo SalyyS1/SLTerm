@@ -148,20 +148,36 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
 
         // --- Not offered by this shell yet, but harmless to answer ---
 
-        // No page zoom is wired up, so the factor is fixed and the change event
-        // below never fires.
+        // Page zoom is switched off in this shell: WebView2's own zoom hotkeys
+        // are disabled at window construction, so the factor cannot change and
+        // the change event below never fires.
         getZoomFactor: () => 1,
-        // The updater is Phase 7 work (tauri-plugin-updater). Reporting
+        // The updater is Phase 2 work (tauri-plugin-updater). Reporting
         // up-to-date keeps the update banner out of the UI until it is real.
         getUpdaterStatus: () => "up-to-date",
         getUpdaterChannel: () => "latest",
         // Electron's <webview> needed a preload script on disk. This shell has no
         // <webview>, and the web block degrades to an iframe, which takes none.
         getWebviewPreload: () => "",
-        // Electron's webUtils could name the file behind a drag-and-drop File
-        // object. Tauri reports dropped paths through its own drag-drop event
-        // instead, which the frontend does not consume yet.
-        getPathForFile: () => "",
+        // A native picker, because a browser File object deliberately hides its
+        // path and Tauri has no equivalent of Electron's webUtils. Returning ""
+        // from a getPathForFile lookalike was worse than not offering one: the
+        // background picker silently did nothing.
+        pickImageFile: async () => {
+            try {
+                const { open } = await import("@tauri-apps/plugin-dialog");
+                const picked = await open({
+                    title: "Choose Background Image",
+                    multiple: false,
+                    directory: false,
+                    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp"] }],
+                });
+                return typeof picked === "string" ? picked : null;
+            } catch (e) {
+                console.error("could not open the image picker", e);
+                return null;
+            }
+        },
 
         // --- Actions that reach the desktop through Rust ---
 
@@ -191,6 +207,9 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
             const target = document.activeElement ?? document.body;
             target.dispatchEvent(new Event("paste", { bubbles: true, cancelable: true }));
         },
+        // Tauri has no core screenshot API and this shell will not grow one for
+        // a single RPC. The caller (tabrpcclient) reports the failure to whoever
+        // asked rather than pretending an empty image succeeded.
         captureScreenshot: () =>
             Promise.reject(new Error("HostApi.captureScreenshot is not implemented by the Tauri shell")),
 
@@ -200,13 +219,8 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
         // reserve space. This shell runs undecorated and the frontend draws them.
         updateWindowControlsOverlay: () => {},
         // Suppressed Electron's menu accelerators for the duration of a chord.
-        // There is no native menu to suppress.
+        // There is no native menu bar to suppress: the app menu is a popup.
         setKeyboardChordMode: () => {},
-        // The next three served Electron's <webview> tag, which this shell does
-        // not have; the web block degrades to an iframe.
-        setWebviewFocus: () => {},
-        registerGlobalWebviewKeys: () => {},
-        clearWebviewStorage: () => Promise.resolve(),
         // No updater is wired up yet, and getUpdaterStatus reports up-to-date, so
         // nothing in the UI offers this.
         installAppUpdate: () => {},
@@ -232,11 +246,27 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
                 )
                 .catch((e) => console.error("could not subscribe to menu clicks", e));
         },
-        onFullScreenChange: () => {},
+        onFullScreenChange: (callback: (isFullScreen: boolean) => void) => {
+            // Fullscreen can be entered from outside the app — F11, the OS window
+            // menu, macOS's green button — so this cannot be inferred from the
+            // setFullScreen calls the frontend makes. Tauri reports the window's
+            // own state change.
+            void import("@tauri-apps/api/window")
+                .then(({ getCurrentWindow }) => {
+                    const win = getCurrentWindow();
+                    return win.onResized(async () => {
+                        callback(await win.isFullscreen().catch(() => false));
+                    });
+                })
+                .catch((e) => console.error("could not subscribe to fullscreen changes", e));
+        },
         onZoomFactorChange: () => {},
         onUpdaterStatusChange: () => {},
+        // The About item is in the app menu this shell builds, which routes its
+        // own clicks — there is no separate native menu to hear from.
         onMenuItemAbout: () => {},
-        onReinjectKey: () => {},
+        // Electron watched Ctrl+Shift in its main process because a webview tag
+        // could have focus. The document watches its own keys now (keymodel).
         onControlShiftStateUpdate: () => {},
 
         onWaveInit: (callback: (initOpts: WaveInitOpts) => void) => {
@@ -276,12 +306,57 @@ function makeTauriHost(snap: TauriHostSnapshot): HostApi {
             windowOp("deleteWorkspace", (ops) => ops.deleteWorkspace(workspaceId)),
         setActiveTab: (tabId: string) => windowOp("setActiveTab", (ops) => ops.setActiveTab(tabId)),
 
-        // --- Still to build, and loud about it ---
+        // The application menu takes the same path as a context menu: the page
+        // builds the tree, Rust pops it natively, and the clicked id comes back
+        // on the same event. Electron assembled this in its main process, which
+        // is why it had no in-document equivalent until the tree moved here.
         //
-        // The application menu is the one native surface with no in-document
-        // equivalent yet: Electron assembled its content in the main process, and
-        // porting it means moving that assembly into the frontend first.
-
-        showWorkspaceAppMenu: () => notImplemented("showWorkspaceAppMenu"),
+        // The workspace id Electron needed to pick a window has no use: this
+        // shell has one window, and the list is fetched from the backend.
+        showWorkspaceAppMenu: (_workspaceId: string) => {
+            void (async () => {
+                try {
+                    const { buildAppMenu, handleAppMenuClick } = await import("@/app/store/appmenu");
+                    const items = await buildAppMenu();
+                    // Registered before the menu is shown, so a click cannot
+                    // arrive with nothing listening for it.
+                    registerAppMenuHandler(handleAppMenuClick);
+                    send("host_show_context_menu", { items });
+                } catch (e) {
+                    console.error("could not open the application menu", e);
+                }
+            })();
+        },
     };
+}
+
+/**
+ * Routes menu clicks to the app menu's handler.
+ *
+ * Context menus and the app menu share one Rust command and therefore one click
+ * event. The frontend's context-menu code registers its own listener through
+ * `onContextMenuClick`; this adds a second listener for the ids the app menu
+ * owns, rather than routing everything through one dispatcher that would have to
+ * know about both.
+ */
+let appMenuHandler: ((id: string) => void) | null = null;
+let appMenuListenerStarted = false;
+
+function registerAppMenuHandler(handler: (id: string) => void): void {
+    appMenuHandler = handler;
+    if (appMenuListenerStarted) {
+        return;
+    }
+    appMenuListenerStarted = true;
+    void import("@tauri-apps/api/event")
+        .then(({ listen }) =>
+            listen<string>(ContextMenuClickEvent, (event) => {
+                // Only ids this menu minted; anything else belongs to a context
+                // menu and its own listener will take it.
+                if (event.payload.startsWith("menu:") || event.payload.startsWith("role:")) {
+                    appMenuHandler?.(event.payload);
+                }
+            })
+        )
+        .catch((e) => console.error("could not subscribe to app menu clicks", e));
 }

@@ -129,10 +129,19 @@ fn predefined_for_role<R: Runtime, M: Manager<R>>(
         "undo" => PredefinedMenuItem::undo(manager, label),
         "redo" => PredefinedMenuItem::redo(manager, label),
         "minimize" => PredefinedMenuItem::minimize(manager, label),
+        "maximize" => PredefinedMenuItem::maximize(manager, label),
+        "fullscreen" | "togglefullscreen" => PredefinedMenuItem::fullscreen(manager, label),
+        "hide" => PredefinedMenuItem::hide(manager, label),
+        "hideOthers" | "hideothers" => PredefinedMenuItem::hide_others(manager, label),
+        "showAll" | "showall" => PredefinedMenuItem::show_all(manager, label),
+        "services" => PredefinedMenuItem::services(manager, label),
         "close" => PredefinedMenuItem::close_window(manager, label),
         "quit" => PredefinedMenuItem::quit(manager, label),
         // Anything else falls through to a normal item, so an unmapped role still
-        // reaches the frontend's own handler rather than vanishing.
+        // reaches the frontend's own handler rather than vanishing. That covers
+        // the Electron roles Tauri has no predefined item for —
+        // "pasteAndMatchStyle", "delete", "zoom", "front" — which the frontend
+        // performs itself when the click comes back.
         _ => return Ok(None),
     };
     Ok(Some(Box::new(item.map_err(to_msg)?)))

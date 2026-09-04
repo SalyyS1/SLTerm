@@ -233,6 +233,23 @@ export function initIpcHandlers() {
         event.returnValue = retVal;
     });
 
+    electron.ipcMain.handle("pick-image-file", async (event) => {
+        // The background picker used to hand a drag-and-drop File to
+        // webUtils.getPathForFile. That only works in a shell that can see the
+        // filesystem behind a File object, so the frontend now asks the host to
+        // open a picker and both shells can answer.
+        const ww = getWaveWindowByWebContentsId(event.sender.id);
+        const result = await electron.dialog.showOpenDialog(ww, {
+            title: "Choose Background Image",
+            properties: ["openFile"],
+            filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp"] }],
+        });
+        if (result.canceled || result.filePaths.length === 0) {
+            return null;
+        }
+        return result.filePaths[0];
+    });
+
     electron.ipcMain.handle("capture-screenshot", async (event, rect) => {
         const tabView = getWaveTabViewByWebContentsId(event.sender.id);
         if (!tabView) {

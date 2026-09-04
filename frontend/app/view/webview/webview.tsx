@@ -5,6 +5,7 @@ import { BlockNodeModel } from "@/app/block/blocktypes";
 import type { TabModel } from "@/app/store/tab-model";
 import { Search, useSearch } from "@/app/element/search";
 import { createBlock, getApi, getBlockMetaKeyAtom, getSettingsKeyAtom, openLink } from "@/app/store/global";
+import { findElectronOnlyApi } from "@/util/host";
 import { getSimpleControlShiftAtom } from "@/app/store/keymodel";
 import { ObjectService } from "@/app/store/services";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -535,9 +536,15 @@ export class WebViewModel implements ViewModel {
     async clearCookiesAndStorage() {
         try {
             const webContentsId = this.webviewRef.current?.getWebContentsId();
-            if (webContentsId) {
-                await getApi().clearWebviewStorage(webContentsId);
+            // Only Electron can clear a <webview>'s partition. Under any other
+            // shell this view is an iframe with no partition to clear, so say so
+            // rather than resolving and letting the UI imply it worked.
+            const electron = findElectronOnlyApi();
+            if (webContentsId && electron != null) {
+                await electron.clearWebviewStorage(webContentsId);
+                return;
             }
+            console.warn("clear cookies and storage is only available under the Electron shell");
         } catch (e) {
             console.error("Failed to clear cookies and storage", e);
         }
@@ -1005,11 +1012,14 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             }
         };
         const webviewFocus = () => {
-            getApi().setWebviewFocus(webview.getWebContentsId());
+            // Electron needed to know which <webview> had focus so its main
+            // process could route keys to it. No other shell has a webview tag
+            // or that routing.
+            findElectronOnlyApi()?.setWebviewFocus(webview.getWebContentsId());
             model.nodeModel.focusNode();
         };
         const webviewBlur = () => {
-            getApi().setWebviewFocus(null);
+            findElectronOnlyApi()?.setWebviewFocus(null);
         };
         const handleDomReady = () => {
             globalStore.set(model.domReady, true);

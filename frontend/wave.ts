@@ -7,9 +7,9 @@ import { GlobalModel } from "@/app/store/global-model";
 import {
     globalRefocus,
     registerControlShiftStateUpdateHandler,
-    registerElectronReinjectKeyHandler,
     registerGlobalKeys,
 } from "@/app/store/keymodel";
+import { installWebviewKeyGuards } from "@/app/store/webview-keys";
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { makeTabRouteId } from "@/app/store/wshrouter";
@@ -189,8 +189,11 @@ async function initWave(initOpts: WaveInitOpts) {
         getApi().sendLog("Error in initialization (wave.ts, loading required objects) " + e.message + "\n" + e.stack);
     }
     registerGlobalKeys();
-    registerElectronReinjectKeyHandler();
     registerControlShiftStateUpdateHandler();
+    // Stops the webview from acting on browser accelerators — F5 in particular,
+    // which reloads the document and takes every open terminal's scrollback with
+    // it. Installed after the keymap so the app's own handlers see keys first.
+    installWebviewKeyGuards();
     const fullConfig = await RpcApi.GetFullConfigCommand(TabRpcClient);
     console.log("fullconfig", fullConfig);
     globalStore.set(atoms.fullConfigAtom, fullConfig);

@@ -65,7 +65,11 @@ contextBridge.exposeInMainWorld("api", {
     nativePaste: () => ipcRenderer.send("native-paste"),
     setFullScreen: (isFullScreen: boolean) => ipcRenderer.send("set-fullscreen", isFullScreen),
     doRefresh: () => ipcRenderer.send("do-refresh"),
+    // Kept for the ElectronApi superset, though nothing in the frontend calls it
+    // any more: a drag-and-drop File cannot be resolved to a path in a shell
+    // without webUtils, so the frontend asks for a native picker instead.
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
+    pickImageFile: () => ipcRenderer.invoke("pick-image-file"),
 });
 
 // Custom event for "new-window"

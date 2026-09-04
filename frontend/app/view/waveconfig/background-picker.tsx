@@ -157,29 +157,22 @@ const BgPresetCard = memo(
 BgPresetCard.displayName = "BgPresetCard";
 
 const CustomImageButton = memo(({ onImageSelected }: { onImageSelected: (filePath: string) => void }) => {
-    const fileRef = useRef<HTMLInputElement>(null);
-    const handleClick = useCallback(() => fileRef.current?.click(), []);
-    const handleChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const filePath = getApi().getPathForFile(file);
-            if (!filePath) return;
-            onImageSelected(filePath);
-            if (fileRef.current) fileRef.current.value = "";
-        },
-        [onImageSelected]
-    );
+    // A native picker rather than a hidden <input type="file">. The input gave a
+    // File object, and turning that back into a path needed Electron's webUtils
+    // — under any other shell it produced nothing and the button did nothing.
+    const handleClick = useCallback(() => {
+        void getApi()
+            .pickImageFile()
+            .then((filePath) => {
+                if (filePath) {
+                    onImageSelected(filePath);
+                }
+            })
+            .catch((e) => console.error("could not pick a background image", e));
+    }, [onImageSelected]);
 
     return (
         <>
-            <input
-                ref={fileRef}
-                type="file"
-                accept="image/*,.gif"
-                onChange={handleChange}
-                style={{ display: "none" }}
-            />
             <button
                 onClick={handleClick}
                 style={{

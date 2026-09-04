@@ -1,5 +1,12 @@
 # SLTerm Upgrade — Plan Index
 
+> **Superseded (2026-09-03) by [`260903-1344-sl-ade-upgrade`](../260903-1344-sl-ade-upgrade/plan.md).**
+> Phases 0, 0.5, 0.6, 0.7, 1, 2, 3 and 7 shipped from this plan and it remains the record of the
+> Electron → Tauri migration and its measurements. Its unbuilt phases are continued there:
+> phase 4 (Claude layer) → new phases 4-5, phase 5 (VCS) → new phase 6, phase 6 (pet, keybindings,
+> polish) → new phase 8. Two constraints below have since changed: the brand is now being rebranded to
+> **SL-ADE**, and Electron is to be deleted rather than kept as a fallback.
+
 **Created:** 2026-08-21
 **Base repo:** `/home/stackops/saly/SLTerm` (github.com/SalyyS1/SLTerm)
 **Reference repo:** `/home/stackops/saly/claude-terminal` (github.com/talayash/claude-terminal, Tauri 2 + React, v1.31.2)

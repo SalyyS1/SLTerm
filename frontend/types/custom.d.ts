@@ -87,6 +87,15 @@ declare global {
         getHostName: () => string; // get-host-name
         getConfigDir: () => string; // get-config-dir
         getWebviewPreload: () => string; // get-webview-preload
+        /**
+         * Asks the host for an image path via a native file picker.
+         *
+         * Replaces getPathForFile, which took a drag-and-drop File and asked the
+         * host to name it. Electron could do that through webUtils; Tauri cannot
+         * — a browser File object deliberately hides its path — so the shell that
+         * knows how to open a picker opens one. Resolves null when cancelled.
+         */
+        pickImageFile: () => Promise<string | null>; // pick-image-file
         getAboutModalDetails: () => AboutModalDetails; // get-about-modal-details
         getZoomFactor: () => number; // get-zoom-factor
         showWorkspaceAppMenu: (workspaceId: string) => void; // workspace-appmenu-show
@@ -102,9 +111,6 @@ declare global {
         installAppUpdate: () => void; // install-app-update
         onMenuItemAbout: (callback: () => void) => void; // menu-item-about
         updateWindowControlsOverlay: (rect: Dimensions) => void; // update-window-controls-overlay
-        onReinjectKey: (callback: (waveEvent: WaveKeyboardEvent) => void) => void; // reinject-key
-        setWebviewFocus: (focusedId: number) => void; // webview-focus, focusedId is the getWebContentsId of the webview
-        registerGlobalWebviewKeys: (keys: string[]) => void; // register-global-webview-keys
         onControlShiftStateUpdate: (callback: (state: boolean) => void) => void; // control-shift-state-update
         createWorkspace: () => void; // create-workspace
         switchWorkspace: (workspaceId: string) => void; // switch-workspace
@@ -119,11 +125,9 @@ declare global {
         openNativePath(filePath: string): void; // open-native-path
         captureScreenshot(rect: HostRect): Promise<string>; // capture-screenshot
         setKeyboardChordMode: () => void; // set-keyboard-chord-mode
-        clearWebviewStorage: (webContentsId: number) => Promise<void>; // clear-webview-storage
         incrementTermCommands: (opts?: { isRemote?: boolean; isWsl?: boolean; isDurable?: boolean }) => void; // increment-term-commands
         nativePaste: () => void; // native-paste
         setFullScreen: (isFullScreen: boolean) => void; // set-fullscreen
-        getPathForFile: (file: File) => string; // webUtils.getPathForFile
     };
 
     /** A screen rectangle in device pixels, as the host's screen APIs use. */
@@ -149,6 +153,17 @@ declare global {
         onIframeNavigate: (callback: (url: string) => void) => void;
         setWaveAIOpen: (isOpen: boolean) => void; // set-waveai-open
         doRefresh: () => void; // do-refresh
+        getPathForFile: (file: File) => string; // webUtils.getPathForFile
+        /**
+         * The next three drive Electron's `<webview>` tag, which exists in no
+         * other shell. They live here rather than in HostApi so a replacement
+         * shell does not have to pretend: a stub that resolved successfully made
+         * "clear cookies" look like it worked when it did nothing at all.
+         */
+        setWebviewFocus: (focusedId: number) => void; // webview-focus
+        registerGlobalWebviewKeys: (keys: string[]) => void; // register-global-webview-keys
+        clearWebviewStorage: (webContentsId: number) => Promise<void>; // clear-webview-storage
+        onReinjectKey: (callback: (waveEvent: WaveKeyboardEvent) => void) => void; // reinject-key
     };
 
     type ElectronContextMenuItem = {

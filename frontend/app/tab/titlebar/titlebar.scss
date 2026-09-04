@@ -1,0 +1,43 @@
+// Copyright 2025, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.window-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    height: 100%;
+    // Buttons are interactive, so they must not be part of the drag region.
+    // The tab bar's own rule already exempts `button`, but this is the element
+    // whose whole reason for existing is to be clicked — say it here too rather
+    // than depend on a selector two files away.
+    -webkit-app-region: no-drag;
+
+    .window-control {
+        width: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--secondary-text-color);
+        cursor: default;
+        padding: 0;
+        transition: background-color 0.1s ease;
+
+        &:hover {
+            background-color: rgb(from var(--main-text-color) r g b / 0.1);
+            color: var(--main-text-color);
+        }
+
+        &:active {
+            background-color: rgb(from var(--main-text-color) r g b / 0.16);
+        }
+    }
+
+    // Close is the one control every platform tints red on hover, and the one
+    // whose misclick costs the most, so it gets the affordance.
+    .window-control-close:hover {
+        background-color: #e04545;
+        color: #ffffff;
+    }
+}

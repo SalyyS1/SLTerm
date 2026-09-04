@@ -360,20 +360,27 @@ function appHandleKeyDown(waveEvent: WaveKeyboardEvent): boolean {
     return false;
 }
 
+/**
+ * Tracks whether Ctrl+Shift is held, which drives the block-number overlay.
+ *
+ * Electron watched this in its main process, because it could see keys the page
+ * never received — a webview tag had focus. There is no webview tag any more and
+ * no main process to ask, so the document watches its own keys. Listening in the
+ * capture phase means the state is right even when a block swallows the event.
+ */
 function registerControlShiftStateUpdateHandler() {
-    getApi().onControlShiftStateUpdate((state: boolean) => {
-        if (state) {
+    const update = (e: KeyboardEvent) => {
+        if (e.ctrlKey && e.shiftKey) {
             setControlShift();
         } else {
             unsetControlShift();
         }
-    });
-}
-
-function registerElectronReinjectKeyHandler() {
-    getApi().onReinjectKey((event: WaveKeyboardEvent) => {
-        appHandleKeyDown(event);
-    });
+    };
+    window.addEventListener("keydown", update, { capture: true });
+    window.addEventListener("keyup", update, { capture: true });
+    // Losing focus mid-chord would otherwise leave the overlay pinned on: the
+    // keyup lands in whatever window the user switched to.
+    window.addEventListener("blur", () => unsetControlShift());
 }
 
 function tryReinjectKey(event: WaveKeyboardEvent): boolean {
@@ -669,11 +676,6 @@ function registerGlobalKeys() {
         globalKeyMap.set(`Ctrl:Shift:c{Numpad${idx}}`, (event) => runCommand(`block:switch${idx}`, event));
     }
 
-    const allKeys = Array.from(globalKeyMap.keys());
-    // special case keys, handled by web view
-    allKeys.push("Cmd:l", "Cmd:r", "Cmd:ArrowRight", "Cmd:ArrowLeft", "Cmd:o");
-    getApi().registerGlobalWebviewKeys(allKeys);
-
     const splitBlockKeys = new Map<string, KeyHandler>();
     splitBlockKeys.set("ArrowUp", () => {
         handleSplitVertical("before");
@@ -707,7 +709,6 @@ export {
     globalRefocus,
     globalRefocusWithTimeout,
     registerControlShiftStateUpdateHandler,
-    registerElectronReinjectKeyHandler,
     registerGlobalKeys,
     tryReinjectKey,
     unsetControlShift,

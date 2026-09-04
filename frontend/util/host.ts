@@ -43,6 +43,18 @@ export function getHostApi(): HostApi {
 }
 
 /**
+ * The Electron host, or null under any other shell.
+ *
+ * For the handful of call sites that drive Electron's `<webview>` tag, which no
+ * other shell has. Asking for it explicitly is the honest shape: the caller can
+ * see it is doing something shell-specific and skip it, rather than calling a
+ * HostApi member that quietly does nothing.
+ */
+export function findElectronOnlyApi(): ElectronApi | null {
+    return findElectronHost();
+}
+
+/**
  * Whether tab switching has to happen inside this document.
  *
  * Electron gave every tab its own webview and swapped them natively, so a document
