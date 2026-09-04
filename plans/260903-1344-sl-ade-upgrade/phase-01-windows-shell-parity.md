@@ -205,10 +205,25 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
    shim goes through `cmd /C` — never the reverse, because Rust's and Go's argv quoting only escapes
    cmd metacharacters when the *spawned program* is a batch file (CVE-2024-24576 shape). Prove the
    `wsh` socket works on Windows; if AF_UNIX fails, add a named-pipe transport.
-10. **1.10 Snap Layouts (deferred sub-item).** Prototype against `tauri-plugin-frame`
-    (`.snap_overlay(true)`), then decide between depending on it and vendoring the ~380 LOC child
-    window. Do this only after titlebar geometry is frozen — the overlay is positioned
-    arithmetically from button width and count, so drift makes the flyout vanish silently.
+10. **1.10 Snap Layouts — DECIDED: deferred out of this phase, not dropped.**
+    The prerequisite is done: `min_inner_size` is now 500 px wide (`window.rs:28`), which is what
+    Microsoft requires before a window may enter a snap zone at all, so `Win+arrow` and drag-to-edge
+    work today. What is deferred is only the **flyout on maximise-button hover**, which needs the
+    transparent Win32 child window returning `HTMAXBUTTON`, because WebView2 answers `WM_NCHITTEST`
+    first and no amount of subclassing the Tauri HWND changes that (`tauri-apps/tauri#4531`, open
+    since 2022, blocked upstream).
+    Reasons to defer rather than build now: (a) the overlay is positioned arithmetically from button
+    width and count, so it must not be written before real hardware confirms the titlebar's geometry —
+    which is 1.12, and 1.12 cannot run here; (b) it is the one item in the phase that fails *silently*
+    when the geometry drifts, so building it blind is how it ships broken; (c) both off-the-shelf
+    crates are poor bets — `tauri-plugin-frame` is ~9 months old with one author, and
+    `tauri-plugin-decorum` has been stale since 2024-09 and injects its own titlebar HTML that would
+    fight the React one.
+    **When it is built, vendor the ~380 LOC child window into `src-tauri`** rather than depend on
+    either crate: it is pure Win32 window plumbing, so it stays inside the zero-business-logic rule,
+    and vendoring is immune to abandonment. Diagnostic for the subclassing trap, worth keeping: if the
+    maximise button still shows its CSS `:hover`, the webview got the mouse and the child window did
+    not.
 11. **1.11 Capture the Electron baseline.** While a real Windows display is available, install the
     published `v0.20.0` Electron release and record idle RAM, RAM at 10 and 25 tabs, and cold start into
     `plans/reports/`. Phase 3 deletes the ability to measure this and its gate depends on the file existing;

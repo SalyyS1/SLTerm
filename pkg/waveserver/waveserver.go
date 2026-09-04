@@ -569,6 +569,18 @@ func Start(opts Options) (Addrs, error) {
 		return Addrs{}, fmt.Errorf("creating unix listener: %w", err)
 	}
 	go wshutil.RunWshRpcOverListener(unixListener, nil)
+	// Windows also gets a named pipe on the same logical address. AF_UNIX works
+	// on most Windows 10 1803+ machines but not all — Server editions and some
+	// managed images lack it — and a wsh that cannot reach the server is a broken
+	// CLI with no obvious cause. Serving both means whichever transport the client
+	// can use is there. Off Windows this declines and only the socket is served,
+	// which is why a failure here is logged rather than fatal: the socket above
+	// already succeeded, so the server is usable either way.
+	if pipeListener, pipeErr := wshutil.ListenFallback(wavebase.GetDomainSocketName()); pipeErr == nil {
+		go wshutil.RunWshRpcOverListener(pipeListener, nil)
+	} else if runtime.GOOS == "windows" {
+		log.Printf("could not create the named pipe listener, wsh will need AF_UNIX: %v\n", pipeErr)
+	}
 	// Runs in the background so Start can hand the addresses back. Nothing else
 	// stops the process, so if this returns the server is finished.
 	go func() {

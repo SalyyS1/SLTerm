@@ -200,7 +200,16 @@ func SetupDomainSocketRpcClient(sockName string, serverImpl ServerImpl, debugNam
 		conn, unixErr = net.Dial("unix", sockName)
 	}
 	if tcpErr != nil && unixErr != nil {
-		return nil, fmt.Errorf("failed to connect to tcp or unix domain socket: tcp err:%w: unix socket err: %w", tcpErr, unixErr)
+		// Last resort, and Windows-only: AF_UNIX exists on Windows 10 1803+ but is
+		// not universal — Server editions and some managed images lack it, and
+		// there the socket cannot be created at all. A named pipe derived from the
+		// same path works on every Windows, so wsh keeps working rather than
+		// failing with a socket error the user cannot act on.
+		var fallbackErr error
+		conn, fallbackErr = dialFallback(sockName)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("failed to connect to tcp or unix domain socket: tcp err:%w: unix socket err: %w: fallback err: %w", tcpErr, unixErr, fallbackErr)
+		}
 	}
 	rtn, errCh, err := SetupConnRpcClient(conn, serverImpl, debugName)
 	go func() {
