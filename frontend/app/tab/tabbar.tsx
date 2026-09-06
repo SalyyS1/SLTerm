@@ -628,6 +628,12 @@ const TabBar = memo(({ workspace }: TabBarProps) => {
         const controlsWidth = ControlWidth * 3;
         windowDragRightWidth = zoomFactor > 0 ? controlsWidth / zoomFactor : controlsWidth;
     }
+    // Published so anything else pinned to the top-right can clear the controls.
+    // The pet HUD is absolutely positioned there and was covering them; reading
+    // the width from here means the two cannot drift apart.
+    useEffect(() => {
+        document.documentElement.style.setProperty("--window-controls-width", `${windowDragRightWidth}px`);
+    }, [windowDragRightWidth]);
 
     const addtabButtonDecl: IconButtonDecl = {
         elemtype: "iconbutton",

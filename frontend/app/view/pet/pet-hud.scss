@@ -4,7 +4,15 @@
 .pet-hud {
     position: absolute;
     top: 8px;
-    right: 8px;
+    // Clear of the window controls the page now draws in the top-right.
+    //
+    // This used to be right: 8px, which was fine while Electron drew the
+    // controls itself in native window chrome outside the document. Under a
+    // frameless window the controls are in the page, in this corner, and the HUD
+    // sat on top of them at z-index 102 — leaving three invisible buttons.
+    //
+    // Set from the same value the tab bar reserves, so the two cannot drift.
+    right: var(--window-controls-width, 8px);
     display: flex;
     align-items: center;
     gap: 8px;
