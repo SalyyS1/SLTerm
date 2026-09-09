@@ -243,6 +243,7 @@ with the rest.
 
 ## Next Steps
 
-Phase 9 (deep rebrand) becomes possible once the tag scheme is unified and `emain/`'s 46 brand hits are
-gone. Phases 4-6 are unaffected by this phase and may already be in flight.
+Phase 4 starts the Claude/Codex capability and backend-owned agent-state foundation after this runtime
+consolidation and its measurements. Phase 9 remains last because it must include every import and generated
+contract added through orchestration phase 10.
 

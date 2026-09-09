@@ -3,284 +3,90 @@ phase: 6
 title: "Phase 6: Change review layer"
 status: todo
 priority: P1
-effort: "3-4w"
-dependencies: [1]
+effort: "4-6w"
+dependencies: [5]
 ---
 
 # Phase 6: Change review layer
 
-## Overview
+## Overview / blockers
 
-Close the loop an ADE exists to close: an agent edits files, and you review, group, stage, commit and
-push those edits without leaving the app. SLTerm has **none** of this today — no `pkg/vcs`, no git RPC,
-no VCS view, and its Monaco diff component has zero consumers. This phase builds the Go git layer, the
-path-confinement trust model, IntelliJ-style changelists, and the `view:vcs` block that presents them.
-
-Independent of phases 2-3 — nothing here touches the shell — but **gated on phase 1's hardened exec
-helper**, because spawning git without it is how the injection class gets reintroduced.
-
-## Key Insights
-
-- **The diff renderer already exists and is dead code.** `frontend/app/view/codeeditor/diffviewer.tsx`
-  wraps Monaco's diff editor with an inline toggle and the `editor:inlinediff` setting, and grep finds no
-  consumer anywhere. Nothing produces `original`/`modified` because there is no git blob reader.
-  `pkg/filebackup` is save-time backup, never wired to a diff.
-- **`os/exec` closes argv injection but not the bigger hole: git runs code from the repo it is pointed
-  at.** `core.fsmonitor`, `diff.<name>.textconv` with a `.gitattributes` mapping, `filter.<name>.clean`
-  and `core.hooksPath` are all read from a repository's own config, and git spawns them itself — argv
-  quoting is irrelevant. A first automatic `git status` on a hostile clone is enough. Every invocation
-  must therefore go through one wrapper that passes
-  `-c core.fsmonitor= -c core.hooksPath=<empty> -c core.pager=cat -c core.askPass= -c credential.helper= -c diff.external= -c protocol.ext.allow=never --no-optional-locks`,
-  sets `GIT_CONFIG_NOSYSTEM=1 GIT_ATTR_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=`, and uses
-  `--no-textconv` on diff and blame. Two rules from the reference still apply on top: **spawn `git.exe`
-  directly** (never through `cmd /C`, which reopens the metacharacter hole on Windows) and set
-  `CREATE_NO_WINDOW` so no console flashes.
-- **The confinement set must not be derived from `cmd:cwd`.** A block's cwd is a meta key
-  (`durableshellcontroller.go:234`), meta is writable over RPC with no allowlist
-  (`pkg/wshrpc/wshserver/wshserver.go:148-156` `SetMetaCommand` → `wstore.UpdateObjectMeta`), and the CLI
-  to write it ships inside every block (`cmd/wsh/cmd/wshcmd-setmeta.go:20`). One line in a hostile repo's
-  build script — `wsh setmeta -b this cmd:cwd=/` — would widen the trust set to the whole filesystem.
-  Derive the set from repo roots the **user** explicitly opened in a `view:vcs` block, recorded
-  server-side and never updated from meta.
-- **Confinement must resolve symlinks.** `filepath.Clean`/`Abs` plus a `..` reject cannot detect a
-  symlink pointing out of the tree; use `filepath.EvalSymlinks` on the resolved path.
-- **Worktree paths are the one legitimate exception to confinement**, and it has to be written down
-  rather than discovered: a new worktree is by definition outside every existing block cwd (the
-  conventional layout is a sibling `../repo.worktrees/feature-x`) and does not exist yet, so resolution of
-  the leaf fails outright. Without an explicit policy the implementer will exempt the worktree RPCs, which
-  turns `git worktree add` into an arbitrary-location directory write and `remove --force` into a delete.
-- **`git status --porcelain` paths are relative to the repo root, not the block's cwd**, and porcelain v1
-  C-quotes unusual names. Use `--porcelain=v1 -z` (and `-z` on `diff --name-status`) so paths arrive as
-  opaque byte strings, then never treat a path as displayable text without sanitising it: git permits any
-  byte except NUL and `/` in a component, including CR, LF and ESC.
-- **Commit through `git commit -F <tempfile>` with 0600 perms.** The reference writes a world-readable
-  temp file; that is a defect not to inherit.
-- **Changelists are a small, complete spec** worth porting rule-for-rule from
-  `claude-terminal/src-tauri/src/changelists.rs` (330 LOC, ~185 of it tests):
-  - `Default` is **synthetic** — any file with no row belongs to it; it is never created, never
-    persisted, never deletable, and is prepended to every list.
-  - Names: non-empty after trim, ≤ 80 chars, `"Default"` reserved case-insensitively,
-    `UNIQUE(repo_path, name)` so the same name may exist in two repos.
-  - Assignment is an UPSERT on `(repo_path, file_path)` — a file moves, never duplicates. Assigning
-    `null` deletes the row, i.e. back to Default.
-  - Deleting a changelist cascades its file rows.
-  - **Worktrees isolate for free** because `repo_path` is the worktree path.
-  - Mappings survive commits because nothing deletes rows on commit. That is the whole of "sticky".
-- **The checkbox semantics are the contract, not decoration:** checked = staged, unchecked = unstaged,
-  indeterminate = partially staged. Group checkboxes act on the group. Files named after Windows
-  reserved devices (`nul`, `con`, …) cannot be indexed by git — disable their checkbox and skip them in
-  group toggles. That guard comes free by copying, and matters on the priority platform.
-- **`pullWithStashConfirm` is the right division of labour**: call pull with `autoStash: false`; if the
-  error says the working tree is dirty, ask the user, then retry with `autoStash: true`. The backend owns
-  stash/pull/pop atomicity; the frontend owns consent only.
-- **Cap the diff.** The reference stops at 100 KB and flags binary / new / deleted separately.
-- **Worktrees are the ADE's isolation primitive.** Every serious product in the category isolates an
-  agent per worktree or per branch, and "open an agent terminal in this worktree" is the single action
-  that turns worktree management into a workflow. Detect a worktree by comparing `git-dir` with
-  `git-common-dir`.
-- **Two cheap wins the category leader lacks:** git graph (18 reaction-votes on its tracker) and blame
-  (13). Both are read-only and land naturally once the git layer exists.
-- **Where the code goes:** new RPC families append to `WshRpcInterface`
-  (`pkg/wshrpc/wshrpctypes.go`, interface closes at `:215`), following the pet / ai tools / agent teams
-  grouping. `pkg/service`'s `ServiceMap` is the older mechanism and only needed for bootstrap-time
-  synchronous calls.
+Close agent work → review → explicit commit/push with a Go Git layer, sticky changelists, worktree lifecycle, and Monaco diff. Preserve original named scope: stage/unstage/discard/commit, branch create/checkout, remote preview/push/pull/stash, graph/blame, worktree create/remove/open-agent. Serial dependency phase 5 includes foundations 1–4; launch/session identity now exists to attribute work. Read [architecture contract](./architecture-contract.md). Owner: VCS maintainer, sole owner of shared RPC/migrations/view registration/config in this phase.
 
 ## Requirements
 
-**Functional**
+- Explicit repository-open action grants scoped read access; separate trust confirmation authorizes writes/setup hooks. Neither block cwd/meta nor agent messages expand authorization. Trusted repository is **not a sandbox**.
+- Canonical repository/worktree identity on execution host; server enforces containment before reads and mutations, including symlink/Windows case/UNC/junction/nonexistent target-parent cases. Paths in Git output retain raw identity separately from escaped display.
+- Passive reads do not execute repo-controlled fsmonitor/textconv/external diff/hooks; trusted writes retain intentionally approved hooks/filters/signing/auth helpers. Use direct Git executable, safe argv and deadlines, not shell strings.
+- Stage, unstage, partially staged checkbox; group operations reflect actual index, not local optimistic state. Sticky per-worktree changelists with synthetic undeletable Default; name trim/80-char/reserved/unique rules; assignment UPSERT, deletion cascade.
+- Whole-file diff and staged/unstaged toggle; binary/new/deleted/rename/type-change/submodule summaries. 100KB rendered diff cap with visible larger-file explanation; raw retrieval bounded separately.
+- Worktree create accepts explicit start ref and resolves immutable starting SHA. Async setup has pending/creating/setup-running/ready/failed/cancelled states, logs and explicit retry. No agent dispatch until ready.
+- Review includes starting SHA→current HEAD plus staged/unstaged/untracked changes; `git diff HEAD` alone misses committed agent work. Attribution is best-effort based on owned worktree/attempt, not proof one author made every edit.
+- No automatic environment/secret sharing. Setup commands are user-trusted executable code, displayed with cwd/env names and confirmation. Dedicated app-owned worktree root, no whole-parent default authorization.
 
-- For a block in a git repo: see changed files grouped as Changes / named changelists / Unversioned,
-  stage and unstage per file and per group, commit, push, pull, stash, discard.
-- View a file's diff, staged or unstaged, inline or side-by-side.
-- Create, rename, delete changelists and move files between them; assignments survive commits.
-- List, create and remove worktrees, and open an agent block directly in one.
-- Nothing outside the user-opened repo-root allowlist can be read or written through these RPCs, and the
-  allowlist cannot be widened by anything running inside a PTY.
-- Worktree create/remove operate under an explicit, separately-validated root policy, not an exemption.
-- A hostile repository's own config cannot cause git to execute anything.
+## Architecture / data flow
 
-**Non-functional**
+User-opened repo → server trusted-root record → hardened read commands → parsed NUL-delimited identities/snapshot → VCS tree/Monaco. Mutation request includes repo ID, expected status/revision, operation and explicit confirmation → per-repo lock → canonical-path recheck + typed Git argv → exit/output receipt → fresh snapshot. Error stderr is escaped/bounded; credential values never logged.
 
-- All git work in Go; no Rust, no shell interpolation.
-- A repository whose branch and file names contain shell metacharacters is handled safely, and a
-  repository carrying a poisoned `core.fsmonitor` / `textconv` / `filter.clean` config executes nothing —
-  both proven by a fixture test that asserts a sentinel file was never created.
-- No git-derived path reaches a terminal, a card preview or a prompt without control characters stripped.
-- Diffs above 100 KB are refused with a clear message rather than rendered.
-- Path confinement is unit-tested at its boundaries, not only through the UI.
+One `pkg/vcs/gitexec.go` dispatcher has **read** and **trusted-write** profiles. Read profile neutralizes fsmonitor/external diff/textconv/pagers and environment config injection, disables optional locks/prompts, and uses only reviewed read commands. Do not promise `git add` is passive: filters execute during writes. Write profile requires execution trust, retains approved helper/hooks/filter behavior and bounded auth interaction; never stores credentials. Use explicit trust UI rather than silently disabling user signing/hooks to make tests pass. Tests prove passive reads create no sentinel; trusted write tests prove intentional hooks/auth still work. Raw leading-dash paths use `--` / literal pathspec handling; Git refs validated with Git's ref rules rather than invented invalid fixtures.
 
-## Architecture
+Worktree job → resolve starting ref/SHA → allocate under canonical configured root → create branch/worktree → persist identity/ownership → optional consented setup process → readiness. Existing worktree import checks Git's actual list and ownership. Remove verifies listed non-primary owned worktree, no running associated process and dirty/untracked state; forced remove separate confirmation. Interrupted setup is recoverable, never silently deleted. Cleanup does not remove branches/worktrees just because app exits.
 
-```
-pkg/vcs/
-  repo.go         root resolution (rev-parse --show-toplevel), worktree detection
-  status.go       porcelain parse → {root, entries[]}, staged/unstaged/partial per file
-  stage.go        stage / unstage / discard
-  commit.go       commit -F tempfile(0600), last-commit info
-  remote.go       upstream, ahead/behind, push preview, push (normal | set-upstream | force-with-lease)
-  pull.go         pull with explicit autoStash, atomic stash→pull→pop
-  stash.go        list / push / apply / pop / drop
-  branch.go       list / create / checkout
-  worktree.go     list / create / remove
-  diff.go         file diff (staged|unstaged) with a size cap and binary/new/deleted flags
-  changelists.go  the ported spec + its tests
-  trust.go        repo-root allowlist + EvalSymlinks confinement, shared with pkg/claudesession
-  gitexec.go      the single hardened invocation wrapper (see Key Insights) — every call goes through it
-  sanitize.go     path/text sanitiser for anything git-derived that reaches a UI or a PTY
-frontend/app/view/vcs/
-  vcs.tsx, vcs-model.ts        block view
-  changelist-tree.tsx          tri-state checkbox tree
-  push-modal.tsx, worktree-modal.tsx
-frontend/app/view/codeeditor/diffviewer.tsx   finally given a consumer
-```
+Pull with stash is a multi-step workflow, **not an atomic transaction**. Save exact stash object ID and pre-operation refs; failure/conflict retains stash and recovery instructions. No automatic reset/pop retry or blind stash drop. Force push is only `--force-with-lease` after preview/confirmation and fresh lease.
 
-Trust model, shared with phase 5: canonicalise with `filepath.Clean`/`Abs` **and `EvalSymlinks`**, reject
-`..` traversal, absolute escapes and NUL bytes, then require containment within the **repo-root
-allowlist** — roots the user explicitly opened in a `view:vcs` block, recorded server-side by block OID and
-never derived from or updated by block meta. Enforced before **every** mutation, in one place.
+## Files
 
-Worktree exception, stated explicitly so phase 7's "must pass phase 6's confinement check" resolves to
-something real: a `vcs:worktreeroots` setting defaulting to `<repo-root>/.worktrees` plus the repository's
-parent directory. For **create**, resolve symlinks on the *parent*, require the leaf to be nonexistent or
-empty, and require the resolved parent to sit inside a configured root. For **remove**, accept only paths
-that appear verbatim in this repository's `git worktree list --porcelain` output, and never pass `--force`
-without separate confirmation.
+Existing sources:
+- `frontend/app/view/codeeditor/diffviewer.tsx:39` existing diff renderer; new consumer rather than second renderer.
+- `pkg/util/procutil/procutil.go:38,55`, `procutil_windows.go:18` safe hidden process helper; `.ps1` is not a batch shim.
+- `pkg/wshrpc/wshrpctypes.go:31`, `Taskfile.yml:228`, generated client/type files in architecture contract.
+- `pkg/wstore/wstore_dbsetup.go:28-36`, next available `db/migrations-wstore/` pairs for repo grants/changelists/worktree lifecycle.
+- `frontend/app/block/block.tsx:54-55` lazy registry pattern, existing widget/config schema files, phase-4 adapter launches and phase-5 session records.
+New proposed:
+- `pkg/vcs/{repo,trust,gitexec,status,stage,commit,remote,pull,stash,branch,worktree,setup,diff,changelists,display}.go` and focused tests. Split only as actual code size merits; no empty scaffolding packages.
+- `pkg/wshrpc/wshserver/wshserver_vcs.go`; `frontend/app/view/vcs/{vcs.tsx,vcs-model.ts,changelist-tree.tsx,push-modal.tsx,worktree-modal.tsx}`.
+Read-only reference: `/home/stackops/saly/claude-terminal/src-tauri/src/changelists.rs:2,16,326`, local `FileChangesPanel.tsx`, `ChangelistSection.tsx`, `PushModal.tsx`, `WorktreeModal.tsx` (UI references; reverify exact function lines before porting). Adapt tests/contract, not monolithic Rust logic.
 
-Diff rendering reuses Monaco through the existing `diffviewer.tsx` rather than porting the reference's
-hand-rolled hunk parser — SLTerm already ships the editor, so the parser would be duplicate machinery.
-Per-hunk accept/reject is a phase 7 concern; this phase delivers whole-file staging.
+## Steps
 
-## Related Code Files
+1. Write hostile-repo/path/read-vs-write trust tests and register canonical grants via explicit UI-owned action. Existing wsh generic meta cannot grant VCS rights; worker RPC permissions are narrower than UI grants. Same-user arbitrary code remains outside sandbox claim.
+2. Implement typed command wrapper profiles, output/time caps, cancellation and operation receipts. Inventory command-specific execution side effects before allowing a command as passive.
+3. Parse status `-z`, rename pairs and raw identity without lossy Unicode/control stripping; distinct display escaping. Handle unavailable Git, unborn HEAD, detached HEAD and nested repos explicitly.
+4. Add staging/discard/commit/branch actions with index refresh and stale-revision rejection; private commit message tempfile (0600 Unix, user-only ACL Windows), deleted afterwards.
+5. Add remote preview/push/pull/stash; progress and recoverable conflict states; helpers/signing remain user-owned, timeout doesn't imply atomic rollback.
+6. Persist sticky changelists with reference behavioral tests adapted to Go and real SQLite; reconcile rename/deleted paths without mutating unrelated entries.
+7. Build Monaco whole-file diff, limits and type states. Add graph/blame as bounded, paginated passive reads. No new full Git client/rebase engine.
+8. Implement worktree create/setup/retry/cancel/remove and starting SHA receipts, then launch Claude/Codex through phase-4 adapter after readiness. Worktree setup process shares owned-process registry.
+9. Build composable VCS surface and trust/consent UI; all mutations awaited and statuses refreshed. Add source-range review for committed + current edits and integration receipts consumed by phase 10.
 
-- Create: `pkg/vcs/*.go` + tests (including a hostile-repo fixture)
-- Create: `frontend/app/view/vcs/{vcs.tsx,vcs-model.ts,changelist-tree.tsx,push-modal.tsx,worktree-modal.tsx}`
-- Modify: `frontend/app/view/codeeditor/diffviewer.tsx` (wire it up; keep `editor:inlinediff`)
-- Modify: `pkg/wshrpc/wshrpctypes.go` (VCS command family + structs), then `task generate`
-- Modify: `pkg/wconfig/defaultconfig/widgets.json` (a `view:vcs` widget), `settings.json` (`vcs:*`:
-  autostage mode, diff cap, refresh interval)
-- Modify: `pkg/wstore` / migrations for the two changelist tables
-- Reference (read-only): `/home/stackops/saly/claude-terminal/src-tauri/src/changelists.rs`,
-  `src/components/{ChangelistSection,FileChangesPanel,InlineDiffView,PushModal,WorktreeModal}.tsx`,
-  `src/utils/diffParser.ts`, `commands.rs:838-869` (the exec rule),
-  `docs/superpowers/specs/2026-06-12-intellij-git-commit-panel-design.md`,
-  `2026-05-21-git-push-popup-design.md`, `2026-06-11-verified-review-cockpit-design.md`
+## Test matrix
 
-## Implementation Steps
+| Level | Cases | Result |
+|---|---|---|
+| Unit | porcelain rename/NUL/leading dash/non-UTF8/control chars; valid ref with metacharacters | exact raw path preserved, safe display/argv |
+| Unit | symlink escape/junction/case/UNC/nonexistent parent; forged block cwd | no grant expansion or outside write |
+| Integration real temp repos | fsmonitor/textconv/external diff sentinels on status/diff/blame | no repo code execution for passive reads |
+| Integration trusted repos | commit hook/signing/helper/filter enabled with consent | expected behavior works, bounded failure visible |
+| Integration | partial stage, sticky list, deleted list, rename, two worktrees | index truth and isolated assignment persist |
+| Integration | worktree async setup fail/retry, duplicate request, starting ref moves, committed+dirty edits | idempotent create; captured SHA stable; complete review |
+| Integration | dirty pull/stash-pop conflict/push lease rejection/disk full | no work/stash loss; actionable recovery |
+| E2E Windows then macOS/Linux | status→review→stage→commit→push, worktree→both providers | normal workflow stays in app, unrelated files/processes untouched |
 
-1. **6.1 Trust model and the hardened wrapper first.** `pkg/vcs/trust.go` (repo-root allowlist,
-   `EvalSymlinks`) with boundary tests: `../../etc/passwd`, an absolute path outside every root, a symlink
-   pointing out, a NUL byte, a legitimate subdirectory that must be allowed, and an assertion that
-   `wsh setmeta -b this cmd:cwd=/` cannot widen the set. Plus `pkg/vcs/gitexec.go`: the single wrapper with
-   the hardening flags and env from Key Insights, a mandatory context timeout, and
-   `CreationFlags: CREATE_NO_WINDOW` on Windows. Nothing else in this phase is safe to write before both
-   exist. If phase 1's exec helper has not landed, write it here and have phase 1 adopt it — do not
-   improvise with `cmd /C`.
-2. **6.2 Repo + status.** Root resolution, worktree detection via `git-dir` vs `git-common-dir`, and
-   `--porcelain=v1 -z` parsing that returns the root explicitly plus a per-file staged / unstaged /
-   partial state. Route every path through `sanitize.go` before it reaches the UI.
-3. **6.3 Mutations.** Stage, unstage, discard, commit via a 0600 tempfile, branch create/checkout. Every
-   call goes through the trust check and `gitexec.go`.
-4. **6.4 Remote.** Upstream resolution, ahead/behind, push preview (commits about to go out, upstream,
-   mode), push with normal / set-upstream / force-with-lease. Pull with explicit `autoStash`, and the
-   stash→pull→pop atomicity owned in Go.
-5. **6.5 Changelists.** Two tables keyed on the normalised repo root, the synthetic `Default`, the UPSERT
-   assignment, the cascade, the name rules. **Port the reference's tests verbatim** — they encode the
-   whole specification, including the worktree-isolation case.
-6. **6.6 Diff.** `git diff` per file with the staged/unstaged toggle, size cap, and binary/new/deleted
-   flags. Feed Monaco's diff editor.
-7. **6.7 Worktrees.** List / create (branch + base + path) / remove, under the explicit
-   `vcs:worktreeroots` policy in Architecture — not as a confinement exemption. Then the action that opens a
-   `claude` or `codex` block with its cwd set to the worktree, which is what makes this an ADE feature
-   rather than a git GUI. Opening a worktree adds its root to the allowlist; nothing else does.
-8. **6.8 `view:vcs`.** Header (branch, ahead/behind, refresh), the tri-state changelist tree with the
-   Windows-reserved-name guard, toolbar (stage all, commit, push, pull, stash), and the diff pane. Build
-   it as composable pieces; the reference's equivalent is a 1,430-line monolith and should not be copied
-   as one file.
-9. **6.9 Consent patterns.** `pullWithStashConfirm`; confirm on discard and on force-push; make
-   `vcs:autostage` (`none` | `tracked` | `all`) an explicit setting rather than implicit behaviour.
-10. **6.10 Read-only extras.** Git graph and blame, both behind the same status refresh. Cheap, and both
-    are gaps in the category leader.
+Commands at implementation: `go test ./pkg/vcs` with real Git fixtures; focused frontend suites; migration tests; `task generate`, typecheck, full Go/frontend tests. Remote/credential helper smoke needs controlled test account, never production secrets in fixtures.
 
-## Todo
+## Success criteria
 
-- [ ] 6.1 `trust.go` (repo-root allowlist + EvalSymlinks) and `gitexec.go` (hardened wrapper) + tests
-- [ ] 6.2 Repo root, worktree detection, `-z` porcelain status with the root returned, paths sanitised
-- [ ] 6.3 Stage / unstage / discard / commit (0600 tempfile) / branch
-- [ ] 6.4 Upstream, ahead/behind, push preview, push modes, pull with explicit autoStash
-- [ ] 6.5 Changelists with the reference's tests ported verbatim
-- [ ] 6.6 Diff with size cap and binary/new/deleted flags, rendered through Monaco
-- [ ] 6.7 Worktree list / create / remove under `vcs:worktreeroots` + "open an agent here"
-- [ ] 6.8 `view:vcs` block + widget, composed not monolithic
-- [ ] 6.9 Consent patterns and the `vcs:autostage` setting
-- [ ] 6.10 Git graph and blame
+- [ ] Passive reads execute no sentinel; trusted commit/push retains approved hooks/auth and reports failure honestly.
+- [ ] Raw path and escaped display identities remain distinct end-to-end; control characters cannot inject PTY input.
+- [ ] All Git mutations require authorization, expected revision and confirmation where destructive.
+- [ ] Changelist rules, partial staging, graph/blame and bounded Monaco diff work on supported OSes.
+- [ ] Worktrees record start SHA/ref, setup lifecycle, ownership and cleanup outcome; no auto env/secret copying.
+- [ ] Agent commits plus unstaged/staged/untracked edits are all visible in review.
+- [ ] Pull/conflict failure preserves exact stash/worktree state and gives manual resolution guidance.
+- [ ] Claude and Codex launch only after chosen worktree is ready; removal refuses active work.
 
-## Success Criteria
+## Risk / compatibility / rollback
 
-- [ ] A repo with a file named `a & b.txt` and a branch named `;rm -rf /` stages, commits and pushes
-      correctly, proven by a test
-- [ ] A fixture repo whose config sets `core.fsmonitor` / `textconv` / `filter.clean` to a payload that
-      would create a sentinel file: status, diff and blame all run and the sentinel does **not** exist
-- [ ] A file whose name contains CR, LF and ESC renders safely in the tree and cannot inject into a PTY
-- [ ] `wsh setmeta -b this cmd:cwd=/` from inside a block does not widen what the VCS RPCs may touch
-- [ ] A block whose cwd is a subdirectory shows correct paths for the whole repo
-- [ ] Changelist assignments survive a commit and a worktree switch
-- [ ] Path confinement rejects `../../etc/passwd`, an absolute path outside every allowlisted root, and a
-      symlink pointing out of the tree
-- [ ] `git worktree add` outside `vcs:worktreeroots` is refused; `remove` accepts only a path git lists
-- [ ] The commit message tempfile is 0600 and is removed afterwards
-- [ ] A 5 MB diff is refused with a message, not rendered
-- [ ] Creating a worktree and opening a `claude` block in it takes one action
-- [ ] `nul.txt` on Windows shows a disabled checkbox instead of failing a group stage
-- [ ] `diffviewer.tsx` has at least one real consumer
+High × high: data loss from stale index/remove/pull → per-repo lock, expected revision, explicit confirmation, retained stash refs and destructive-operation tests. Medium × high: repository-controlled executable hooks → passive/trusted-write profiles, explicit trust; do not call worktree a sandbox. Medium × high: auth stalls → approved bounded helper flow, visible terminal-assisted recovery. Medium × medium: status cost → one coalesced refresh per root, focus/file-change refresh, pagination; never poll per block.
 
-## Risk Assessment
-
-- **Path confinement is the one place a mistake is a security bug**, not an annoyance. Too tight blocks
-  legitimate work; too loose lets a compromised webview operate on arbitrary paths. *Signal:* users hit
-  "outside trusted path" on ordinary files, or a test can reach outside. *Response:* unit-test the
-  boundary directly, and log every rejection with the resolved path so misconfiguration is diagnosable.
-- **The exec helper's absence invites the wrong fix.** If `gitexec.go` is not in place first, the obvious
-  way to hide the Windows console flash is `cmd /C start /b git …`, which reintroduces the injection hole
-  in the module whose success criterion claims metacharacters are safe. *Response:* 6.1 builds the wrapper
-  before any git call site exists, and the frontmatter now declares `dependencies: [1]`.
-- **Credential prompts hang the RPC.** Without `GIT_TERMINAL_PROMPT=0` and an empty `GIT_ASKPASS`, a push
-  to a remote needing credentials blocks forever on a pipe with no TTY. *Response:* both are set in
-  `gitexec.go`, and every invocation carries a context timeout.
-- **Destructive operations.** Discard, force-push and worktree removal all lose work.
-  *Response:* confirmation on each, force-push restricted to `--force-with-lease`, and worktree removal
-  refuses when the worktree is dirty unless explicitly confirmed.
-- **Status refresh cost.** Polling `git status` per block in a large repo is expensive.
-  *Signal:* CPU load with several blocks in one big repo. *Response:* one status per repo root, shared
-  across blocks, refreshed on focus and on file-change events rather than a fixed timer.
-- **The changelist port looks like plumbing and is actually a spec.** *Mitigation:* the tests come first;
-  if a rule is unclear, the test in the reference is the answer.
-- **Scope creep into a git client.** Interactive rebase, cherry-pick, submodules and conflict resolution
-  are out. The goal is reviewing what an agent just did. *Response:* if a conflict arises, say so and let
-  the user resolve it in the terminal.
-
-## Security Considerations
-
-- Spawn `git` directly, never via `cmd /C` — routing a real `.exe` through the shell is what would
-  reintroduce metacharacter injection from hostile branch and path names on Windows.
-- Argv quoting is **not** the main hostile-repo risk. Git executes programs named by a repository's own
-  config (`core.fsmonitor`, `diff.<n>.textconv` + `.gitattributes`, `filter.<n>.clean`, `core.hooksPath`),
-  which is why every invocation goes through `gitexec.go` with those settings neutralised and
-  `GIT_CONFIG_NOSYSTEM` / `GIT_ATTR_NOSYSTEM` set. Add a repo-trust gate: an unfamiliar root is read-only
-  until the user confirms it.
-- The trust set is server-side state seeded only by an explicit user action. Never read it from block meta:
-  `SetMetaCommand` has no allowlist and `wsh setmeta` ships inside every terminal.
-- Git-derived paths are untrusted bytes. `-z` output plus one sanitiser (drop C0/C1 and ESC, never emit CR
-  or LF, cap length) before anything reaches the UI, a prompt, or a PTY.
-- Every mutation passes the trust check before touching the filesystem; the check lives in one function
-  so it cannot be forgotten at a call site.
-- Commit messages are written to a 0600 tempfile in a private directory and deleted after use.
-- Never render a diff of a file outside the confinement set, even read-only — that is an exfiltration
-  path for a compromised renderer.
-- Push credentials are git's own (helpers, agents, tokens); this layer must not read, store or forward
-  them.
-
-## Next Steps
-
-Phase 7 builds per-hunk accept/reject and routes review comments back to the agent on top of this
-layer, and binds workspaces to the worktrees created here.
-
+Additive new tables/optional VCS view preserve existing workspaces. Rollback disables VCS mutations/setup first, stops only owned setup jobs, preserves worktrees/branches/stashes/changelists and opens them in terminal; never auto-delete to undo a failed phase. SQL downgrade is backup-based with user consent. Phase 7 adds contextual review UX/hunks; phase 10 reuses this worktree/readiness/integration service.

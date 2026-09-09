@@ -3,269 +3,125 @@ phase: 4
 title: "Phase 4: Agent state and notifications"
 status: todo
 priority: P1
-effort: "1-2w"
-dependencies: [1]
+effort: "3-4w"
+dependencies: [3]
 ---
 
 # Phase 4: Agent state and notifications
 
 ## Overview
 
-Make an agent's state legible without clicking into its pane: **working / waiting / done / idle /
-stopped**, as a glyph on every block header and tab, plus one OS notification when an agent starts
-waiting for you. This is the smallest, highest-leverage ADE feature in the plan — the landscape survey
-found it in every serious product in the category, and the reference implementation is ~185 LOC of pure
-frontend TypeScript with no backend at all.
+Build the shared Claude/Codex capability and managed-launch foundation, backend-owned agent observations and reliable attention notifications. This is not a frontend-only classifier port. Block rendering may unmount while its agent continues; status must remain useful in cold tabs and multiple windows.
 
-It comes before the session layer deliberately: the state model is the substrate the agent board
-(phase 7), the notifications here, and the session HUD (phase 5) all read from.
-
-## Key Insights
-
-- **The reference heuristic is frontend-only and reads xterm's already-parsed buffer.** No PTY tap, no
-  Rust, no Go. Full rule from `claude-terminal/src/lib/terminalState.ts` +
-  `src/hooks/useSessionStateDetection.ts`:
-  `stopped` if the process exited → else `busy` if any byte arrived in the last **600 ms** → else
-  classify the last **15 buffer rows** → else keep the previous state. Poll every **500 ms**, one
-  global interval for all terminals.
-- **The classifier is three ordered rules**, and its documented bias is to guess `idle`:
-  1. explicit blocking phrases win immediately — `Do you want to proceed?`,
-     `Do you trust the files in this folder?`, `(y/n)`, `[y/n]`;
-  2. if a plain input box is visible (`? for shortcuts`, or a lone `>` line) it is `idle`, even if a
-     numbered list from the last response is still on screen;
-  3. a selection menu is `waiting` only when **two or more** option lines exist **and** one carries the
-     `❯` cursor — the cursor is what separates a live picker from a finished response.
-  *"A missed prompt is a minor annoyance; a false 'needs attention' alarm erodes trust in the whole
-  feature."*
-- **The activity clock is deliberately not in the state store.** `markTerminalActive(id)` writes into a
-  module-level plain `Map` because the output handler runs thousands of times per second on streaming
-  chunks and a store write would re-render on every one.
-- **Notifications need four gates**, all present in the reference: rising edge only
-  (`prev !== 'waiting'`), not the focused active pane, not inside a do-not-disturb window, and
-  one-notification-per-waiting-episode with re-arm on exit.
-- **`translateToString(true)`** is what makes this cheap — xterm hands back clean text with no ANSI and
-  no trailing whitespace, so the regexes never see escape sequences.
-- **SLTerm's notification mechanism has a CLI caller and no owner after phase 3.** `NotifyCommand` is
-  declared (`pkg/wshrpc/wshrpctypes.go:122`, payload `:495`, generated clients at `wshclient.go:605` and
-  `frontend/app/store/wshclientapi.ts:501`) and **`wsh notify` already calls it** on the host route
-  (`cmd/wsh/cmd/wshcmd-notify.go:42`). The `host` route id is
-  `frontend/app/store/wshrpcutil-base.ts:17` and its **only** registrant is `initElectronWshrpc`
-  (`:121-132`), whose client is `emain/emain-wsh.ts` — which phase 3 deletes. So the owner of this route
-  is a **frontend** Tauri client (`initHostWshrpc`), added in phase 3, whose handlers `invoke` into Rust.
-  There is no "Rust-side wshrpc handler" to build: `src-tauri/src/` has no websocket, no wsh client and
-  no notification plugin, and adding one would put business logic in the shell.
-- **Reuse the existing in-app notification surface.** `frontend/app/notification/usenotification.tsx`
-  and `atoms.notifications` already exist and are coupled to the Electron bridge at
-  `usenotification.tsx:10`. Extend that, rather than standing up a second parallel policy path.
-- **The heuristic can only see mounted blocks, and the warm-tab cap is 2.** The classifier reads xterm's
-  buffer, and `frontend/app/workspace/workspace.tsx:44-49,57,62,94` renders `TabContent` only for tabs
-  inside `mountedTabIds`; a tab outside the warm set has no xterm instance at all. So a long-running
-  agent in a cold tab produces no state, no glyph and no notification — the exact case the feature exists
-  for. This is a boundary the phase must state and then close, not a detail.
-- **`block:jobstatus` is the wrong `stopped` signal for agent blocks.** The claude and codex widgets are
-  `"controller": "cmd"` (`pkg/wconfig/defaultconfig/widgets.json:19,33`), and jobs exist only for durable
-  *shell* blocks (`pkg/blockcontroller/blockcontroller.go:177`). The event is published by
-  `pkg/jobcontroller/jobcontroller.go:221`. The signal that already reports an agent's exit is the
-  controller runtime status — `BlockService.GetControllerStatus` feeding `shellProcFullStatus` in
-  `frontend/app/view/term/term-model.ts:219,364,374`.
-- **Today's only "needs input" signal is the terminal bell.** `termwrap.ts:209-224` sets a tab
-  indicator on BEL. It fires for any program, is tab-scoped rather than block-scoped, and requires the
-  agent to emit BEL at all. It reaches the shell over the same `host` route, so it breaks with `emain/`
-  unless phase 3's replacement lands.
-- **The heuristic's known failure mode is documented by the category leader.** Orca infers state from
-  OSC titles plus agent hooks and still has an open bug where slow agent startup false-positives idle
-  and loses an injected dispatch. Prefer an explicit signal (OSC title, or an agent hook) when one is
-  available and treat the text heuristic as the fallback, not the primary.
-- **The patterns are English-only and track Claude Code's TUI.** The reference keeps
-  `WAITING_PATTERNS` exported specifically so it is tunable when the TUI changes. Put it in config, not
-  in a compiled constant.
-- **`cmd:interactive` and `cmd:login` are dead meta keys.** The `claude` and `codex` widgets both set
-  them (`pkg/wconfig/defaultconfig/widgets.json:15-46`); they are declared in
-  `pkg/waveobj/metaconsts.go:42-43` and read by no Go code. An agent-aware block needs a real marker,
-  so either wire these or add one.
-- **A hand-launched agent is a real case the marker design excludes.** Typing `claude` in an ordinary
-  terminal block gives it no agent meta, so no glyph and no notification; and phase 5's resume flags and
-  OTEL env go through `createCmdStrAndOpts`, which `pkg/blockcontroller/shellcontroller.go:425-431` calls
-  only on the `BlockController_Cmd` branch — the shell branch at `:415-424` never sees it. This phase must
-  decide the boundary explicitly rather than leave it to be discovered.
+Read [architecture contract](./architecture-contract.md), especially identity, lifecycle, trust and terminal invariants. Blockers: completed shell/process teardown, Tauri host-route replacement and phase-3 performance baseline. Owner: one agent-runtime maintainer; shared RPC/config/controller files exclusively owned here until handoff to phase 5.
 
 ## Requirements
 
-**Functional**
+- Both Claude Code and Codex discover/launch in existing PTYs; explicit provider marker and profile, never inference from command text alone. Record host, cwd, provider home, CLI version, requested/effective preferences and generation.
+- Capabilities distinguish interactive TUI from structured execution, hooks, explicit session IDs/resume, usage and config support. Codex app-server is a separately owned integration, not a passive TUI observer.
+- Process states and agent states are distinct. UI vocabulary: starting, working, needs-you, idle, turn-done, stopped, failed, unknown/stale. No claim that silence means task success.
+- Backend snapshots continue without mounted xterm. Hooks/structured provider events are stronger observations; process exit overrides stale working hints. OSC and mounted-buffer heuristic are advisory only, not approval/readiness authority. When no verified authoritative signal exists, fail closed to `unknown/stale`; never promote a heuristic guess to exact needs-you/turn-done.
+- Hand-typed agents may be marked for observation. Explicit managed relaunch is required for spawn-only hooks/session identity/usage. Promotion must not silently kill the current shell.
+- One waiting-episode notification across all windows; suppress for focused agent, DnD (including overnight), denied OS permission and already-delivered episode. Notification content is generic and bounded; no private transcript snippets.
+- Live terminal delivery is ordered and byte-preserving with bounded backpressure; no per-byte Jotai writes, destructive line dedup or provider parsing in Rust. Durable history advances only across acknowledged contiguous writes. Storage timeout/full disk closes the current segment with a visible gap, keeps live rendering responsive, and starts a new segment only after recovery; no gapped history is labeled complete or lossless.
+- Observation capture has an explicit degraded contract. Queue overflow, hook timeout, endpoint loss, parser reset,
+  disk/storage failure or event-sequence gap marks that launch `degraded` with cause and last-good timestamp;
+  state falls back only to still-valid stronger sources, otherwise `unknown/stale`. Degraded capture can suppress
+  attention/completion notification but can never manufacture `idle`, `turn-done` or successful completion.
 
-- Every block running an agent carries a state glyph: working, waiting, done, blocked, idle, stopped.
-- For a block whose tab is **not** mounted (the warm-tab cap defaults to 2), state comes from an explicit
-  signal and the last known state persists; where no explicit signal exists, the guarantee is scoped to
-  mounted blocks and stated in the UI.
-- The glyph appears on the block header and on the tab that contains it, so a background tab still
-  shows that something needs attention.
-- Entering `waiting` raises exactly one OS notification, unless the user is already looking at that
-  pane or is inside a do-not-disturb window.
-- The waiting patterns are user-editable configuration, not compiled constants.
-- A plain shell block is not an agent block and shows no glyph.
+## Architecture and data flow
 
-**Non-functional**
+User launch/profile → Go capability adapter → immutable launch receipt + generation → existing controller/PTY. Provider observation (hook/structured event), process transition and bounded output-derived hint → backend reducer → versioned snapshot → Jotai glyphs/sidebar/board and notification delivery owner.
 
-- The output path takes no new per-chunk store write.
-- One poller for the whole app, not one per block.
-- The classifier is unit-tested against captured Claude Code and Codex screens, including a numbered
-  list that must classify as `idle`.
-- False `waiting` is treated as worse than missed `waiting`; the tests encode that bias.
+Introduce `pkg/agent/` with adapter descriptors and launch/state services. Store active handles in process memory keyed by launch ID; persist receipt and state needed for recovery in existing wstore. A block controller is reused across launches: allocation `pkg/blockcontroller/shellcontroller.go:72-83`, sole production constructor caller `pkg/blockcontroller/blockcontroller.go:233`. Never attach unfenced mutable provider state to a shared controller. Late read/wait callbacks compare active generation before updates.
 
-## Architecture
+Existing launch trace: command builder `pkg/blockcontroller/shellcontroller.go:427` → local `:522`, WSL `:442,460,466`, SSH `:475,493,499`. Shell-typed commands bypass builder. Output loop `:565-580` appends raw bytes; derive bounded hints on a separate path. Wait/status transition `:599-617` and explicit stop `:98-124` emit idempotent terminal outcome. Stop interface callers are `pkg/blockcontroller/blockcontroller.go:99,278,326`.
 
-```
-frontend/app/store/agent-state.ts        classifier (ported), state enum, config-driven patterns
-frontend/app/store/agent-activity.ts     module-level Map: markActive(blockId) / getLastOutputAt
-frontend/app/store/agent-poller.ts       one 500ms interval; reads term buffers, writes states
-frontend/app/element/state-dot.tsx       glyph + tooltip table
-frontend/app/notification/agent-notify.ts  4-gate policy, layered on the existing usenotification surface
-frontend/app/store/wshrpcutil-base.ts    host-route handlers (added in phase 3) gain notify
-src-tauri/src/notify.rs                  native toast via tauri-plugin-notification, no policy
-```
+Private managed-hook descriptor is atomically replaced per app generation. Hook reads descriptor every invocation, posts per-launch token, provider/session identity, generation and sequence. Validate size, timeout, expected host and active launch; reject stale/duplicate/spoofed ownership. Hook install is managed-entry merge with backup/CAS, removal only for own entries. Hook failure degrades state with diagnostics; never blocks provider indefinitely.
 
-State source, in priority order:
+Backend observations for cold tabs: provider callbacks or structured launch channel, plus process lifecycle. Interactive Codex without a verified explicit event remains live/stale/unknown rather than pretending exact waiting coverage. Frontend OSC handler alone cannot solve cold tabs. Optional bounded backend OSC observer must preserve original bytes and treat titles only as hints. Snapshot timestamps reveal freshness and unsupported precision.
 
-1. **explicit** — an OSC title the agent sets, or an agent hook writing a marker file. Trusted, and the
-   **only** source that works for a block whose tab is not mounted.
-2. **process** — the controller runtime status (`BlockService.GetControllerStatus` →
-   `shellProcFullStatus`, `term-model.ts:219,364,374`) → `stopped`. `block:jobstatus`
-   (`pkg/jobcontroller/jobcontroller.go:221`) applies only to durable shell blocks, not to the
-   `controller: cmd` agent widgets.
-3. **activity** — a byte within 600 ms → `working`.
-4. **text heuristic** — the classifier over the last 15 rows. Fallback only, and mounted blocks only.
+Capture health is a first-class sibling of agent state: `healthy | degraded | unavailable`, with cause,
+source, dropped/gapped sequence range and last-good observation. The reducer never treats absence after a gap
+as settled silence. A bounded derivation queue may coalesce superseded activity timestamps, but cannot drop
+process exits, questions or approval requests. Live PTY bytes continue to render in order; durable capture
+uses acknowledged contiguous offsets. The current source path has a two-second append deadline and logs then
+continues on failure (`pkg/blockcontroller/blockcontroller.go:48,365-370` and
+`pkg/blockcontroller/shellcontroller.go:565-580`), so implementation must replace that silent-loss behavior:
+on append failure, record a visible gap/degraded segment boundary, never advance persisted/replay offsets past
+the missing range, and resume into a new segment only after storage acknowledgment. On observer overload,
+mark degraded before losing semantic observations, pause confidence-dependent notifications, request
+snapshot/resync where supported and remain unknown until a fresh authoritative snapshot closes the semantic
+gap. The UI shows capture health on tooltip/sidebar/board; diagnostics are bounded and contain no transcript
+body.
 
-Cold blocks: the last known state is persisted per block id so a glyph survives unmounting, and the
-explicit signals in level 1 keep updating it. If neither an OSC title nor a hook is available for an
-agent, the phase's guarantee is scoped to mounted blocks and says so.
+## Related code files
 
-Which blocks are agents: a block is agent-aware when its meta marks it so. Wire the existing
-`cmd:interactive` / `cmd:login` keys, or add an explicit `agent:kind` meta set by the `claude` and
-`codex` widgets. Do not infer from the command string — an agent launched through a wrapper script
-would be missed. A block launched by hand (`claude` typed into a shell block) gets a "treat as agent"
-action that sets the meta; resume and cost tracking additionally need a respawn, because both are
-spawn-time only.
+Existing modify seams (source verified; detailed trace in architecture contract):
+- `pkg/blockcontroller/shellcontroller.go:72,427,565,608`, `blockcontroller.go:233,317` — managed launch and lifecycle hooks.
+- `pkg/shellexec/shellexec.go:40,156,177,295,338,584`, `conninterface.go:22,86,168,239` — host-specific launch/owned cancellation without a second PTY stack.
+- `pkg/wshrpc/wshrpctypes.go:31`, existing generation task `Taskfile.yml:228`; new `pkg/wshrpc/wshserver/wshserver_agent.go`.
+- `frontend/app/block/block.tsx:54-55` registration pattern; existing `frontend/app/store/commands.ts:49` and `keymodel.ts:665` launch commands.
+- Existing `frontend/app/view/term/termwrap.ts`, `osc-handlers.ts`, `frontend/app/block/blockframe.tsx`, `frontend/app/tab/tab.tsx`, `frontend/app/notification/usenotification.tsx`, `frontend/app/store/wshrpcutil-base.ts:121` — render hints/notifications. Fresh symbol-level ranges outside the cited entry points must be checked at implementation.
+- Existing `pkg/wconfig/defaultconfig/{widgets,settings}.json`, `pkg/wconfig/settingsconfig.go`, `src-tauri/{Cargo.toml,capabilities/default.json}`, `src-tauri/src/lib.rs`.
+New proposed files:
+- `pkg/agent/{adapter,launch,state,hooks,ownership}.go`, `pkg/agent/{claude,codex}.go`, matching tests; next available `db/migrations-wstore/*_agent_launches.{up,down}.sql` (reserve number only at implementation).
+- `frontend/app/store/agent-state.ts`, `frontend/app/element/state-dot.tsx`, `frontend/app/notification/agent-notify.ts`; `src-tauri/src/notify.rs` (native display only).
+- Generated outputs: Go client, TS client and Go TS types listed in architecture contract; sole current phase owns regeneration.
+Read-only reference: `/home/stackops/saly/claude-terminal/src/lib/terminalState.ts:37`, `src-tauri/src/terminal.rs:132`; official Orca hooks/Codex docs linked in architecture contract.
 
-Glyph vocabulary, copied from the category leader so muscle memory transfers: spinner = working,
-amber `?` = waiting on you, emerald dot = done, red = blocked/failed, grey = idle, no glyph = plain
-shell.
+## Implementation steps
 
-## Related Code Files
+1. Add tests for launch identity/capability descriptors first. Probe executables with timeout and safe host-local argv. Missing/auth/version errors visible; no automatic CLI install or approval bypass.
+2. Implement immutable managed launch receipts. App-owned agents opt out of detached durable jobs. Apply phase-1 ownership and process-tree cancellation; include WSL/SSH host receipts and uncertain remote termination.
+3. Implement reducer with generation and monotonic sequence; process exit precedence; freshness expiry. Keep agent-turn completion separate from command exit and later task verification.
+4. Implement Claude managed hook integration and Codex verified structured/event capabilities; test merge/uninstall and descriptor reread after app restart. Capability-disable unsupported version paths rather than invent protocol support.
+5. Add bounded activity/OSC derivation; port classifier idle-bias examples to mounted-buffer fallback, not backend authority. Avoid configurable unbounded JS regex on stream; validate bounded patterns or use linear-time Go matching.
+6. Publish snapshot/bootstrap and incremental events, reconnect reconciliation, capture-health/gap metadata,
+   resync and no per-chunk persistence/rendering. Replace the current append-timeout log-and-continue path
+   with storage acknowledgement and contiguous capture segments: live terminal rendering continues, but a
+   failed write closes the segment, fences replay offsets and exposes the missing range before a recovered
+   segment begins. Session layer later adds transcript/history; do not invent duplicate logs here. Fault-inject
+   full derivation queue, append timeout/disk-full, hook endpoint loss and event sequence gaps; prove degraded
+   appears before confidence is lost, persisted history never hides a gap, and no false settled/completed
+   transition occurs.
+7. Add glyph + tooltip/source/freshness/capture health to block/tab, explicit mark-as-agent action and capability reasons. One notification coordinator handles multiwindow dedupe and click-to-focus.
+8. Add settings: notification, sound, DnD, hint patterns/poll cadence, stale timeout; native permission/error UI. Preserve ordinary terminal/BEL/`wsh notify` behavior.
 
-- Create: `frontend/app/store/agent-state.ts`, `agent-activity.ts`, `agent-poller.ts`
-- Create: `frontend/app/element/state-dot.tsx`, `frontend/app/notification/agent-notify.ts`
-- Create: `src-tauri/src/notify.rs`; add `tauri-plugin-notification` to `src-tauri/Cargo.toml` and its
-  permission to `capabilities/default.json`
-- Modify: `frontend/app/store/wshrpcutil-base.ts` (the phase-3 `host`-route client gains a notify handler)
-- Modify: `frontend/app/notification/usenotification.tsx` (drop the `getApi()` coupling at `:10`, reuse
-  `atoms.notifications` as the in-app surface)
-- Modify: `frontend/app/view/term/termwrap.ts` (call `markActive` on data; keep the BEL indicator)
-- Modify: `frontend/app/view/term/osc-handlers.ts` (OSC-title state signal)
-- Modify: `frontend/app/block/blockframe.tsx` (glyph in the header), `frontend/app/tab/tab.tsx`
-  (glyph on the tab)
-- Modify: `frontend/app/store/global.ts` (state atoms, persisted last-known state), `frontend/wave.ts`
-  (mount the poller once)
-- Modify: `pkg/wconfig/defaultconfig/settings.json` (`agent:*` keys: patterns, poll interval, DnD, sound)
-- Modify: `pkg/wconfig/defaultconfig/widgets.json` (agent marker on the claude/codex widgets)
-- Reference (read-only): `/home/stackops/saly/claude-terminal/src/lib/terminalState.ts`,
-  `src/lib/terminalActivity.ts`, `src/lib/notificationGate.ts`, `src/components/StateDot.tsx`,
-  `src/hooks/useSessionStateDetection.ts`, `src/hooks/useNotification.ts`,
-  `docs/superpowers/specs/2026-06-01-session-state-smart-notifications-design.md`
+## Test scenario matrix
 
-## Implementation Steps
+| Level | Scenarios | Expected |
+|---|---|---|
+| Unit | late previous-generation exit, duplicated hook, out-of-order event, process stopped + working hint | no state resurrection/cross-block leak |
+| Unit | Claude numbered answer, input box, picker, Vietnamese/CJK screen; Codex unknown version | false waiting avoided; unknown explicit |
+| Unit | split UTF-8/OSC, repeated lines, alternate-screen redraw | raw output unchanged; bounded derivation |
+| Unit/fault | full observer queue, dropped sequence, append timeout/disk-full, hook timeout/restart, resync unsupported | capture marked degraded; durable segment exposes gap and fences offsets; live rendering stays responsive; no false idle/done |
+| Integration | two providers, same cwd, simultaneous launch; managed hooks edited externally | distinct receipts; CAS conflict not clobber |
+| Integration | cold tab, reconnect/new window, stale endpoint after restart | backend snapshot survives mount; old token rejected |
+| Integration | wait loop/explicit stop/replacement/cancel | exactly one terminal outcome per launch |
+| E2E Windows then macOS/Linux | permission prompt background/focused/DnD; 10 streams | one toast per episode; working input; no orphan process |
 
-1. **4.1 Mark agent blocks, and decide the hand-launch boundary.** Choose between wiring
-   `cmd:interactive`/`cmd:login` and adding an explicit `agent:kind` meta; set it on the `claude` and
-   `codex` widgets. Then decide and write down what happens for `claude` typed into a plain shell block:
-   ship a "treat this block as an agent" action that sets the meta (state and notifications work
-   immediately; resume and cost need a respawn because both are spawn-time only), or add runtime
-   detection via an OSC title. Do not leave this to be discovered in phase 5.
-2. **4.2 Activity clock.** `markActive(blockId)` from the terminal data path into a module-level `Map`.
-   Do not route it through jotai — the reference documents this as the specific mistake to avoid.
-3. **4.3 Classifier.** Port `classifySettled` with its three ordered rules and its idle bias. Move
-   `WAITING_PATTERNS` into settings so it survives a Claude Code TUI change without a release. Unit-test
-   with captured screens: a `(y/n)` prompt, a `❯ 1./2.` picker, a finished numbered list (must be
-   `idle`), an input box with a list above it (must be `idle`), and one CJK plus one Vietnamese screen.
-4. **4.4 Poller.** One 500 ms interval mounted once. Per agent block: stopped from the controller
-   runtime status → working (600 ms activity window) → classify last 15 rows via
-   `translateToString(true)` → else keep previous. Skip non-agent blocks. Persist the last computed
-   state per block id so it survives unmounting.
-5. **4.5 Explicit signals, and the cold-block path.** Add an OSC title handler (`osc-handlers.ts`
-   already exists for OSC work) so an agent that reports its own state overrides the heuristic, and where
-   Claude Code hooks are available let a hook write the state. This is also the only source that works for
-   a block outside the warm-tab set (`window:maxtabcachesize` defaults to **2**), so it is what closes the
-   background-agent gap rather than an optimisation. If no explicit signal is available for an agent,
-   scope the guarantee to mounted blocks in the requirements and say so in the UI tooltip.
-6. **4.6 Glyphs.** `state-dot.tsx` with the tooltip table. Render in the block header and, aggregated,
-   on the tab: a tab shows the most urgent state among its blocks (waiting > blocked > working > done).
-7. **4.7 Notifications.** Four gates, then the phase-3 `host`-route client's notify handler `invoke`s
-   `src-tauri/src/notify.rs` (`tauri-plugin-notification`). Policy — DnD window, sound, per-episode
-   dedupe — lives in the frontend and Go config; Rust only shows the toast. Support the overnight DnD case
-   (start > end). Layer this on the existing `usenotification.tsx` / `atoms.notifications` surface rather
-   than a second parallel path.
-8. **4.8 Settings.** `agent:pollintervalms`, `agent:busywindowms`, `agent:waitingpatterns`,
-   `agent:notify`, `agent:notifysound`, `agent:dndstart`, `agent:dndend`. Defaults matching the
-   reference: 500, 600, the four patterns, on, on, unset, unset.
+Commands at implementation: `go test ./pkg/agent ./pkg/blockcontroller ./pkg/shellexec`, `npx vitest run` focused new suites, `task generate`, `npm run typecheck`; then full `go test ./...` and frontend tests. Actual provider/hardware cases are manual recorded gates, not covered by synthetic fixtures alone.
 
-## Todo
+## Success criteria
 
-- [ ] 4.1 Agent-block marker wired; hand-launch boundary decided and written down
-- [ ] 4.2 Activity `Map` fed from the terminal data path, no store churn
-- [ ] 4.3 Classifier ported + unit tests including the two idle-bias cases
-- [ ] 4.4 Single 500 ms poller with the four-level priority; last state persisted per block
-- [ ] 4.5 OSC-title / hook override ahead of the heuristic, and as the cold-block path
-- [ ] 4.6 Glyph on block header and tab, with tab aggregation
-- [ ] 4.7 Notify handler on the phase-3 host route + `tauri-plugin-notification`; four gates; DnD incl.
-      overnight; layered on the existing notification surface
-- [ ] 4.8 `agent:*` settings with defaults
+- [ ] Claude and Codex launch, cancel and report explicit capability/version receipts; no unsupported feature silently succeeds.
+- [ ] Switching beyond warm-tab cap retains backend liveness/state freshness and never reports fabricated exact state.
+- [ ] Previous-generation callbacks cannot overwrite new launch or cause notifications.
+- [ ] Confirmed quit reaps owned agents/children; unrelated same-name process survives.
+- [ ] Hooks survive endpoint changes and coexist with user settings; removal does not delete external changes.
+- [ ] Focus/DnD/multiwindow cases deliver at most one toast per waiting episode.
+- [ ] Repeated live output/replay has no missing or duplicated bytes under healthy storage; forced append failure keeps live rendering responsive, exposes a durable-history gap/new segment, and never advances replay offsets across the missing range. Ten-stream p95 regression stays within phase-3 budget.
+- [ ] Forced queue/hook/sequence capture gaps produce visible `degraded`/`unknown` with cause and last-good
+      time, never false idle/turn-done/completion; authoritative resync restores healthy state when available.
 
-## Success Criteria
+## Risk, compatibility and rollback
 
-- [ ] Start `claude` in a block, ask it something long: the glyph shows working, then done
-- [ ] Trigger a permission prompt: the glyph goes amber and one notification fires
-- [ ] Keep the pane focused: the same transition fires **no** notification
-- [ ] A finished response containing a numbered list classifies as idle, not waiting
-- [ ] A plain shell block never shows a glyph
-- [ ] Switching to another tab still shows that a background agent is waiting, including after that tab
-      falls out of the warm set (or, if no explicit signal is available, the limitation is documented and
-      the tooltip says so)
-- [ ] Editing `agent:waitingpatterns` changes behaviour without a rebuild
-- [ ] `wsh notify "title" "body"` from a shell raises a toast (it does not today)
-- [ ] `claude` typed into a plain shell block can be promoted to an agent block and then shows a glyph
-- [ ] The terminal output path shows no measurable regression with 10 streaming blocks
+| Risk (likelihood × impact) | Mitigation / stop signal |
+|---|---|
+| Provider protocol drift: high × high | version fixtures and capability failure; degrade explicit unknown, never falsely authorize execution |
+| Process leak / generation race: medium × high | owned handles, parent-death protection, awaited shutdown and generation tests; block release on surviving owned local children |
+| Hook clobber / spoof: medium × high | managed merge/CAS, narrow tokens, schema/size limits; hooks never approve tasks |
+| Stream latency: medium × high | coalesced observations, bounded queues and no destructive dedup; rollback derived observer if regression |
 
-## Risk Assessment
-
-- **Heuristic drift.** The patterns match Claude Code's current TUI; a redesign breaks them silently
-  and the app quietly stops noticing prompts. *Signal:* waiting never fires while prompts clearly appear.
-  *Response:* patterns are configuration, and step 4.5's explicit signals mean the heuristic is not the
-  only source. Revisit when a Claude Code release changes the prompt UI.
-- **False positives destroy trust faster than false negatives earn it.** *Signal:* users report
-  notifications for agents that were not waiting. *Response:* tighten toward idle — the two-option +
-  cursor rule exists precisely for this, and the tests encode it.
-- **Notification spam across many blocks.** Ten agents finishing together is ten toasts.
-  *Response:* per-episode dedupe plus a coalescing window; if it still annoys, aggregate to
-  "3 agents need input" — decide from real use, not up front.
-- **Poller cost with many blocks.** 500 ms × N buffer reads of 15 rows. *Signal:* input latency with
-  20+ blocks. *Response:* the warm-tab cap already bounds how many blocks have a buffer at all; skip
-  blocks whose activity timestamp shows nothing changed since the last classification. Note this bound is
-  also the coverage gap in the row above — it is a limit, not only a mitigation.
-- **`translateToString` behaviour on wide/CJK glyphs is unverified for the pattern set.**
-  *Response:* include a CJK and a Vietnamese screen in the classifier tests; the terminal's IME
-  correctness is a stated product guarantee elsewhere in this plan.
-
-## Security Considerations
-
-- Notification bodies are built from terminal content. Truncate hard, strip control characters, and
-  never include buffer text verbatim in a toast — a hostile repository can print a convincing
-  notification body.
-- The Rust notify command must not accept arbitrary formatting or file paths from the frontend beyond
-  a title and a body string.
-- OSC sequences are attacker-controllable by anything running in the PTY. Treat an OSC-reported state
-  as a hint about a block the user already trusts, never as authority for an action.
-
-## Next Steps
-
-Phase 5 (session layer) hangs its cost/token HUD and resume UI off these states. Phase 7's agent board
-is a second view over the same atoms — build it there, not here.
-
+Additive markers/defaults leave existing blocks ordinary terminals. On rollback disable agent observations/managed launch entry, remove only managed hook entries after stopping owned launches, preserve receipts/history and leave underlying shell working. Do not downgrade schema destructively. No external Claude team/task JSON mutations. Next: phase 5 reuses adapter identities, receipts and event reducer.

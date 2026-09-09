@@ -3,254 +3,102 @@ phase: 7
 title: "Phase 7: ADE workspace UX"
 status: todo
 priority: P2
-effort: "3-4w"
-dependencies: [1, 4, 5, 6]
+effort: "5-7w"
+dependencies: [6]
 ---
 
 # Phase 7: ADE workspace UX
 
-## Overview
+## Overview / blockers
 
-Assemble the pieces from phases 4-6 into the workflow the category has converged on: a workspace is a
-git worktree, agents run one per worktree, a board shows every agent's state across worktrees, and one
-palette reaches every command, file, session and worktree. This is where SLTerm stops being a terminal
-that can run agents and becomes an environment for supervising them.
+Assemble a simple workbench, not a dashboard-first platform: project sidebar, terminal/editor work area, contextual review. Integrate Claude/Codex onboarding/configuration, palette/search and prompt ergonomics with the existing blocks. Retain board, worktree binding, tear-off, pins and hunk review scope. Orchestration is approved in phase 10 after this foundation, not deferred outside the plan.
 
-SLTerm starts from an unusual advantage here: its block/tab/workspace tiling model is already a superset
-of what the leading product calls tab groups and pane trees, and it already ships both a terminal and a
-Monaco editor — the exact combination whose absence generates the category leader's top feature requests.
-
-## Key Insights
-
-- **Workspaces are currently tab groups with no project identity.** `waveobj.Workspace`
-  (`pkg/waveobj/wtype.go`) carries `OID`, `Name`, `Icon`, `Color`, `TabIds`, `ActiveTabId` and a
-  `Meta MetaMapType` — no root, cwd or repo field, but the `Meta` map means the worktree binding is a new
-  meta key rather than a schema change. Additive either way.
-- **The layout persistence to match is "switching worktrees swaps the entire pane tree"** — browser tab,
-  terminal and diff all reappear exactly as they were. SLTerm persists block trees per tab already; the
-  missing link is the worktree binding, not the persistence.
-- **Pane boundaries should be pinned and persisted**, so a window resize never reshuffles the layout.
-  The category leader calls this out as deliberate design, and it is the difference between a layout you
-  trust and one you keep repairing.
-- **There is no action registry to search.** Every global action is an anonymous closure in
-  `globalKeyMap` (`frontend/app/store/keymodel.ts:396-566`) with no id and no label — which is why
-  `view:launcher` can only search *widgets to open*. Phase 1 introduces the registry; this phase is its
-  first real payoff.
-- **The fuzzy matcher already exists in Go.** `pkg/suggestion` implements `FuzzyMatchV2`
-  (`suggestion.go:221,232,409`) and already backs the file-path typeahead in the preview view. The
-  palette should call it rather than adding a JS fuzzy library.
-- **The agent board is an extension of an existing view, not a new one.** `view:agentteams` plus
-  `AgentTeamsGetSnapshot` / `AgentTeamsGetTasks` already read `~/.claude/teams` and `~/.claude/tasks`
-  and render a roster with status and `blockedBy`. The board adds columns, filters and click-to-focus
-  over the phase-4 states.
-- **Ship the board on by default.** The category leader flag-gated its equivalent behind an experimental
-  setting with no keybinding, and a third party shipped a separate viewer just to see the data it was
-  already collecting. That is a mistake with a documented outcome.
-- **Tear-off must be built in Rust, not from JS, and that is a security constraint rather than a
-  preference.** A window created with `new WebviewWindow` cannot carry an initialization script by design,
-  and SLTerm's window is unusable without one — the script carries the wavesrv endpoints and the auth key
-  (`lib.rs:195-208`, key at `host.rs:27`, re-exported by `tauri-host.ts:128`). The tempting fix, a local
-  plugin whose `js_init_script` injects the handshake into *every* webview, combined with granting the
-  renderer `core:webview:allow-create-webview-window`, would let any JS in the main frame open a window at
-  an arbitrary URL and have the auth key injected into it. Because `pkg/web/ws.go:65` is
-  `CheckOrigin: return true` and the key is accepted as a query parameter, that key alone is the whole
-  wshrpc surface — block and shell control, i.e. RCE. **So: one narrow Rust command,
-  `host_tear_off_tab(tab_id)`, builds the window with a fixed `WebviewUrl::App("index.html")` and attaches
-  the init script at construction — exactly the mechanism `lib.rs` already uses for `main`.** No
-  webview-creation permission is granted to the renderer, and no plugin injects into windows the app did
-  not construct.
-- **Harden the WS endpoint in the same phase.** Validate `Origin` against the shell origins the server
-  already knows (`shellWebviewOrigins`, `pkg/web/web.go:510-515`) and prefer the header over the query
-  parameter, so a leaked key is not by itself sufficient.
-- **Tear-off is still cheaper here than in the reference.** There, terminal state lived in per-window
-  stores and PTYs in Rust, so a transfer protocol was necessary. In SLTerm, blocks and tabs live in the Go
-  backend and the frontend is just a client of the WS endpoint — a torn-off window is a second client
-  pointed at a different tab id. **UNVERIFIED and gating:** whether `wavesrv` tolerates two simultaneous
-  frontend clients on the same workspace.
-- **Three tear-off traps, all with known answers:** capabilities match on window **label**, so
-  `["main"]` silently denies every IPC call from a detached window (`["main", "detached-*"]`);
-  `on_window_event` fires for every window, so closing a detached one runs the app-shutdown path unless
-  guarded by label; and window options are **logical** pixels while a cursor position is **physical**,
-  so passing cursor coordinates as options misplaces the window by the display scale factor.
-- **`dragDropEnabled` (default true) conflicts with HTML5 drag-and-drop on Windows.** Disabling it to
-  get HTML5 DnD would kill Tauri's file-drop events, which the files view wants. Use pointer-event
-  dragging plus a separate always-on-top preview window, and leave the default alone.
-- **Tab pinning can be done properly here.** The reference's pins do not survive a restart because
-  restored terminals get fresh UUIDs; SLTerm has persistent object ids, so pins can be durable.
-- **Per-hunk accept/reject is the best-in-class review model**, and the differentiator nobody but the
-  category leader has is routing a comment on a diff line back into the agent's prompt.
+Read [architecture contract](./architecture-contract.md). Blockers: phases 1–6 complete; canonical provider/session/worktree services ready. Owner: workspace maintainer; sole owner of shared shell/workspace/registry/config/RPC files. Estimate includes named supporting UX rather than hiding it in polish.
 
 ## Requirements
 
-**Functional**
+- Project sidebar shows worktrees and agent attention, expandable file explorer and session navigation. Work area reuses terminals, Monaco editor and file/web previews; review drawer opens contextually. Board secondary but available without experimental flag, by palette/keybinding.
+- Workspace binding stores stable host/repo/worktree context; cwd defaults apply only to **new** blocks. Never silently retarget running agents when user changes workspace binding. Existing unbound workspace remains valid.
+- Palette reaches commands, files, blocks, sessions, worktrees and snippets; project file-content and session-history search has limits, cancellation, ignore rules and explicit truncation. Reuse existing Go fuzzy matcher; avoid second command registry/launcher.
+- Claude/Codex onboarding independently detects executable/version/auth readiness/capabilities, shows explicit install/login/update steps and launch profiles. No automatic package installation or secret harvesting.
+- Extend existing AI-tools for provider-specific settings, memory, skills, subagents/commands, hooks and MCP where supported. Scope badges distinguish global/project/subdir/account/host. Config writes preserve unknown keys/comments where format allows, external edits and user hooks.
+- Prompt composer, snippets and paste-as-file allow preview/edit/reuse before sending. Clipboard files are private, bounded, self-ignored only with consent; no automatic capture of sensitive clipboard. Review comments are drafts bound to session/generation/revision, never blindly written into unknown TUI or followed by auto-Enter.
+- Package-script runner opens an owned sibling terminal; preview reuses web block with trusted URL policy. Project scripts require execution trust and lifecycle cleanup, not automatic startup.
+- Board shows both providers, source/freshness, workspace, session age, measured/unknown usage, review state and click-to-focus. External Claude teams remain read-only observations, not orchestration tasks. PR/MR filters may show unknown/offline; use existing authenticated CLI only with explicit consent, not an invented account service.
+- Tear-off and reattach preserve stable tab identity/layout, one active render owner per tab, and backend event subscriptions. Closing detached window doesn't quit/kill agents; app Quit confirms for all owned work. Pins and pane ratios persist.
+- Hunk stage/reject checks reviewed content revision. Reject/discard destructive, explicit confirmation; conflicts preserve work. No source attribution by guess when multiple agents share cwd.
 
-- A workspace can be bound to a git worktree; switching workspaces swaps the whole block tree and every
-  block's cwd follows.
-- One palette (single chord) searches commands, files, open blocks, sessions and worktrees.
-- An agent board lists every agent across worktrees in Needs You / Working / Done / Idle columns, with
-  project and PR-state filters, and clicking a card focuses that agent's block.
-- Agents are launched from a registry with per-agent arguments and an optional model / effort override,
-  not from hardcoded widget entries.
-- A tab can be torn off into its own window and dragged back.
-- Pinned tabs survive a restart.
-- A diff hunk can be accepted or rejected individually, and a comment on a diff line can be sent to the
-  agent that made the change.
+## Architecture and data flow
 
-**Non-functional**
+Backend project/worktree/session snapshot → sidebar + work area selection → command registry action → existing RPC services. Workspace meta is context only, not repository authorization. Workspace creation/storage already exists (`pkg/wcore/workspace.go:51,201,242`); avoid replacing persisted layout model.
 
-- The board is on by default with a keybinding, not behind an experimental flag.
-- Pane boundaries persist; a window resize never reshuffles the layout.
-- No new fuzzy-matching dependency; the palette uses `pkg/suggestion`.
-- File drop keeps working (`dragDropEnabled` stays at its default).
+Command registry already implemented (`frontend/app/store/commands.ts:49,61,71,87`), registered from `keymodel.ts:665`; menu invokes `runCommand` at `appmenu.ts:230-231`. Keep these signatures; palette is a consumer. File suggestions use existing `pkg/suggestion`; search adds bounded query APIs rather than scraping terminal screens.
 
-## Architecture
+Config read → provider/scope model → diff editor → schema validation + content hash compare-and-swap → atomic save/backup → explicit restart/reload requirement. Existing AI-tools read/write path `pkg/aitools/aitools_config.go:83,114,148,163,180`; MCP reader `:47`; extend, do not fork another config editor. Codex AGENTS/config scopes are adapter-specific, not Claude aliases.
 
-```
-pkg/waveobj              Workspace worktree binding as a new Meta key (no schema change)
-pkg/wcore/workspace.go   bind / rebind / clear, and cwd propagation to new blocks
-pkg/suggestion           reused for palette scoring; new sources: commands, sessions, worktrees
-src-tauri/src/teardown.rs    host_tear_off_tab(tab_id): builds a detached window in Rust with the
-                             init script attached at construction (no JS-created webviews)
-frontend/app/palette/    palette.tsx + sources/{commands,files,blocks,sessions,worktrees}.ts
-frontend/app/view/agentteams/  extended into the board: columns, filters, cards, click-to-focus
-frontend/app/store/agent-registry.ts   agent definitions, launch args, model/effort override
-frontend/app/tab/teardown/  pointer-drag tear-off, label conventions, drop routing
-frontend/app/view/vcs/review.tsx  per-hunk accept/reject + comment→agent
-```
+Tear-off: narrow native command accepts existing tab ID, obtains app-approved window data and constructs fixed app-local URL with private init script; no arbitrary URL or renderer webview-create capability. Current init script `src-tauri/src/lib.rs:258,365`, close handler `:433-443` and exit `:459-468` require per-window versus app lifecycle separation. Global close-confirmed state `:44` cannot authorize all future windows accidentally. Backend owns transfer transaction/version; target subscribes then acknowledges, source unmounts; failure returns tab to original owner.
 
-The palette is a thin UI over sources: each source returns `{id, label, detail, run}` and the Go matcher
-ranks them. Commands come from the phase-1 registry, so anything registered is searchable for free.
+WS hardening must respect browser reality: `frontend/util/wsutil.ts:19-23` cannot set custom headers in browser WebSocket; do not propose header-only auth. Enforce origin allowlist and per-window authenticated short-lived connection ticket via an authenticated HTTP/bootstrap path (new design), redact URL tickets and expire/replay-protect them. Existing `pkg/web/ws.go:65` allows every origin; `pkg/web/web.go:517` has shell origin table. Origin protects browser cross-origin abuse, not same-user native attackers. Preserve CLI/socket authentication separately; no assumption Origin is a credential.
 
-Comment-to-agent routing: a comment on a hunk becomes text written into the owning agent's PTY, prefixed
-with the file and line. No new protocol — the agent is a terminal program and the terminal is the channel.
-**Both halves of that text are untrusted**: the user's comment, and the git-derived file path (phase 6
-returns `-z` output precisely so a name containing CR, LF or ESC arrives intact rather than pre-broken).
-Everything written to a PTY goes through phase 6's `sanitize.go` — drop C0/C1 and ESC, never emit CR or LF,
-cap length — the preview shows the sanitised bytes with control characters escaped visibly, and submission
-happens on an explicit keypress rather than by appending a newline.
+Review draft → escaped file/range + user text → preview → explicit selected target/mode validation → copy or acknowledged structured submit. TUI insertion permitted only explicit paste into confirmed prompt-ready target, without Enter; otherwise copy-only. Sanitized display never substitutes for raw Git identity.
 
-## Related Code Files
+## File inventory
 
-- Create: `src-tauri/src/teardown.rs` (`host_tear_off_tab`, window built in Rust)
-- Create: `frontend/app/palette/palette.tsx` + `sources/*.ts`
-- Create: `frontend/app/store/agent-registry.ts`
-- Create: `frontend/app/tab/teardown/{tear-off.ts,drop-routing.ts,drag-preview.tsx}`
-- Create: `frontend/app/view/vcs/review.tsx`
-- Modify: `src-tauri/src/lib.rs` (register `host_tear_off_tab`; extract the init-script builder so both
-  `main` and detached windows share it; guard `on_window_event` by label)
-- Modify: `src-tauri/capabilities/default.json` (`windows: ["main", "detached-*"]`; **do not** add
-  `core:webview:allow-create-webview-window`)
-- Modify: `pkg/web/ws.go:65` (validate `Origin` against `shellWebviewOrigins`), `pkg/web/web.go` and
-  `frontend/util/endpoints.ts` (prefer the auth-key header over the query parameter)
-- Modify: `pkg/waveobj/wtype.go`, `pkg/wcore/workspace.go`, `pkg/wshrpc/wshrpctypes.go` (+`task generate`)
-- Modify: `frontend/app/view/agentteams/agentteams.tsx` (board), `frontend/app/tab/tabbar.tsx` (pins,
-  drag), `frontend/app/view/launcher/launcher.tsx` (fold into the palette or keep as the widget grid)
-- Modify: `frontend/layout/*` (pin pane boundaries), `pkg/wconfig/defaultconfig/settings.json`
-- Reference (read-only): `/home/stackops/saly/claude-terminal/src/lib/{windowMode,windowLayout,tabTransfer}.ts`,
-  `src/hooks/useTabDrag.tsx`, `src/components/{CommandPalette,GlobalSearchModal,OrchestrationPanel}.tsx`,
-  `src-tauri/src/main.rs:250-297` (per-window lifecycle guards)
+Existing modify:
+- `pkg/wcore/workspace.go:51,201,242`, `pkg/waveobj/wtype.go` workspace model; prefer additive meta and backend trust IDs, not duplicate project database.
+- `frontend/app/store/commands.ts:49`, `keymodel.ts:665`, `appmenu.ts:230`; existing launcher and workspace/tab/layout surfaces; `frontend/app/block/block.tsx:54-55` registry.
+- `pkg/aitools/aitools_config.go:47,83,163`, existing `frontend/app/view/aitools/aitools.tsx`, `pkg/agentteams/agentteams.go:103,161`, `frontend/app/view/agentteams/agentteams.tsx`.
+- `src-tauri/src/lib.rs:258,433,459`, `src-tauri/capabilities/default.json`, `frontend/util/{tauri-host,wsutil,endpoints}.ts`, `pkg/web/{ws,web}.go:65` / `:517`.
+- Existing `frontend/app/view/preview/`, `frontend/app/view/codeeditor/diffviewer.tsx:39`, phase-6 VCS files, provider/session files from phases 4–5; RPC/schema/defaults/generated artifacts in architecture contract.
+New proposed:
+- `frontend/app/workspace/project-sidebar.tsx`, `frontend/app/palette/palette.tsx` and source modules; `frontend/app/modals/agent-setup.tsx`; provider profile/config components inside existing AI-tools view.
+- `frontend/app/view/vcs/review.tsx`, `frontend/app/prompt/{composer,snippets,paste-as-file}.tsx`; new Go bounded `pkg/projectsearch/` and prompt storage helpers only if existing storage cannot serve them.
+- `src-tauri/src/tearoff.rs`, `frontend/app/tab/tearoff/{tear-off,drop-routing}.ts`; targeted tests for window ownership/auth.
+- New SQL migrations only for durable records not already expressible in workspace/meta/session stores; reserve sequence serially.
+Read-only references: `/home/stackops/saly/claude-terminal/src/components/{SetupWizard,CommandPalette,MemoryEditor,PromptEditorDrawer,PasteAsFileDrawer,SnippetsModal,ScriptsMenu}.tsx`; source paths verified from local inventory, exact component symbols [UNVERIFIED] until implementation. Use UX behavior, not monolith copying.
 
-## Implementation Steps
+## Steps
 
-1. **7.1 Verify the multi-client premise.** Before any tear-off work: confirm `wavesrv` accepts two
-   simultaneous frontend clients on one workspace. If it does not, tear-off needs a Go change and should
-   move to its own phase — decide before building UI on top of it.
-2. **7.2 Worktree-bound workspaces.** Add the binding meta key, propagate the root to new blocks' cwd, and
-   make a workspace switch restore that worktree's block tree. Pin pane boundaries while in the layout
-   code.
-3. **7.3 Palette.** One chord, five sources, Go-side ranking. Commands from the phase-1 registry; files
-   from the existing suggestion path; sessions from phase 5; worktrees from phase 6; open blocks from the
-   layout model. Adopt the category's default chords so muscle memory transfers.
-4. **7.4 Agent registry.** Generalise the `claude` / `codex` widget entries into a registry with launch
-   args and optional model/effort overrides, and record what was requested versus what the agent actually
-   started with — a receipt is what makes an override debuggable.
-5. **7.5 Agent board.** Extend `view:agentteams`: four columns over the phase-4 states, filters for
-   project and PR state, cards showing agent, worktree, age, last line and cost, click to focus the block,
-   nested subagents as expandable children. Default-on, with a keybinding.
-6. **7.6 Tear-off.** `host_tear_off_tab` in Rust first — fixed app URL, init script attached at
-   construction, no webview-creation permission for the renderer — then the label conventions
-   (`detached-<n>`, stable so window state does not accumulate dead entries), the capability label glob,
-   the `on_window_event` label guard, pointer-event dragging with a preview window, and drop routing by
-   hit-testing physical cursor position against each window's outer rect. Remember logical-vs-physical
-   units when positioning. Land the `Origin` check and header-preferred auth key in the same phase.
-7. **7.7 Pins.** Pin on the persistent object id so pins survive a restart.
-8. **7.8 Review upgrades.** Per-hunk accept/reject over phase 6's diff, and comment-to-agent routing
-   through the owning block's PTY.
+1. Prove multi-client backend behavior with two clients and duplicate/reconnected subscribers; define tab ownership transfer and per-window focus/notification rules before tear-off UI. If premise fails, fix backend within this scope, do not silently drop tear-off.
+2. Add worktree workspace binding and sidebar context with new-block cwd defaults, persistent pane ratios and keyboard navigation. Don't mutate active cwd/session on switch.
+3. Build onboarding/profile UI on phase-4 capabilities; both providers independently usable. Surface auth/install failures and provider update re-probe.
+4. Expand AI-tools config/memory/MCP with scope picker, validation, diff/CAS save, managed hook protections and provider-specific supported concepts. Test external editor race.
+5. Palette over existing registry/suggestion services; consolidate widget launcher as visual catalog, not competing search. Add bounded project/session search and file explorer/editor context.
+6. Composer/snippets/paste-as-file and scripts/preview: explicit trust, private retention, no auto-Enter, missing prompt readiness → copy fallback. Cleanup script process with its owner.
+7. Build secondary board from managed-launch snapshots; external teams in distinct observed section. Link stable IDs, not ambiguous cwd matching. Show unknown attribution/PR/usage instead of fabricated state.
+8. Implement secure tear-off/auth tickets and reattach transaction, window-specific close state/capabilities, DPI-correct pointer dragging and file-drop coexistence. No general renderer webview creation grant.
+9. Add pins and hunk review/comments with stale-hash protection. Diff baseline includes commits as defined in phase 6.
+10. Accessibility/i18n/empty-error states and measurements: sidebar collapses at narrow widths, reduced motion, no pet/control overlap. Keep one obvious launch and review entry point.
 
-## Anti-scope (decided, do not build)
+## Test matrix
 
-- No cloud VMs, no hosted sandbox fleet, no mobile companion or relay. The relay is a whole subsystem and
-  its most common bug reports are Windows pairing failures; SSH and WSL blocks already deliver remote
-  work without hosted infrastructure.
-- No chat UI as the primary surface. Terminals as blocks are the product's strength.
-- No selling inference or credits. Bring-your-own subscription is the model.
-- No supervisor/worker orchestration engine in this phase. It is the strongest available differentiator
-  and the category leader's own version is still experimental and CLI-only — it deserves its own plan
-  after this one lands, not a corner of this phase.
+| Level | Cases | Expected |
+|---|---|---|
+| Unit | palette rank/source cancellation; unknown command; scope merge/CAS | correct action, bounded results, no config clobber |
+| Unit | draft contains CR/LF/ESC filename; wrong session/generation | safe preview and refusal, no automatic submit |
+| Integration | two clients transfer/reconnect/window crash | one tab owner, recoverable original layout, no duplicate launch |
+| Integration | ticket expiry/replay, untrusted Origin/child URL, CLI socket | browser denied appropriately; CLI unaffected |
+| Integration | external config edits, MCP unknown fields, missing one CLI | conflict shown; unsupported provider fields not fabricated |
+| E2E | project→both providers→search→review→comment draft→commit | discoverable workbench; no unknown TUI injection |
+| E2E | tear-off/reattach/close, 100–200% DPI, native file drop | same tab identity; detached close not global quit |
+| E2E | 25 tabs/10 active streams, IME, keyboard-only, Vietnamese, reduced motion | bounded resources, input/review usable, no hidden actions |
 
-## Todo
+Implementation gates: focused workspace/config/auth tests, real SQLite migration tests, generation + typecheck, full Go/frontend suites and native multi-window tests. Hardware results are recorded separately, not assumed from compilation.
 
-- [ ] 7.1 Multi-client premise verified (gates 7.6)
-- [ ] 7.2 Workspace ↔ worktree binding, cwd propagation, pinned pane boundaries
-- [ ] 7.3 Palette over five sources with Go-side fuzzy ranking
-- [ ] 7.4 Agent registry with per-agent args and model/effort override + receipt
-- [ ] 7.5 Agent board default-on with columns, filters, click-to-focus, nested subagents
-- [ ] 7.6 Rust `host_tear_off_tab`, tear-off, label guards, drop routing, WS `Origin` check
-- [ ] 7.7 Durable tab pins on persistent ids
-- [ ] 7.8 Per-hunk accept/reject and comment→agent routing
+## Success criteria
 
-## Success Criteria
+- [ ] Default project sidebar/work area/contextual review is usable without opening a board.
+- [ ] Both providers onboard, configure at correct scope, launch and resume through shared adapters.
+- [ ] Palette and bounded project/session search reach actual objects; no second command registry.
+- [ ] Composer/snippets/pastes/scripts/preview obey trust and owned-process lifecycle.
+- [ ] Existing unbound layouts remain intact; workspace switches don't retarget running agents.
+- [ ] Board supports managed Claude/Codex with truthful unknowns and separate external teams.
+- [ ] Tear-off/reattach/pins survive restart; detached close doesn't quit; app Quit includes all owned work.
+- [ ] Stale hunk mutation refused; review comment always drafted and explicitly sent/copied.
+- [ ] Auth credentials absent in external frames; browser handshake rejects replay/untrusted origin.
 
-- [ ] Create a worktree, bind a workspace to it, switch away and back: the same blocks, same layout, same
-      cwds
-- [ ] One chord opens the palette; typing a command name, a file name, a session preview or a worktree
-      name all reach the right thing
-- [ ] Three agents in three worktrees appear on the board in the right columns and clicking one focuses it
-- [ ] The board is reachable by keybinding with no setting to enable
-- [ ] Launching an agent with a model override records both requested and effective values
-- [ ] A torn-off window can run a terminal and talk to the backend; closing it does not quit the app
-- [ ] Dropping a tab back into the main window reattaches it
-- [ ] Pins survive a restart
-- [ ] Accepting one hunk of a three-hunk diff stages only that hunk
-- [ ] A comment on a diff line arrives in the agent's terminal with file and line context
+## Risks / compatibility / rollback
 
-## Risk Assessment
+Medium × high: shared-window state/auth → transaction/short-lived tickets, label-scoped native commands and attack tests; block tear-off release until proven. Medium × high: config overwrite → CAS/backup/atomic writes; stop save on conflict. High × high: TUI automation mistakes → draft-first, exact target/generation, no auto-Enter and copy fallback. Medium × medium: crowded UI → contextual review, secondary board, reuse existing chrome; measure attention/task completion before adding panels.
 
-- **The multi-client premise may be false.** *Signal:* two clients on one workspace produce duplicated
-  events or fight over block state. *Response:* 7.1 is a gate, not a task — if it fails, cut 7.6 from this
-  phase and keep everything else, rather than building UI on an unverified backend property.
-- **Tear-off has three silent failure modes** (label-scoped capabilities, unguarded window events,
-  logical-vs-physical coordinates), each of which looks like an unrelated bug. *Mitigation:* they are named
-  in Key Insights with their fixes; add the label guard in the same commit that can create a second window.
-- **Any design where JS can create a webview that receives the auth key is an RCE path**, because the WS
-  endpoint accepts any Origin and takes the key from the URL. *Signal:* a `create-webview-window` grant or
-  an all-webviews init script appearing in a diff. *Response:* windows are built only by
-  `host_tear_off_tab` with a fixed app URL; add a test asserting the renderer cannot create a window, and
-  one asserting the key is absent from a child frame's scope in the `webview` view.
-- **Board scope creep toward orchestration.** A board that shows tasks invites a task engine.
-  *Response:* the anti-scope section is explicit; the board reads state, it does not schedule work.
-- **Palette becomes a second launcher.** Two overlapping surfaces is worse than one.
-  *Response:* decide in 7.3 whether `view:launcher` folds into the palette or stays as the visual widget
-  grid; do not ship both doing the same job.
-- **Per-hunk staging is fiddly.** Partial-hunk staging via patch application can corrupt a working tree.
-  *Response:* build it on `git apply --cached` with a generated patch and verify against the file's hash
-  before and after; refuse when the file changed underneath.
-
-## Security Considerations
-
-- The renderer never gets permission to create a webview, and no init script is injected into a webview
-  the app did not construct with an app-local URL. The auth key is a full wshrpc credential.
-- Scope the capability's window list to `["main", "detached-*"]` — never `["*"]`.
-- Validate `Origin` on the WS upgrade and prefer the auth-key header over the query parameter, so a key
-  that does leak is not sufficient on its own.
-- Comment-to-agent routing writes text into a PTY. Sanitise **both** the user's comment and the
-  git-derived path prefix; show the sanitised bytes with control characters visible before sending; submit
-  on an explicit keypress, never by appending a newline.
-- The board renders last-line previews from terminal output; strip control characters and cap length.
-- Worktree paths reaching the palette must pass phase 6's confinement check before any action runs.
-
-## Next Steps
-
-Phase 8 makes SLTerm's own differentiators first-class on top of the registry and states built here. A
-supervisor/worker orchestration engine is the natural follow-on plan once this phase is stable.
-
+Workspace fields additive; old widgets/AI-tools routes remain compatible and redirect into consolidated surfaces. Rollback disables new navigation/window creation, reattaches tabs, keeps durable layouts/drafts and provider config backups. Never delete user provider config to roll back UI. No autonomous scheduler here; next phase 8 polishes foundations, phase 10 adds approved orchestration.

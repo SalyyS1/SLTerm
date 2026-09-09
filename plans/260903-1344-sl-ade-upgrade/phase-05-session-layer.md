@@ -3,242 +3,85 @@ phase: 5
 title: "Phase 5: Session layer"
 status: todo
 priority: P1
-effort: "3-4w"
+effort: "4-6w"
 dependencies: [4]
 ---
 
 # Phase 5: Session layer
 
-## Overview
+## Overview and dependencies
 
-Give agent conversations continuity and a price tag: resume a past Claude Code session from the UI,
-browse a session's history and timeline, and see live token counts and estimated cost. Everything here
-is a Go package plus a block view — the reference implementation is Rust, and under this project's rule
-that Rust is a shell, it is a specification to reimplement rather than code to lift.
-
-## Key Insights
-
-- **Session discovery is a directory diff, not a CLI query.** Claude Code writes each conversation to
-  `~/.claude/projects/<encoded-cwd>/<session-uuid>.jsonl`. Snapshot the files before spawn, poll after,
-  and the new file's stem is the id.
-- **Do not trust a reimplemented path encoder as the lookup key.** The reference maps `\`, `/`, `:` and
-  space to `-`, but a real `~/.claude/projects` listing on this machine also shows `.` mapped to `-`
-  (`/home/stackops/.claude` → `-home-stackops--claude`), which that four-character rule does not produce.
-  So: enumerate the directories under `~/.claude/projects` and match by the `cwd` recorded **inside** the
-  JSONL entries; keep an encoder only as a fast path. Port the reference's test vectors *and* add ones
-  captured from a real listing, including a dotted path.
-- **Filter the snapshot to regular `.jsonl` files.** That same directory contains a subdirectory whose
-  name is a valid-looking session UUID, so "the new file's stem is the id" will otherwise adopt a
-  directory as a session.
-- **The snapshot must cover every project dir, not just the current cwd's**, because the encoded
-  directory may not exist yet on a first run in that folder.
-- **An exclude set is mandatory.** Without excluding ids already claimed by other live blocks, N agents
-  started in one directory all converge on the same conversation.
-- **`--resume=<id>` must use the equals form.** `--resume` takes an optional argument in Claude's CLI,
-  so `--resume <id>` parses as "open the picker" plus a stray positional. This is a landmine worth a
-  comment in the code.
-- **The fallback ladder is three-deep:** `--resume=<id>` when an id was captured → `--continue` when it
-  was not → plain spawn. After a `--continue` spawn, record which session it landed on immediately, or a
-  second `--continue` in the same directory hijacks a different conversation.
-- **Cost and tokens come from OpenTelemetry, not from parsing JSONL.** Spawn the agent with
-  `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_METRICS_EXPORTER=otlp`,
-  `OTEL_EXPORTER_OTLP_PROTOCOL=http/json`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:<ephemeral>`,
-  `OTEL_METRIC_EXPORT_INTERVAL=3000`, `OTEL_METRICS_INCLUDE_SESSION_ID=true`, and
-  `OTEL_RESOURCE_ATTRIBUTES=terminal.id=<block>` — that last attribute is how one receiver demultiplexes
-  many agents.
-- **Counters arrive as DELTA increments** (`aggregationTemporality=1`), verified against claude
-  v2.1.159: each export is the delta since the last, so the receiver sums them and the frontend takes
-  **latest-value-wins, never summing again**. Token values are `asDouble`; the type key is `type` with
-  camelCase values `input`/`output`/`cacheRead`/`cacheCreation`.
-- **Parse defensively**: accept `asInt`-as-string, `asInt`-as-number and `asDouble`; reject NaN, inf and
-  negatives before any cast; read from either `sum` or `gauge`.
-- **Cache reads dominate volume but not cost.** The reference's metrics panel explains this in tooltips
-  and it is the difference between a number that informs and a number that alarms.
-- **Every terminal's raw output is teed to a log file** in the reference, and that log is what powers
-  history, summaries and the timeline. SLTerm already writes terminal output to a **circular,
-  size-capped** block file (`pkg/blockcontroller/shellcontroller.go:393,570`) — capped bytes are not a
-  navigable history, so this phase needs a real per-session record either way.
-- **A session summary is one `claude -p` call.** Strip ANSI from the last ~100 KB of log, pipe to
-  `claude -p --model haiku "Summarize what was accomplished…"`, cache the result. Every failure path
-  returns "no summary" rather than an error.
-- **SLTerm has no resume, no history and no cost surface today** — verified: no `--resume`, `--continue`
-  or session-id handling anywhere in `pkg/` or `frontend/`, and the only `sessionId` hits belong to the
-  unrelated durable-shell input queue. Durable shell reattaches a *live* PTY; it is process persistence,
-  not conversation resume.
-- **New RPC families go on `WshRpcInterface`.** `pkg/wshrpc/wshrpctypes.go` closes the interface at
-  `:215` with pet / ai tools / agent teams grouped under comment headers — that is the template. Methods
-  end in `Command`, take `ctx` first, at most one param; `task generate` regenerates bindings and is
-  deliberately uncached.
+First-class **Claude Code and Codex** conversation continuity, history, timeline, usage and explicit summaries. Reuse phase-4 provider adapters/managed launches; no Claude-only session subsystem exposed as provider-neutral support. Read [architecture contract](./architecture-contract.md). Owner: session maintainer, exclusively taking RPC/schema/controller/config seams from phase 4. Phase 6 does not supply a helper backwards in time: provider-home confinement is implemented here; repository authorization belongs to phase 6.
 
 ## Requirements
 
-**Functional**
+- Discover, preview, filter, resume and inspect history for both providers. Scope identity by provider + account home + execution host + provider session ID, with recorded cwd/profile. Never read remote history from local home or silently change account.
+- Explicit session resume only. Missing/deleted/ambiguous session → visible choice to retry, select another or start new. **No automatic resume→continue→new fallback.** Continue-most-recent, if offered, is a distinct user action with resolved session confirmation.
+- For Claude managed new launches prefer explicit provider session-ID allocation where current CLI supports it; correlate verified launch events. Directory-diff/newest-mtime discovery is fallback evidence, not concurrency-safe identity by itself. Codex IDs/formats are adapter-defined, not assumed UUIDs.
+- CLI argv is version-tested. Official spaced `--resume <id>` is valid documentation; do not inherit claude-terminal's equals-only claim without empirical evidence. Never concatenate IDs into shell syntax.
+- One conversation can have many launch records; historical sessions are not live PTYs. Restart restores layout and scrollback but marks interrupted launches, offering explicit resume rather than recreating agents automatically.
+- Token counters with source/time; estimated monetary cost with pricing revision; subscription quota separately with provider/source/reset/freshness. Unknown is not zero, unavailable quota is not inferred from tokens.
+- Opt-in metrics and summaries separately. Summary preview warns that local provider CLI sends supplied text upstream, may consume quota/cost; cancel/failure visible. No automatic summary at process exit.
+- Bounded private history/log retention, deletion/export controls, malformed/large/truncated transcript safety; never store credentials or product-upload telemetry by default.
 
-- Agent features are available on the launch paths phase 4 defines; a block launched by hand can be
-  promoted, and the plan states plainly that resume flags and OTEL env are **spawn-time only**, so a
-  promoted block needs a respawn to gain them.
-- List past Claude Code sessions for a block's working directory, newest first, each with a preview of
-  its first user message.
-- Resume any of them into a new or existing block, using the correct flag form.
-- Two agents started in the same directory never adopt the same session.
-- A session record exists per agent run: label, start, end, working directory, session id, log path.
-- Live token counts (input, output, cache read, cache write) and estimated cost for the active session,
-  with an optional budget bar.
-- An on-demand plain-language summary of what a session accomplished.
+## Architecture and data flow
 
-**Non-functional**
+Adapter-specific discovery under approved host/provider home → normalized session index → SQLite conversation/launch/history metadata → paginated sessions view. Provider files remain source-owned/read-only. Do not rename/edit provider transcripts. Incremental index by file identity/offset + replacement detection; cap enumeration, record bytes, parsing depth and preview size. Claude cwd encoding is only a fast path; inspect recorded cwd and only regular JSONL files. Codex reader is independently versioned and reads verified rollout/history contracts, not Claude JSONL fields.
 
-- All of it in Go under `pkg/`; the Rust shell gains nothing.
-- The OTLP listener binds loopback on an ephemeral port and is only enabled when cost tracking is on.
-- Cost tracking is opt-in and off by default, consistent with `telemetry:enabled` being off.
-- Session discovery tolerates a missing or empty `~/.claude` without erroring.
+Launch receipt + exact resume request → identity reservation transaction → provider argv builder → managed launch → session handshake or uncertain identity diagnostic. Unique live ownership prevents concurrent adoption in same account/host; retry gets new launch generation. Provider session identity can be unknown until trustworthy evidence; never fabricate it from cwd alone.
 
-## Architecture
+Process completion `pkg/blockcontroller/shellcontroller.go:599-617` and explicit stop `:98-124` close a launch record exactly once. Phase-4 reducer owns event capture; session service subscribes rather than inventing a second wait loop. Raw stream remains on existing `HandleAppendBlockFile` path (`pkg/blockcontroller/blockcontroller.go:365-389`). Private per-launch log defaults are now user-validated: 10 MiB per launch, 500 MiB total and 30-day retention, configurable. Rotation/eviction writes visible truncation markers; provider transcript history and raw terminal log remain distinct. Storage failure follows phase 4's fenced segment-gap contract and never silently alters live terminal delivery.
 
-```
-pkg/claudesession/
-  discover.go      project-dir enumeration + cwd match (encoder as a fast path only), snapshot of
-                   regular *.jsonl files, find_new_for_cwd(exclude), list_for_cwd
-  preview.go       first user message from the JSONL head, both content shapes, 120-char truncate
-  resume.go        the --resume=<id> / --continue / plain ladder, and recording what --continue landed on
-  record.go        per-run session rows over the existing SQLite layer
-  summarize.go     ANSI strip + claude -p --model haiku, cached
-pkg/otelrecv/
-  server.go        loopback HTTP, OTLP/JSON, per-terminal.id demux
-  aggregate.go     DELTA sums → cumulative snapshot per session
-pkg/wshrpc         ClaudeSessionList/Resume/GetRecord/Summarize + SessionMetricsGet commands
-frontend/app/view/sessions/     view:sessions block — list, timeline, history, insights
-frontend/app/element/session-hud.tsx    tokens + cost chip, reads the phase-4 state atoms
-```
+Metrics: provider structured usage/transcript or opt-in OTLP → normalized event keyed by source/session/generation/interval → backend aggregate → cumulative versioned snapshot; frontend replaces, never sums. Read OTLP temporality instead of assuming every provider/version is DELTA. Deduplicate replay/export retries; cumulative counter reset starts a new source generation; preserve uncertainty where exact dedupe impossible. Never add transcript totals to OTLP totals for the same work. Receiver binds loopback only while enabled, bounded body/time/rate; random per-generation credentials where exporter supports headers. Local metrics are untrusted data, never commands. Account quota comes only from supported provider integration; no credential scraping or undocumented refresh-token use.
 
-The metrics contract, stated once so it is not re-derived: **the Go receiver sums DELTA exports into a
-running total and publishes the cumulative snapshot. The frontend replaces its value with the latest
-snapshot. It never sums.**
+## File inventory
 
-Sessions surface as a **block view**, not a modal, so it composes with the tiling layout the same way
-`aitools` and `agentteams` already do — the reference uses modals because it has no tiling model.
+Existing modify/reference seams:
+- `pkg/blockcontroller/shellcontroller.go:427,599-617`, `blockcontroller.go:99,278,326` lifecycle and phase-4 adapter integration (do not change every spawn independently).
+- `pkg/wstore/wstore_dbsetup.go:28-36` migration runner; next available `db/migrations-wstore/` migration pair for sessions/history.
+- `pkg/wshrpc/wshrpctypes.go:31` additive session RPCs; `Taskfile.yml:228` generation; generated three client/type files in architecture contract.
+- `frontend/app/block/block.tsx:54-55` lazy view pattern; existing widget/config schema/default files; phase-4 state/adapter files (created by prerequisite).
+New proposed: `pkg/agentsession/{index,claude,codex,resume,record,history,summary,metrics}.go` and tests; `pkg/otelrecv/{server,aggregate}.go` and tests; `pkg/wshrpc/wshserver/wshserver_agentsession.go`; `frontend/app/view/sessions/{sessions,sessions-model,timeline,history}.tsx` (use `.ts` for non-JSX models), `frontend/app/element/session-hud.tsx`.
+Read-only local reference: `/home/stackops/saly/claude-terminal/src-tauri/src/{claude_session,terminal,otel_receiver}.rs`; verified resume implementation `terminal.rs:132-143`, OTLP DELTA example `otel_receiver.rs:10,156`, restore `src/store/terminalStore.ts:536-554`. Examples are not current provider contracts; pin fixture versions before porting.
 
-## Related Code Files
+## Steps
 
-- Create: `pkg/claudesession/{discover,preview,resume,record,summarize}.go` + tests
-- Create: `pkg/otelrecv/{server,aggregate}.go` + tests
-- Create: `frontend/app/view/sessions/{sessions.tsx,sessions-model.ts,timeline.tsx,history.tsx}`
-- Create: `frontend/app/element/session-hud.tsx`
-- Modify: `pkg/wshrpc/wshrpctypes.go` (new command family + data structs after the AI-tools structs),
-  then `task generate`
-- Modify: `pkg/blockcontroller/shellcontroller.go` (`createCmdStrAndOpts` for the resume flags — note it
-  is called only on the `BlockController_Cmd` branch at `:425-431`, so a plain shell block never receives
-  them; the OTLP env injection; the session-stop emit at `:608`) and `blockcontroller.go` (`Controller.Stop`
-  at `:99,278,326`)
-- Modify: `pkg/wconfig/defaultconfig/settings.json` (`claudesession:*`, `cost:*`),
-  `widgets.json` (a sessions widget)
-- Modify: `pkg/waveserver` if the OTLP listener should start with the server rather than per block
-- Reference (read-only): `/home/stackops/saly/claude-terminal/src-tauri/src/claude_session.rs`,
-  `otel_receiver.rs`, `terminal.rs:132-146` (resume) and `:253-263` (OTLP env),
-  `commands.rs:315-335` (ladder), `:3058` (summarize), `src/lib/sessionMetrics.ts`,
-  `src/components/Session{sPanel,History,Timeline,Insights,MetricsPanel}.tsx`
+1. Specify normalized identity and adapter session capabilities; test paths with spaces/dots/drive letters, custom homes, two accounts and WSL/SSH. Persist provider identity without leaking credentials.
+2. Add backward-compatible SQL tables/indexes and migration/backup tests. Index Claude and Codex with defensive incremental readers and visible warnings; missing home is empty state, unreadable home is an error.
+3. Implement exact-resume reservations and argv building; explicit-ID Claude launch and Codex provider correlation. Test concurrent same-cwd launches and external provider process creating files at the same time.
+4. Integrate launch lifecycle, crash reconciliation, bounded raw-log retention and paginated transcript/history rendering. Output replay uses offsets/generation, not string overlap deletion.
+5. Implement metrics normalization and OTLP optional receiver. Parse integer strings/numbers, finite doubles, temporality, reset and missing fields. Respect existing provider telemetry config; do not silently override user endpoint.
+6. Build sessions list/timeline/history, resume action into recorded context, HUD and separate quota panel. All unsupported/stale/missing states named.
+7. Implement consented summary jobs through provider adapter with bounded input/output, timeout/cancel, cache keyed by session revision + provider/model/prompt revision. Errors remain retryable errors, not empty success.
+8. Add delete/export actions with preview and confirmation; deletion affects app index/log only unless a separate provider-supported delete was explicitly requested. Never delete external history by inference.
 
-## Implementation Steps
+## Test matrix
 
-1. **5.1 `pkg/claudesession` discovery.** Resolve a cwd to its project directory by enumerating
-   `~/.claude/projects` and matching the `cwd` recorded inside each conversation's JSONL, with a path
-   encoder as a fast path only — a reimplemented encoder is not trustworthy as the sole key (see Key
-   Insights). Write the tests first, including a dotted path captured from a real listing. Snapshot only
-   regular `*.jsonl` files, then find-new-with-exclude / list-for-cwd, returning
-   `{id, modifiedAt, preview}` sorted newest-first.
-2. **5.2 Preview.** Scan the first ~20 JSONL lines for `type == "user"`, handle both content shapes
-   (plain string, or an array of blocks with `.text`), collapse whitespace, truncate to 120 chars.
-3. **5.3 Resume ladder.** Inject `--resume=<id>` (equals form, with a comment saying why) or `--continue`
-   into the command built by `createCmdStrAndOpts`. Do **not** persist the injected flag into the block's
-   saved command — each restart re-decides. Record the landed session id right after a `--continue`.
-4. **5.4 Session records.** One row per agent run over the existing SQLite layer, using SLTerm's own
-   migration mechanism rather than the reference's ALTER-and-swallow loop. Emit **start** where the
-   controller spawns, and **stop** from the single place that sets the terminal status —
-   `pkg/blockcontroller/shellcontroller.go:608` (`bc.ProcStatus = Status_Done`) plus `Controller.Stop`
-   (`blockcontroller.go:99,278,326`) — or by subscribing server-side to the controller runtime-status
-   event. The status *checks* at `blockcontroller.go:214,244` are start-path gates, not transitions;
-   hooking them yields records with a start and no end. Add a test that kills the child and asserts the
-   end time is set.
-5. **5.5 Per-session log.** Decide whether the circular block file is enough or a separate uncapped
-   per-session log is needed for history and summaries. If a new log: bound it, put it under the data
-   dir, and confine reads to that directory with a size cap on the tail.
-6. **5.6 OTLP receiver.** Loopback HTTP, OTLP/JSON, ephemeral port, `terminal.id` demux, DELTA sums,
-   defensive number parsing. Bind once per app, not once per block.
-7. **5.7 Env injection.** Add the seven OTEL vars when cost tracking is on **and** the receiver bound a
-   port. Never inject a half-configured set.
-8. **5.8 `view:sessions`.** List for the current block's cwd with one-click resume; timeline over session
-   records with duration formatting and a filter box; per-run history viewer. Resume into the session's
-   recorded working directory, not the app's cwd.
-9. **5.9 Session HUD.** Tokens, cost, and the phase-4 state glyph in one compact chip. Keep the
-   educational tooltips explaining why cache reads are large but cheap; a budget bar that turns red at or
-   over `cost:sessionbudgetusd`.
-10. **5.10 Summaries.** ANSI-strip the log tail, pipe to `claude -p --model haiku`, cache per session,
-    return empty on every failure path.
+| Level | Cases | Observable result |
+|---|---|---|
+| Unit | Claude/Codex fixtures, malformed/partial JSONL, oversized line, UUID directory, cwd collisions | bounded parse, no wrong adoption, visible diagnostics |
+| Unit | exact resume missing; opaque ID; changed account/host; same-cwd concurrent reservation | no implicit continue, no shell interpolation, unique active owner |
+| Unit | DELTA/cumulative/retry/reset/NaN/negative/missing usage | no double count; unknown preserved |
+| Integration | real SQLite migration, kill during index update, file truncate/replace, disk full | restart consistent; capture failure visible |
+| Integration | provider absent/auth denied, invalid session, summary cancel/network failure | typed error and retry; no hidden new conversation |
+| E2E | both providers run→quit→reopen→explicit resume; two accounts and WSL path | correct context/history; no auto-spawn on restart |
+| E2E | metrics off, summary consent denied, retained log limit | no listener/summary traffic; visible truncation |
 
-## Todo
+Implementation commands: focused Go session/OTLP tests, focused `npx vitest run`, generation + typecheck, full Go/frontend suites. Real provider smoke records include CLI version, mode, OS and sanitized evidence, not private transcript content.
 
-- [ ] 5.1 Project-dir resolution by recorded cwd, `*.jsonl`-only snapshot, find-new-with-exclude, tests
-      including a dotted path
-- [ ] 5.2 First-user-message preview, both content shapes
-- [ ] 5.3 `--resume=<id>` / `--continue` ladder with landed-id recording
-- [ ] 5.4 Session records with start **and** end, emitted from the real status transition
-- [ ] 5.5 Per-session log decision and implementation
-- [ ] 5.6 Go OTLP receiver with DELTA aggregation and defensive parsing
-- [ ] 5.7 OTEL env injection gated on cost tracking + a bound port
-- [ ] 5.8 `view:sessions` block + widget: list, timeline, history
-- [ ] 5.9 Session HUD with tokens, cost and budget bar
-- [ ] 5.10 Cached `claude -p` summaries
+## Success criteria
 
-## Success Criteria
+- [ ] Both Claude and Codex sessions list and explicitly resume with correct provider/home/host/cwd.
+- [ ] Same-cwd concurrent agents never adopt each other's conversation; ambiguous evidence stays unresolved.
+- [ ] Missing resume target never invokes continue/new without another user decision.
+- [ ] Interrupted/ended launches have truthful timeline state and do not respawn on app restart.
+- [ ] Token, estimated cost and quota are distinct; missing data is visibly unknown.
+- [ ] Metrics off opens no receiver; summary only runs after content/provider disclosure and approval.
+- [ ] Summary failure/cancel visible; completed summary cached by content revision, not stale forever.
+- [ ] Retention/replay tests preserve live bytes, bound disk usage and expose historical truncation.
 
-- [ ] Run `claude` in a directory, exit, reopen: the session appears in the list with a recognisable
-      preview and resumes with its context intact
-- [ ] Two agents in the same directory get two different session ids
-- [ ] Directories whose paths contain a space, a drive letter, and a leading dot all resolve to the right
-      project dir; a UUID-named subdirectory is never adopted as a session
-- [ ] Token counts move while an agent works and match `/cost` inside Claude Code within rounding
-- [ ] Cost tracking off → no OTEL vars in the child environment, and no listener bound
-- [ ] Killing an agent's process writes an end time; the timeline shows a finished duration, and the
-      cached summary triggers
-- [ ] The timeline resumes a session into its own working directory
-- [ ] A summary appears for a finished session and is not recomputed on reopen
-- [ ] `~/.claude` absent → empty list, no error
+## Risks / rollback
 
-## Risk Assessment
+High × high: provider private-history drift → version-isolated readers and fixtures, explicit unsupported state; block exact-resume claim until smoke verified. Medium × high: cross-account/session mixup → composite identity and reservation; fail closed on ambiguity. Medium × high: sensitive log exfiltration → local private storage, opt-in content preview and provider disclosure, no analytics payload. Medium × high: metrics corruption → source exclusivity/temporality tests and uncertainty labels.
 
-- **Private, undocumented contracts.** `~/.claude/projects` layout, the JSONL shape, the OTEL metric
-  names and `--resume`'s parsing are all internal to Claude Code and can change without notice.
-  *Signal:* discovery returns nothing, or token counts stop moving after a Claude Code update.
-  *Response:* every one of these is isolated behind one Go file with tests; treat a break as a
-  patch-level fix, and keep the app fully functional with the session layer degraded (list empty, HUD
-  hidden) rather than erroring.
-- **Cost numbers are estimates.** Publishing a wrong dollar figure is worse than publishing none.
-  *Response:* label it "estimated", show the token counts (which are measured) more prominently than the
-  cost, and state the pricing table's date in the tooltip.
-- **The DELTA-vs-cumulative contract is exactly the kind of thing that gets re-derived wrong.** A second
-  summation in the frontend doubles every number. *Mitigation:* the contract is stated once in the
-  architecture section above, and the aggregation has a unit test asserting three DELTA exports produce
-  the sum once.
-- **`--continue` hijacking.** *Signal:* an agent resumes someone else's conversation. *Response:* record
-  the landed id immediately after spawn; the exclude set covers the concurrent case.
-- **Scope creep into a full transcript viewer.** The JSONL contains the entire conversation and it is
-  tempting to render it. That is a chat UI, which the landscape research explicitly advises against as a
-  first move. Keep this phase to list / resume / metrics / summary.
-
-## Security Considerations
-
-- The OTLP listener must bind `127.0.0.1` only, on an ephemeral port, and accept only OTLP/JSON. Any
-  local process can post to it; treat received metrics as untrusted numbers and never as commands.
-- Session previews and summaries come from conversation content. They are shown to the user who owns
-  them, but truncate hard and strip control characters before rendering.
-- Session ids are injected into a command line. Reject any id that is not a plain UUID before it reaches
-  `exec`; the reference rejects shell metacharacters explicitly, and Go's `exec` not using a shell is not
-  a reason to skip validation.
-- Log reads must be confined to the session log directory by canonicalised prefix check, with a byte cap.
-- Do not send session content anywhere. The summariser runs the user's own local `claude` binary.
-
-## Next Steps
-
-Phase 6 (change review) shares the path-confinement helper written here. Phase 7's agent board shows
-session cost per card and resumes from the board.
-
+Rollback disables session writes/receivers/summarizer after stopping owned jobs, keeps session records/logs and provider files untouched, returns terminal-only UI. Additive migrations remain; restore backup only with consent and app stopped. Existing ordinary terminals and phase-4 state keep working. Next phase 6 adds repository/worktree review without importing session identity from block meta.

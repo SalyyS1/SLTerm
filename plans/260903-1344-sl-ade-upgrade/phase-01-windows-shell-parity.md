@@ -110,7 +110,7 @@ frontend/app/store/appmenu.ts     NEW  menu tree (ported from emain-menu.ts) bui
 frontend/util/tauri-host.ts       MOD  showWorkspaceAppMenu → host_show_context_menu; drop the liars
 src-tauri/src/menu.rs             MOD  extend predefined_for_role beyond today's 9 roles
 src-tauri/src/window.rs           NEW  bounds persistence, single-instance focus, startup dialog
-src-tauri/capabilities/default.json MOD window actions + create-webview-window
+src-tauri/capabilities/default.json MOD window actions only; renderer receives no generic webview-creation grant
 pkg/util/shellutil, pkg/vcs-adjacent exec paths  MOD  CREATE_NO_WINDOW on Windows
 ```
 
@@ -142,8 +142,9 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
 
 ## Implementation Steps
 
-1. **1.1 Capabilities and plugins.** Add the window-action permissions and
-   `core:webview:allow-create-webview-window`; add `tauri-plugin-single-instance` (registered
+1. **1.1 Capabilities and plugins.** Add only the required window-action permissions; explicitly do **not**
+   grant `core:webview:allow-create-webview-window` (phase 7 uses one narrow Rust constructor with fixed
+   app-local URL). Add `tauri-plugin-single-instance` (registered
    **first** in the builder), `tauri-plugin-dialog`, `tauri-plugin-window-state`, and the `tray-icon`
    Cargo feature. Note `panic="abort"` in the release profile: any plugin relying on unwinding will
    abort the process — verify each one starts under a release build, not just debug.
@@ -201,10 +202,11 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
    remove the RPC path or implement it. `onFullScreenChange`: emit an event from
    `host_set_fullscreen`. `build_time`: stamp it instead of `0` (`host.rs:56`).
 9. **1.9 Windows correctness in Go.** Set `CREATE_NO_WINDOW` (`0x08000000`) on every non-PTY child
-   process. Adopt claude-terminal's exec rule: a real `.exe` is executed directly, a `.cmd`/`.bat`/`.ps1`
-   shim goes through `cmd /C` — never the reverse, because Rust's and Go's argv quoting only escapes
-   cmd metacharacters when the *spawned program* is a batch file (CVE-2024-24576 shape). Prove the
-   `wsh` socket works on Windows; if AF_UNIX fails, add a named-pipe transport.
+   process. Adopt the shared exec rule: execute a real `.exe` directly; route `.cmd`/`.bat` through
+   `cmd /C` with the tested batch quoting path; invoke `.ps1` explicitly through PowerShell with an argv
+   array — never treat PowerShell scripts as batch files. Routing a real executable through a command
+   shell reopens metacharacter injection (CVE-2024-24576 shape). Prove the already-implemented `wsh`
+   named-pipe fallback on Windows rather than recreating it.
 10. **1.10 Snap Layouts — DECIDED: deferred out of this phase, not dropped.**
     The prerequisite is done: `min_inner_size` is now 500 px wide (`window.rs:28`), which is what
     Microsoft requires before a window may enter a snap zone at all, so `Win+arrow` and drag-to-edge
@@ -230,23 +232,63 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
     the prior plan's `phase-0-baseline.md` names these numbers and contains none of them.
 12. **1.12 Cross-platform QA.** Execute the matrix below on real Windows 11 and macOS hardware.
 
+13. **1.13 Owned process-tree shutdown.** Implement the awaited ownership flow specified below; preserve
+    cancellation semantics, surface remote uncertainty and prove exact-handle escalation on hardware.
+14. **1.14 CSP.** Inventory every packaged main-frame requirement (`script/style/connect/worker/font/img/media`
+    plus preview framing), author the narrowest policy in `src-tauri/tauri.conf.json`, and separate remote
+    preview content from the privileged app origin. Run production/package mode because dev-server allowances
+    are not release policy. Add negative tests for injected remote script/frame access and a regression test
+    that forbids returning to `null`, wildcard sources or `unsafe-eval` without a reviewed exception.
+15. **1.15 Native-path confinement.** Route `host_open_native_path` through one canonical allowlist check
+    seeded by explicit picker/project/app-owned paths. Revalidate at call time, resolve symlinks/junctions,
+    reject NUL/nonexistent/unsupported targets and avoid leaking resolved outside paths in renderer errors.
+    Positive and escape tests cover local paths plus Windows case/UNC behavior.
+
 ## Todo
 
-- [ ] 1.1 Capabilities + single-instance/dialog/window-state plugins + tray feature
-- [ ] 1.2 React titlebar with drag region and platform-split window controls
-- [ ] 1.3 Per-OS window construction (macOS keeps native traffic lights), `isLinux()` + Linux gap,
+- [x] 1.1 Capabilities + single-instance/dialog plugins (`tauri-plugin-single-instance`,
+      `tauri-plugin-dialog`; window-action permissions granted explicitly)
+- [x] 1.2 React titlebar with drag region and platform-split window controls
+- [x] 1.3 Per-OS window construction (macOS keeps native traffic lights), `isLinux()` + Linux gap,
       `window:nativetitlebar` read in Rust with the default flipped, min size, opaque window + DWM rounded
       corners, bounds persistence with display clamp
-- [ ] 1.4 Command registry over `globalKeyMap`
-- [ ] 1.5 App menu ported from `emain-menu.ts`; `showWorkspaceAppMenu` no longer throws
-- [ ] 1.6 Startup error dialog (incl. a named lock-contention message), confirm dialogs, save dialog,
+- [x] 1.4 Command registry over `globalKeyMap`
+- [x] 1.5 App menu ported from `emain-menu.ts`; `showWorkspaceAppMenu` no longer throws
+- [x] 1.6 Startup error dialog (incl. a named lock-contention message), confirm-on-quit, save dialog,
       single-instance focus, `shutdown_backend()` + update-in-progress bypass
-- [ ] 1.7 Ctrl+Shift state, chord mode, WebView2 default-key suppression; delete webview key members
-- [ ] 1.8 Remove or implement all six silently-wrong HostApi members; stamp `build_time`
-- [ ] 1.9 `CREATE_NO_WINDOW` everywhere; exec-shim rule; `wsh` socket proven on Windows
-- [ ] 1.10 Snap Layouts decision (prototype → vendor or depend or drop)
-- [ ] 1.11 Electron `v0.20.0` baseline captured (idle RAM, RAM at 10 and 25 tabs, cold start)
-- [ ] 1.12 Windows 11 + macOS QA matrix executed and recorded in `plans/reports/`
+- [x] 1.7 Ctrl+Shift state, WebView2 default-key suppression; delete webview key members
+- [x] 1.8 Remove or implement all six silently-wrong HostApi members; stamp `build_time`
+- [x] 1.9 `CREATE_NO_WINDOW` on every non-PTY exec site; exec-shim rule; `wsh` named-pipe fallback
+- [x] 1.10 Snap Layouts decision: **deferred** (min width now permits snapping; flyout waits for hardware)
+- [ ] 1.11 Electron `v0.20.0` baseline captured (idle RAM, RAM at 10 and 25 tabs, cold start) — **needs a
+      real display**
+- [ ] 1.12 Windows 11 + macOS QA matrix executed and recorded in `plans/reports/` — **needs hardware**
+- [ ] 1.13 Confirmed Quit performs a bounded, awaited shutdown of every app-owned local/WSL/SSH process
+      tree, escalating only exact owned handles, recording uncertain remote termination, flushing state and
+      releasing the data lock before Rust reaps `wavesrv`; cancelling confirmation leaves all work running
+- [ ] 1.14 Replace `app.security.csp: null` with a least-privilege CSP proven against bundled assets,
+      loopback HTTP/WS endpoints, workers/fonts/images and required preview behavior; remote/untrusted content
+      must not inherit app privileges or force a wildcard fallback
+- [ ] 1.15 Constrain `host_open_native_path`: accept only canonical user-approved/project/app-owned paths,
+      reject NUL/symlink escapes and unsupported targets, and test an untrusted renderer cannot reveal or open
+      arbitrary filesystem locations
+
+## Implementation status (2026-09-06)
+
+Implemented and verified on this machine (Linux, headless Xvfb): the window builds with per-OS
+decorations, saved+clamped geometry, and a real shutdown path; the titlebar draws drag + controls on
+Windows/Linux with macOS traffic lights; the app menu opens; F5/Ctrl+R/Ctrl+F/Ctrl+P are swallowed;
+the pet HUD no longer covers the controls; the startup dialog, single-instance focus, and
+confirm-on-quit are wired; `build_time` is stamped; every non-PTY Go exec site is hidden; and `wsh`
+gains a named-pipe fallback for Windows without AF_UNIX. Full frontend suite (151 tests) and the Go
+suite pass; `cargo check`/`go build` clean on Linux and cross-compiled Windows; a release binary was
+built and launched headlessly to a live shell prompt.
+
+**Blocked on real hardware (cannot be done here):** 1.11 (Electron RAM/cold-start baseline) and 1.12
+(the Windows 11 and macOS QA matrix — drag, double-click maximise, Snap flyout, IME, ConPTY, WSL,
+console-flash). These are the phase's gate for phase 2 and 3. A Windows 11 machine is the hard
+prerequisite; without it the phase cannot be declared done. The checklist above is the work to run
+there.
 
 ## QA matrix (execute on hardware, record results)
 
@@ -270,6 +312,29 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
 | Second launch focuses instead of failing | must pass | must pass | must pass |
 | No console window flashes | **must pass** | n/a | n/a |
 
+### 1.13 Owned process-tree shutdown acceptance
+
+Fresh source changes the earlier conclusion. Rust `Backend::shutdown()` kills and waits for the `wavesrv`
+sidecar only (`src-tauri/src/lib.rs:71-91`). Go shutdown starts controller cleanup asynchronously
+(`pkg/waveserver/waveserver.go:85-103`, especially `:90`), sleeps 500 ms, then exits; that is not proof that
+Claude/Codex grandchildren, WSL processes, SSH-launched commands or durable jobs stopped. Preserve 1.6's
+implemented close/sidecar work, but do not equate it with all-agents-stopped.
+
+Before phase 4 managed launch builds on this lifecycle, make Go shutdown an awaited bounded sequence:
+freeze new app-owned launches; snapshot exact ownership handles/generations; request graceful stop; wait on
+completion barriers; escalate local process groups/Windows Job Objects only for exact owned handles; request
+WSL/SSH cancellation and record `termination-unconfirmed` if the remote cannot acknowledge; flush controller,
+session and terminal state; release the database/data-dir lock; acknowledge Rust, which may then reap
+`wavesrv` as last resort. Never `pkill`/`taskkill` by provider name or target an adopted/user-started process.
+Cancelling the quit confirmation changes nothing. Detached-window close is not app Quit. Timeout leaves a
+visible recovery record on next start rather than claiming success.
+
+Test matrix: local child+grandchild ignoring graceful stop; WSL child; SSH disconnect during cancellation;
+durable job; detached window close; user process with the same executable; update-driven unattended exit;
+crash during each shutdown stage. Windows process-tree proof and WSL/ConPTY cases require real Windows 11.
+Rollback restores the current terminal-only stop path but must warn before exit if owned processes remain;
+never silently return to sidecar-only semantics after orchestration ships.
+
 ## Success Criteria
 
 - [ ] A Windows 11 user can install the NSIS build, move/resize/maximise/close the window, and reach
@@ -283,6 +348,15 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
 - [ ] With `window:nativetitlebar` at its shipped default the custom titlebar is the one users see
 - [ ] `shutdown_backend()` releases the data-dir lock before the process exits, with no dialog shown when
       the update-in-progress flag is set
+- [ ] After confirmed Quit, every exact app-owned local child and descendant is reaped within the configured
+      deadline; WSL/SSH/durable ownership is reconciled, uncertainty is recorded, and an unrelated same-name
+      process survives. Cancelling Quit leaves every agent running
+- [ ] Packaged app starts with a non-null least-privilege CSP; terminal, Monaco, bundled workers/assets and
+      approved loopback backend function, while an injected remote frame/script cannot call app APIs
+- [ ] `host_open_native_path` opens a trusted project/app-owned path and refuses an outside path plus a
+      symlink escape; renderer input alone cannot widen the allowed roots
+- [ ] Renderer capability set contains no `core:webview:allow-create-webview-window`; phase-7 detached windows
+      can only be constructed through the fixed-URL Rust command
 - [ ] `grep -rn "CREATE_NO_WINDOW\|HideWindow" pkg/ cmd/` returns every non-PTY exec site
 - [ ] The QA matrix above is filled in with real results, no "assumed"
 
@@ -296,9 +370,16 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
   and Linux with buttons drawn into a 6 px reservation. *Signal:* it only shows up at 1.12, at the end of
   the phase. *Response:* 1.3 makes construction per-OS and the QA matrix now has a row per platform for
   control presence and overlap.
-- **`wsh` transport on Windows.** If AF_UNIX does not work, remote/WSL features and the `wsh` CLI are
-  dead on the priority platform. *Signal:* `wsh` connect fails while the GUI works. *Response:* add a
-  `winio` named-pipe transport behind `GetDomainSocketName`; budget +1w.
+- **`wsh` transport on Windows.** The named-pipe fallback now exists, but remains unproven on real Windows.
+  *Signal:* `wsh` cannot authenticate/reach the server while the GUI works. *Response:* keep Phase 1 open,
+  diagnose the existing `wshsocket_windows.go` path on Windows 11, and fix that implementation; do not add a
+  second transport or infer success from Linux.
+- **Owned descendant cleanup remains incomplete after the implemented sidecar shutdown.**
+  `Backend::shutdown()` (`src-tauri/src/lib.rs:71-91`) waits for `wavesrv`, but Go starts controller cleanup
+  asynchronously then exits (`pkg/waveserver/waveserver.go:85-103`). *Signal:* a provider/child remains after
+  GUI exit or a remote termination is reported complete without acknowledgement. *Response:* 1.13 is an
+  unchecked gate: awaited graceful shutdown, exact ownership, bounded escalation and restart reconciliation.
+  Do not mark it complete from a clean `wavesrv` exit alone.
 - **Min-width vs snapping conflict.** ≤500 px (330 recommended by the technique's author) is narrow
   for a tiled terminal with a widget rail.
   *Signal:* the layout breaks below ~700 px. *Response:* keep 900 and drop Snap Layouts (1.10)
@@ -316,17 +397,20 @@ anonymous closure in `globalKeyMap` (`keymodel.ts:396-566`) with no id and no la
 - The exec-shim rule is a security control, not a cosmetic one: routing a real `.exe` through
   `cmd /C` lets `& | ( ) ^ !` in branch names, file paths and remote names from a hostile repository
   escape into command execution.
-- `app.security.csp` is `null` today. The webview renders markdown and remote content; set a CSP in
-  this phase while the window construction is already being touched.
-- Adding `create-webview-window` widens the capability surface for phase 7's tear-off; scope the
-  capability's `windows` list to `["main", "detached-*"]` rather than `["*"]`.
-- `host_open_native_path` does no path validation (`host.rs:98-101`). Confine it the way
-  `host_open_external` confines schemes.
+- `app.security.csp` is `null` today. Replace it in 1.14 with the smallest packaged-app policy that admits
+  required self/bundled workers/assets and exact loopback backend endpoints. Validate Monaco, xterm, markdown
+  and preview flows; never resolve breakage with `*`, `unsafe-eval` or arbitrary remote script/frame access.
+- The renderer receives **no** `create-webview-window` permission. Phase 7's tear-off is a narrow Rust
+  `host_tear_off_tab` constructor with a fixed app-local URL and label-scoped capability; test the permission
+  remains absent.
+- `host_open_native_path` currently has no path validation (`host.rs:98-101`). 1.15 canonicalizes and confines
+  to roots established by explicit user choice or app ownership. Scheme filtering from `host_open_external`
+  is not sufficient for filesystem paths; symlinks and renderer-controlled absolute paths are test cases.
 
 ## Next Steps
 
-Phase 2 (identity, signing, updater) depends on this phase's window construction being final —
-the identity rename touches the same `tauri.conf.json` keys, and the updater must not ship before a
-Windows build has been launched. Phase 4 (agent state) depends only on 1.4's command registry and can
-start in parallel once that lands.
+Phase 2 (identity, signing, updater) depends on this phase's unchecked hardware and owned-process shutdown
+gates — the updater must not ship before a Windows build has been launched and teardown proven. Later ADE
+phases run serially after Electron retirement; phase 4 reuses the command registry and process ownership
+rather than starting while this phase is incomplete.
 

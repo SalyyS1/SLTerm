@@ -4,17 +4,20 @@ title: "Phase 9: Deep rebrand"
 status: todo
 priority: P3
 effort: "1-2w"
-dependencies: [2, 3, 4, 5, 6, 7, 8]
+dependencies: [2, 3, 4, 5, 6, 7, 8, 10]
 ---
 
 # Phase 9: Deep rebrand
 
 ## Overview
 
-**Split dependencies.** Rungs 9.1-9.5 and 9.8 only need phases 2 and 3. Steps **9.6 (Go module path) and
-9.7 (repo rename)** must be last in the whole plan and require **no other branch open**: rewriting 721
-import blocks conflicts with every open branch, and `task generate` on a stale branch silently regenerates
-wshrpc clients carrying the old module path. That is why the frontmatter lists 2-8.
+**This entire phase is last.** Do not execute “safe” prose/env/copyright rungs early: phase 10 adds new
+packages, CLI strings, generated RPC clients, settings and docs that must participate in the same fresh census,
+and early partial rename creates two naming contracts for active branches. Every step 9.1–9.8 therefore waits
+for phases 2–8 and 10, requires no open implementation branch, and runs in the listed order. Rewriting import
+blocks conflicts with every open branch, and `task generate` on a stale branch silently regenerates wshrpc
+clients carrying the old module path. Exact import counts from 2026-09-03 are historical and must be freshly
+counted at execution.
 
 Finish what phase 2 started. Phase 2 changed what users see and what the installer keys on; this phase
 changes what the code says: environment variable names, the Go module path, the copyright header, the
@@ -23,10 +26,10 @@ load-bearing for shipping, and one item (the keyring service) is deliberately le
 
 ## Key Insights
 
-- **82 % of the brand footprint is two mechanical sweeps.** Of 1,463 hits for
-  `SLTerm|slterm|SLTERM|Salyvn` across `pkg` + `cmd` + `frontend`: 721 are the Go import path
-  `github.com/SalyyS1/SLTerm/...`, 483 are the `// Copyright 2025, Salyvn.` header in 477 files, ~145 are
-  `SLTERM_*` env var names, and only ~26 are real prose or UI strings.
+- **82 % of the 2026-09-03 brand census was two mechanical sweeps.** Historical count: 1,463 hits for
+  `SLTerm|slterm|SLTERM|Salyvn` across `pkg` + `cmd` + `frontend`, including 721 Go import-path hits and
+  483 copyright-header hits. Phase 10 and intervening code will change these numbers; freshly enumerate
+  before execution and treat the report only as sizing evidence.
 - **The env vars split into two classes.** Nineteen are process-scoped and set by the app on every launch
   (`_AUTH_KEY`, `_DATA_HOME`, `_CONFIG_HOME`, `_APP_PATH`, `_JWT`, `_SWAPTOKEN`, `_TABID`, `_BLOCKID`,
   `_WORKSPACEID`, `_CLIENTID`, `_JOBID`, `_ZDOTDIR`, `_WSHBINDIR`, `_SI_*`, `_PTY_OK_`) — producer and
@@ -56,10 +59,10 @@ load-bearing for shipping, and one item (the keyring service) is deliberately le
 - **`IssuerSLTerm = "slterm"` is safe to rename only if no JWT is persisted across restarts.** Minting and
   validation ship together in one process lifetime. UNVERIFIED whether any token is written to disk;
   check before touching it.
-- **The repo rename is the safest step in the whole ladder.** GitHub redirects everything except project
-  site URLs and published Actions; git operations against the old location keep working; release asset
-  URLs stay resolvable. Two rules: do not recreate a repository under the old name, and rewrite the 721
-  in-repo import statements in the same commit as `go mod edit -module`.
+- **The repo rename is mechanically straightforward only after its gates pass.** GitHub redirects most old
+  URLs, but project sites/published Actions and a recreated old repository can break assumptions. Rewrite
+  every freshly enumerated in-repo import in the same commit as `go mod edit -module`; prove updater and
+  clone/release URLs rather than declaring the rename intrinsically safe.
 - **`sl-ade` is free everywhere checked** (GitHub org, npm, PyPI, crates.io, Homebrew cask). `slade` is
   not: an 864★ Doom editor owns the name with its own domain, and `slade-cli` is live on npm.
 
@@ -76,20 +79,23 @@ load-bearing for shipping, and one item (the keyring service) is deliberately le
 
 **Non-functional**
 
+- The entire phase starts only after phases 2–8 and 10 finish and no implementation branch remains open.
 - Each sweep is its own commit, so any of them can be reverted independently.
 - No remote host is broken by a variable rename.
-- Nothing in this phase blocks a release; it can ship in pieces.
+- Failure of one rung stops later rungs; it does not authorize interleaving rebrand work with earlier phases.
 
 ## Architecture
 
-Four rungs, in order of increasing cost. Phase 2 already did rungs 1-2.
+Four rungs, executed only after all prerequisite phases. Phase 2 performed the installer/user-visible identity
+migration; it did not authorize starting this deep-rebrand phase early.
 
 ```
 rung 1  DONE in phase 2   productName, identifier, exe, window title, About, icons, installer names
 rung 2  DONE in phase 2   data-dir alias (~/.sl-ade → ~/.slterm), release naming
-rung 3  THIS PHASE        env prefix (+aliases), TERM_PROGRAM, JWT issuer, __SLTERM_HOST__, copyright
-                          headers, docs                                  [needs phases 2-3]
-rung 4  LAST IN THE PLAN  Go module path + 721 imports, repository rename [needs phases 2-8, no open branch]
+rung 3  THIS PHASE, LAST  env prefix (+aliases), TERM_PROGRAM, JWT issuer, __SLTERM_HOST__, copyright
+                           headers, docs [after phases 2-8 and 10]
+rung 4  THEN LAST RUNGS    Go module path + every current import, repository rename
+                           [same exclusive final-phase window, no open branch]
 NEVER                     wsh CLI name, wave.sock basenames, keyring service "SLTerm",
                           the remote-side ~/.slterm layout and its /tmp socket paths
 ```
@@ -105,8 +111,8 @@ would be noise for a contract no one outside the process can see.
 - Modify: `pkg/util/shellutil/shellutil.go` (`TERM_PROGRAM`, the rc-snippet templates)
 - Modify: `pkg/util/shellutil/shellintegration/*.sh` (variable names, local shells only)
 - Modify: `pkg/wavejwt/wavejwt.go` (issuer — only after confirming no token is persisted)
-- Modify: `go.mod` + 721 import sites; `Taskfile.yml`; `package.json`; `README.md`;
-  `ACKNOWLEDGEMENTS.md`; `NOTICE`; 477 copyright headers
+- Modify: `go.mod` + every current import site (fresh census after phase 10); `Taskfile.yml`; `package.json`; `README.md`;
+  `ACKNOWLEDGEMENTS.md`; `NOTICE`; every current copyright header
 - Modify: `frontend/wave.ts`, `frontend/app/element/quicktips.tsx`,
   `frontend/app/view/term/{term-model.ts,termutil.ts}`, `pkg/wshrpc/wshserver/wshserver.go`,
   `pkg/web/web.go` (the ~26 real prose strings)
@@ -115,16 +121,20 @@ would be noise for a contract no one outside the process can see.
 
 ## Implementation Steps
 
-1. **9.1 Env alias helper**, then rename the nineteen internal variables atomically in one commit. Leave
-   the remote-facing ones alone, or gate them behind a `wsh` version handshake.
+1. **9.1 Final-phase gate, then env alias helper.** Verify phases 2–8 and 10 complete, no implementation
+   branches/processes are active, working tree is clean except this phase, capture a fresh brand/import census
+   and updater/repository baseline. Only then add the alias helper and rename internal variables atomically.
+   Leave remote-facing ones alone, or gate them behind a `wsh` version handshake.
 2. **9.2 `TERM_PROGRAM`.** Change it and put it in the release notes; expect it to be the thing nobody
    remembers when a prompt misbehaves.
 3. **9.3 JWT issuer.** Confirm no token is persisted across restarts, then rename. If any is, skip it.
 4. **9.4 Host snapshot key.** Rename `window.__SLTERM_HOST__` in Rust, the frontend and its test in one
    commit.
-5. **9.5 Copyright + prose sweep.** 477 headers and ~26 real strings. Mechanical; one commit each.
+5. **9.5 Copyright + prose sweep.** Freshly enumerate headers and real strings after phase 10. Keep
+   mechanical headers and reviewed user-facing text in separate commits.
 6. **9.6 Module path — last, with no other branch open.** `go mod edit -module github.com/SalyyS1/sl-ade`
-   plus a scripted rewrite of the 721 imports, in a single commit with no other edits. Gate:
+   plus a scripted rewrite of every freshly enumerated import, including orchestration phase 10, in a single
+   commit with no other edits. Gate:
    `go build ./... && go test ./...`, **and** `task generate && git diff --exit-code` so regenerated wshrpc
    clients are proven to carry the new path rather than silently reintroducing the old one.
 7. **9.7 Repository rename — last, and gated on the updater endpoint.** The endpoint frozen in phase 2 is
@@ -139,12 +149,13 @@ would be noise for a contract no one outside the process can see.
 
 ## Todo
 
-- [ ] 9.1 Env alias helper + internal variable rename
+- [ ] 9.1 Final-phase gate proven (2–8 and 10 complete, clean/exclusive branch, fresh census), then env alias helper + internal variable rename
 - [ ] 9.2 `TERM_PROGRAM` changed and noted in release notes
 - [ ] 9.3 JWT issuer renamed, or skipped with a recorded reason
 - [ ] 9.4 `__SLTERM_HOST__` renamed atomically across Rust, TS and its test
 - [ ] 9.5 Copyright headers and prose strings
-- [ ] 9.6 Go module path + 721 imports, build and tests green, `task generate` diff-clean (no open branch)
+- [ ] 9.6 Go module path + every freshly enumerated import (including phase 10), build and tests green,
+      `task generate` diff-clean (no open branch)
 - [ ] 9.7 Repository renamed; endpoint migrated or the post-rename update proven; old URLs still resolving
 - [ ] 9.8 Docs and README
 
@@ -169,10 +180,10 @@ would be noise for a contract no one outside the process can see.
 - **Remote hosts with a stale `wsh`.** *Signal:* an SSH block connects but shell integration is dead.
   *Response:* do not rename the remote-facing variables, or force a `wsh` update on connect. Prefer the
   former.
-- **Module rename churn hides a real change, and collides with every open branch.** A 721-file diff makes
-  review meaningless, and any branch from phases 4-8 conflicts in every touched import block. *Mitigation:*
-  9.6 runs last with no other branch open, as one scripted commit with no other edits, and `task generate`
-  must produce no diff afterwards — otherwise the regenerated clients still carry the old path.
+- **Module rename churn hides a real change, and collides with every open branch.** A repo-wide import diff
+  makes review noisy, and any outstanding branch conflicts in touched import blocks. *Mitigation:* 9.6 runs
+  last after phase 10 with no other branch open, as one scripted commit with no other edits, and
+  `task generate` must produce no diff afterwards — otherwise generated clients still carry the old path.
 - **The repo rename can silently kill the update channel.** *Signal:* clients report up-to-date forever
   after the rename, because a 404 is indistinguishable from "no update". *Response:* 9.7 is gated on either
   an off-repo endpoint or a proven post-rename update.
@@ -194,7 +205,7 @@ would be noise for a contract no one outside the process can see.
 
 ## Next Steps
 
-This is the last phase of the plan. Remaining ideas recorded for a follow-on plan: supervisor/worker
-orchestration with a visible task DAG, multi-repo workspaces, an LSP bridge for code intelligence, an
-agent sandbox/trust model, and element-to-prompt design mode over the existing webview.
+This is the last phase. No deferred orchestration remains: phase 10 delivered the approved engine before
+this mechanical rename. Possible future product ideas (multi-repo/LSP/design mode) require separate user
+scope and are not commitments in this plan.
 
