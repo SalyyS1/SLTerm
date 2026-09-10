@@ -31,7 +31,7 @@ tauri-plugin-dialog = "2"
 [target.'cfg(windows)'.dependencies]
 # One call: DwmSetWindowAttribute for rounded corners on the undecorated window.
 # Undecorated windows lose DWM's rounding, and there is no Tauri API for it.
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_Shell"] }
 
 [profile.release]
 # The whole point of moving off Electron is size, so optimize for it: fat LTO

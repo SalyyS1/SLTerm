@@ -40,3 +40,7 @@ func SignalTerm(pid int) error {
 func SignalHup(pid int) error {
 	return nil
 }
+
+func SignalProcessGroup(pgid int, signal os.Signal) error {
+	return fmt.Errorf("process group signaling not supported on windows")
+}

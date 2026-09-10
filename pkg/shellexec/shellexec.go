@@ -48,29 +48,32 @@ type CommandOptsType struct {
 }
 
 type ShellProc struct {
-	ConnName  string
-	Cmd       ConnInterface
-	CloseOnce *sync.Once
-	DoneCh    chan any // closed after proc.Wait() returns
-	WaitErr   error    // WaitErr is synchronized by DoneCh (written before DoneCh is closed) and CloseOnce
+	ConnName       string
+	Cmd            ConnInterface
+	CloseOnce      *sync.Once
+	CloseStartOnce *sync.Once
+	DoneCh         chan any // closed after proc.Wait() returns
+	WaitErr        error    // WaitErr is synchronized by DoneCh (written before DoneCh is closed) and CloseOnce
 }
 
 func (sp *ShellProc) Close() {
-	sp.Cmd.KillGraceful(DefaultGracefulKillWait)
-	go func() {
-		defer func() {
-			panichandler.PanicHandler("ShellProc.Close", recover())
-		}()
-		waitErr := sp.Cmd.Wait()
-		sp.SetWaitErrorAndSignalDone(waitErr)
+	sp.CloseStartOnce.Do(func() {
+		sp.Cmd.KillGraceful(DefaultGracefulKillWait)
+		go func() {
+			defer func() {
+				panichandler.PanicHandler("ShellProc.Close", recover())
+			}()
+			waitErr := sp.Cmd.Wait()
+			sp.SetWaitErrorAndSignalDone(waitErr)
 
-		// windows cannot handle the pty being
-		// closed twice, so we let the pty
-		// close itself instead
-		if runtime.GOOS != "windows" {
-			sp.Cmd.Close()
-		}
-	}()
+			// windows cannot handle the pty being
+			// closed twice, so we let the pty
+			// close itself instead
+			if runtime.GOOS != "windows" {
+				sp.Cmd.Close()
+			}
+		}()
+	})
 }
 
 func (sp *ShellProc) SetWaitErrorAndSignalDone(waitErr error) {
@@ -171,7 +174,7 @@ func StartWslShellProcNoWsh(ctx context.Context, termSize waveobj.TermSize, cmdS
 		return nil, err
 	}
 	cmdWrap := MakeCmdWrap(ecmd, cmdPty, true)
-	return &ShellProc{Cmd: cmdWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
+	return &ShellProc{Cmd: cmdWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, CloseStartOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
 }
 
 func StartWslShellProc(ctx context.Context, termSize waveobj.TermSize, cmdStr string, cmdOpts CommandOptsType, conn *wslconn.WslConn) (*ShellProc, error) {
@@ -289,7 +292,7 @@ func StartWslShellProc(ctx context.Context, termSize waveobj.TermSize, cmdStr st
 		return nil, err
 	}
 	cmdWrap := MakeCmdWrap(ecmd, cmdPty, true)
-	return &ShellProc{Cmd: cmdWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
+	return &ShellProc{Cmd: cmdWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, CloseStartOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
 }
 
 func StartRemoteShellProcNoWsh(ctx context.Context, termSize waveobj.TermSize, cmdStr string, cmdOpts CommandOptsType, conn *conncontroller.SSHConn) (*ShellProc, error) {
@@ -332,7 +335,7 @@ func StartRemoteShellProcNoWsh(ctx context.Context, termSize waveobj.TermSize, c
 		pipePty.Close()
 		return nil, err
 	}
-	return &ShellProc{Cmd: sessionWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
+	return &ShellProc{Cmd: sessionWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, CloseStartOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
 }
 
 func StartRemoteShellProc(ctx context.Context, logCtx context.Context, termSize waveobj.TermSize, cmdStr string, cmdOpts CommandOptsType, conn *conncontroller.SSHConn) (*ShellProc, error) {
@@ -467,7 +470,7 @@ func StartRemoteShellProc(ctx context.Context, logCtx context.Context, termSize 
 		pipePty.Close()
 		return nil, err
 	}
-	return &ShellProc{Cmd: sessionWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
+	return &ShellProc{Cmd: sessionWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, CloseStartOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
 }
 
 func StartRemoteShellJob(ctx context.Context, logCtx context.Context, termSize waveobj.TermSize, cmdStr string, cmdOpts CommandOptsType, conn *conncontroller.SSHConn, optBlockId string) (string, error) {
@@ -690,7 +693,7 @@ func StartLocalShellProc(logCtx context.Context, termSize waveobj.TermSize, cmdS
 		return nil, err
 	}
 	cmdWrap := MakeCmdWrap(ecmd, cmdPty, isShell)
-	return &ShellProc{Cmd: cmdWrap, ConnName: connName, CloseOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
+	return &ShellProc{Cmd: cmdWrap, ConnName: connName, CloseOnce: &sync.Once{}, CloseStartOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
 }
 
 func RunSimpleCmdInPty(ecmd *exec.Cmd, termSize waveobj.TermSize) ([]byte, error) {

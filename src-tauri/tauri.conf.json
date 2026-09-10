@@ -12,7 +12,7 @@
         "withGlobalTauri": false,
         "windows": [],
         "security": {
-            "csp": null
+            "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://127.0.0.1:* ws://127.0.0.1:*; worker-src 'self' blob:; child-src 'self' blob:; frame-src http://127.0.0.1:*; img-src 'self' asset: http://127.0.0.1:* https://raw.githubusercontent.com https://play.pokemonshowdown.com data: blob:; media-src 'self' http://127.0.0.1:* blob:; font-src 'self' data:; form-action 'none'; frame-ancestors 'none'"
         }
     },
     "bundle": {

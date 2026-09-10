@@ -68,3 +68,13 @@ func SignalTerm(pid int) error {
 func SignalHup(pid int) error {
 	return syscall.Kill(pid, syscall.SIGHUP)
 }
+
+// SignalProcessGroup targets the exact process group created for an owned PTY.
+// A negative pid is the POSIX group form; it never searches by executable name.
+func SignalProcessGroup(pgid int, signal os.Signal) error {
+	sig, ok := signal.(syscall.Signal)
+	if !ok {
+		return fmt.Errorf("unsupported process signal %v", signal)
+	}
+	return syscall.Kill(-pgid, sig)
+}

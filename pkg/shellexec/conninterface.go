@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/creack/pty"
 	"github.com/SalyyS1/SLTerm/pkg/panichandler"
 	"github.com/SalyyS1/SLTerm/pkg/util/unixutil"
 	"github.com/SalyyS1/SLTerm/pkg/wsl"
+	"github.com/creack/pty"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -33,20 +33,29 @@ type ConnInterface interface {
 	pty.Pty
 }
 
+type waitState struct {
+	once sync.Once
+	done chan struct{}
+	err  error
+}
+
+func newWaitState() *waitState {
+	return &waitState{done: make(chan struct{})}
+}
+
 type CmdWrap struct {
-	Cmd      *exec.Cmd
-	IsShell  bool
-	WaitOnce *sync.Once
-	WaitErr  error
+	Cmd       *exec.Cmd
+	IsShell   bool
+	waitState *waitState
 	pty.Pty
 }
 
 func MakeCmdWrap(cmd *exec.Cmd, cmdPty pty.Pty, isShell bool) CmdWrap {
 	return CmdWrap{
-		Cmd:      cmd,
-		IsShell:  isShell,
-		WaitOnce: &sync.Once{},
-		Pty:      cmdPty,
+		Cmd:       cmd,
+		IsShell:   isShell,
+		waitState: newWaitState(),
+		Pty:       cmdPty,
 	}
 }
 
@@ -55,10 +64,12 @@ func (cw CmdWrap) Kill() {
 }
 
 func (cw CmdWrap) Wait() error {
-	cw.WaitOnce.Do(func() {
-		cw.WaitErr = cw.Cmd.Wait()
+	cw.waitState.once.Do(func() {
+		cw.waitState.err = cw.Cmd.Wait()
+		close(cw.waitState.done)
 	})
-	return cw.WaitErr
+	<-cw.waitState.done
+	return cw.waitState.err
 }
 
 // only valid once Wait() has returned (or you know Cmd is done)
@@ -87,25 +98,32 @@ func (cw CmdWrap) KillGraceful(timeout time.Duration) {
 	if cw.Cmd.Process == nil {
 		return
 	}
-	if cw.Cmd.ProcessState != nil && cw.Cmd.ProcessState.Exited() {
-		return
-	}
+	pid := cw.Cmd.Process.Pid
 	if runtime.GOOS == "windows" {
-		cw.Cmd.Process.Kill()
+		// The ConPTY root is the only ownership handle available on Windows today.
+		// Do not broaden this to taskkill-by-name; Windows Job Object ownership is
+		// intentionally a hardware-gated follow-up.
+		_ = cw.Cmd.Process.Kill()
 		return
 	}
 	if cw.IsShell {
-		unixutil.SignalHup(cw.Cmd.Process.Pid)
+		unixutil.SignalProcessGroup(pid, syscall.SIGHUP)
 	} else {
-		unixutil.SignalTerm(cw.Cmd.Process.Pid)
+		unixutil.SignalProcessGroup(pid, syscall.SIGTERM)
 	}
 	go func() {
 		defer func() {
 			panichandler.PanicHandler("KillGraceful:Kill", recover())
 		}()
-		time.Sleep(timeout)
-		if cw.Cmd.ProcessState == nil || !cw.Cmd.ProcessState.Exited() {
-			cw.Cmd.Process.Kill() // force kill if it is already not exited
+		timer := time.NewTimer(timeout)
+		defer timer.Stop()
+		select {
+		case <-cw.waitState.done:
+			return
+		case <-timer.C:
+			// WaitDone is the only completion signal. Never inspect ProcessState
+			// concurrently with Cmd.Wait, and never poll a reused PID.
+			unixutil.SignalProcessGroup(pid, syscall.SIGKILL)
 		}
 	}()
 }

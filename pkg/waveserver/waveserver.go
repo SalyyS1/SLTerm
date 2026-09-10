@@ -85,9 +85,11 @@ var heldLock wavebase.FDLock
 func doShutdown(reason string) {
 	shutdownOnce.Do(func() {
 		log.Printf("shutting down: %s\n", reason)
-		ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancelFn := context.WithTimeout(context.Background(), 12*time.Second)
 		defer cancelFn()
-		go blockcontroller.StopAllBlockControllersForShutdown()
+		if err := blockcontroller.StopAllBlockControllersForShutdown(ctx); err != nil {
+			log.Printf("warning: %v\n", err)
+		}
 		petengine.Shutdown()
 		shutdownActivityUpdate()
 		sendTelemetryWrapper()
@@ -98,7 +100,12 @@ func doShutdown(reason string) {
 		if watcher != nil {
 			watcher.Close()
 		}
-		time.Sleep(500 * time.Millisecond)
+		if heldLock != nil {
+			if err := heldLock.Close(); err != nil {
+				log.Printf("warning: releasing data lock: %v\n", err)
+			}
+			heldLock = nil
+		}
 		log.Printf("shutdown complete\n")
 		os.Exit(0)
 	})

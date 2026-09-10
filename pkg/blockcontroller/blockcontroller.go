@@ -75,6 +75,7 @@ type Controller interface {
 var (
 	controllerRegistry = make(map[string]Controller)
 	registryLock       sync.RWMutex
+	launchesFrozen     bool
 )
 
 // Registry operations
@@ -84,10 +85,14 @@ func getController(blockId string) Controller {
 	return controllerRegistry[blockId]
 }
 
-func registerController(blockId string, controller Controller) {
+func registerController(blockId string, controller Controller) bool {
 	var existingController Controller
 
 	registryLock.Lock()
+	if launchesFrozen {
+		registryLock.Unlock()
+		return false
+	}
 	existing, exists := controllerRegistry[blockId]
 	if exists {
 		existingController = existing
@@ -99,6 +104,16 @@ func registerController(blockId string, controller Controller) {
 		existingController.Stop(false, Status_Done, true)
 		wstore.DeleteRTInfo(waveobj.MakeORef(waveobj.OType_Block, blockId))
 	}
+	return true
+}
+
+func admitControllerStart(blockId string, controller Controller, start func() error) error {
+	registryLock.Lock()
+	defer registryLock.Unlock()
+	if launchesFrozen || controllerRegistry[blockId] != controller {
+		return fmt.Errorf("cannot start controller while server shutdown is in progress")
+	}
+	return start()
 }
 
 func deleteController(blockId string) {
@@ -141,6 +156,12 @@ func handleBlockCloseEvent(event *wps.WaveEvent) {
 func ResyncController(ctx context.Context, tabId string, blockId string, rtOpts *waveobj.RuntimeOpts, force bool) error {
 	if tabId == "" || blockId == "" {
 		return fmt.Errorf("invalid tabId or blockId passed to ResyncController")
+	}
+	registryLock.RLock()
+	frozen := launchesFrozen
+	registryLock.RUnlock()
+	if frozen {
+		return fmt.Errorf("cannot start controller while server shutdown is in progress")
 	}
 
 	blockData, err := wstore.DBMustGet[*waveobj.Block](ctx, blockId)
@@ -232,7 +253,22 @@ func ResyncController(ctx context.Context, tabId string, blockId string, rtOpts 
 			} else {
 				controller = MakeShellController(tabId, blockId, controllerName, connName)
 			}
-			registerController(blockId, controller)
+			if !registerController(blockId, controller) {
+				return fmt.Errorf("cannot start controller while server shutdown is in progress")
+			}
+			if err := admitControllerStart(blockId, controller, func() error {
+				return controller.Start(ctx, blockData.Meta, rtOpts, force)
+			}); err != nil {
+				// Reconcile any process or durable job allocated before startup failed.
+				controller.Stop(true, Status_Done, true)
+				registryLock.Lock()
+				if controllerRegistry[blockId] == controller {
+					delete(controllerRegistry, blockId)
+				}
+				registryLock.Unlock()
+				return fmt.Errorf("error starting controller: %w", err)
+			}
+			return nil
 
 		default:
 			return fmt.Errorf("unknown controller type %q", controllerName)
@@ -252,8 +288,11 @@ func ResyncController(ctx context.Context, tabId string, blockId string, rtOpts 
 			}
 		}
 
-		// Start controller
-		err = controller.Start(ctx, blockData.Meta, rtOpts, force)
+		if err := admitControllerStart(blockId, controller, func() error {
+			return controller.Start(ctx, blockData.Meta, rtOpts, force)
+		}); err != nil {
+			return fmt.Errorf("error starting controller: %w", err)
+		}
 		if err != nil {
 			return fmt.Errorf("error starting controller: %w", err)
 		}
@@ -313,20 +352,35 @@ func SendInput(blockId string, inputUnion *BlockInputUnion) error {
 	return controller.SendInput(inputUnion)
 }
 
-// only call this on shutdown
-func StopAllBlockControllersForShutdown() {
-	controllers := getAllControllers()
+// StopAllBlockControllersForShutdown freezes new launches, snapshots exact
+// controller instances, and waits for every bounded stop before returning.
+func StopAllBlockControllersForShutdown(ctx context.Context) error {
+	registryLock.Lock()
+	launchesFrozen = true
+	controllers := make(map[string]Controller, len(controllerRegistry))
+	for id, controller := range controllerRegistry {
+		controllers[id] = controller
+	}
+	registryLock.Unlock()
+	return stopControllerSnapshot(ctx, controllers, func(id string) {
+		wstore.DeleteRTInfo(waveobj.MakeORef(waveobj.OType_Block, id))
+	})
+}
+
+func stopControllerSnapshot(ctx context.Context, controllers map[string]Controller, deleteRuntimeInfo func(string)) error {
 	var wg sync.WaitGroup
 	for blockId, controller := range controllers {
 		status := controller.GetRuntimeStatus()
-		if status != nil && status.ShellProcStatus == Status_Running {
-			wg.Add(1)
-			go func(id string, c Controller) {
-				defer wg.Done()
-				c.Stop(true, Status_Done, false)
-				wstore.DeleteRTInfo(waveobj.MakeORef(waveobj.OType_Block, id))
-			}(blockId, controller)
+		if status == nil || status.ShellProcStatus == Status_Done {
+			continue
 		}
+		wg.Add(1)
+		go func(id string, c Controller) {
+			defer wg.Done()
+			// App Quit owns durable jobs too; normal block stop deliberately does not.
+			c.Stop(true, Status_Done, true)
+			deleteRuntimeInfo(id)
+		}(blockId, controller)
 	}
 	doneCh := make(chan struct{})
 	go func() {
@@ -335,9 +389,9 @@ func StopAllBlockControllersForShutdown() {
 	}()
 	select {
 	case <-doneCh:
-		// all controllers stopped
-	case <-time.After(10 * time.Second):
-		log.Printf("warning: shutdown timed out waiting for block controllers\n")
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("shutdown timed out waiting for owned block controllers: %w", ctx.Err())
 	}
 }
 

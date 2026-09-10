@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use rand::Rng;
 use tauri::{Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -85,10 +86,26 @@ impl Backend {
     fn shutdown(&self) {
         let child = self.0.lock().ok().and_then(|mut guard| guard.take());
         if let Some(mut child) = child {
-            let _ = child.kill();
-            // Waiting is the point: kill() only asks. Returning before the
-            // process is reaped is what leaves the lock held.
-            let _ = child.wait();
+            // Closing stdin asks wavesrv to execute its awaited shutdown sequence.
+            // Give that bounded path time to flush state and release wave.lock;
+            // killing the exact sidecar remains the last resort.
+            drop(child.stdin.take());
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) => return,
+                    Ok(None) if Instant::now() < deadline => {
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    Ok(None) | Err(_) => break,
+                }
+            }
+            if let Err(e) = child.kill() {
+                eprintln!("[slterm] could not terminate wavesrv after shutdown deadline: {e}");
+            }
+            if let Err(e) = child.wait() {
+                eprintln!("[slterm] could not reap wavesrv: {e}");
+            }
         }
     }
 }
@@ -113,7 +130,9 @@ fn app_root(app: &tauri::AppHandle) -> PathBuf {
             return dir;
         }
     }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("dist")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("dist")
 }
 
 /// Locates the packaged `wavesrv` binary. Falls back to the repo's dist/ tree so
@@ -320,7 +339,7 @@ pub fn run() {
                         .message(detail)
                         .title("SLTerm could not start")
                         .kind(MessageDialogKind::Error)
-                        .blocking_show();
+                        .show(|_| {});
                     return Err(e.into());
                 }
             };
@@ -340,7 +359,8 @@ pub fn run() {
             // back; it keeps its decorations and the frontend fills the inset.
             // Windows and Linux get a fully undecorated window and the frontend
             // draws all three buttons.
-            let decorations = settings.native_titlebar || window::keeps_decorations_with_custom_titlebar();
+            let decorations =
+                settings.native_titlebar || window::keeps_decorations_with_custom_titlebar();
 
             // The window is built here rather than declared in tauri.conf.json
             // because the snapshot depends on endpoints only known after the
@@ -380,7 +400,9 @@ pub fn run() {
                     .map(|m| m.scale_factor())
                     .unwrap_or(1.0);
                 let (size, position) = window::logical_from_saved(bounds, scale);
-                builder = builder.inner_size(size.width, size.height).position(position.x, position.y);
+                builder = builder
+                    .inner_size(size.width, size.height)
+                    .position(position.x, position.y);
             }
 
             // Transparency is only worth its cost when something behind the
@@ -496,5 +518,28 @@ fn round_window_corners(window: &tauri::WebviewWindow) {
             &preference as *const _ as *const _,
             std::mem::size_of_val(&preference) as u32,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{close_may_proceed, set_close_confirmed, set_update_in_progress};
+
+    #[test]
+    fn cancelled_quit_does_not_enable_close() {
+        set_close_confirmed(false);
+        set_update_in_progress(false);
+        assert!(!close_may_proceed());
+    }
+
+    #[test]
+    fn confirmed_or_update_driven_quit_can_close() {
+        set_close_confirmed(true);
+        set_update_in_progress(false);
+        assert!(close_may_proceed());
+        set_close_confirmed(false);
+        set_update_in_progress(true);
+        assert!(close_may_proceed());
+        set_update_in_progress(false);
     }
 }

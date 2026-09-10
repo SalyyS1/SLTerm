@@ -90,9 +90,10 @@ func (sc *ShellController) Start(ctx context.Context, blockMeta waveobj.MetaMapT
 		return fmt.Errorf("error getting block: %w", err)
 	}
 
-	// Use the existing run method which handles all the start logic
-	go sc.run(ctx, blockData, blockData.Meta, rtOpts, force)
-	return nil
+	// Complete process admission before returning. Shutdown holds the registry
+	// write lock after freezing launches, so an asynchronously deferred spawn here
+	// could otherwise escape the ownership snapshot.
+	return sc.run(ctx, blockData, blockData.Meta, rtOpts, force)
 }
 
 func (sc *ShellController) Stop(graceful bool, newStatus string, destroy bool) {
@@ -262,24 +263,19 @@ func (sc *ShellController) UnlockRunLock() {
 	log.Printf("block %q run() unlock\n", sc.BlockId)
 }
 
-func (sc *ShellController) run(logCtx context.Context, bdata *waveobj.Block, blockMeta map[string]any, rtOpts *waveobj.RuntimeOpts, force bool) {
+func (sc *ShellController) run(logCtx context.Context, bdata *waveobj.Block, blockMeta map[string]any, rtOpts *waveobj.RuntimeOpts, force bool) error {
 	blocklogger.Debugf(logCtx, "[conndebug] ShellController.run() %q\n", sc.BlockId)
-	runningShellCommand := false
 	ok := sc.LockRunLock()
 	if !ok {
 		log.Printf("block %q is already executing run()\n", sc.BlockId)
-		return
+		return fmt.Errorf("block %q is already executing run()", sc.BlockId)
 	}
-	defer func() {
-		if !runningShellCommand {
-			sc.UnlockRunLock()
-		}
-	}()
+	defer sc.UnlockRunLock()
 	curStatus := sc.GetRuntimeStatus()
 	controllerName := bdata.Meta.GetString(waveobj.MetaKey_Controller, "")
 	if controllerName != BlockController_Shell && controllerName != BlockController_Cmd {
 		log.Printf("unknown controller %q\n", controllerName)
-		return
+		return fmt.Errorf("unknown controller %q", controllerName)
 	}
 	runOnce := getBoolFromMeta(blockMeta, waveobj.MetaKey_CmdRunOnce, false)
 	runOnStart := getBoolFromMeta(blockMeta, waveobj.MetaKey_CmdRunOnStart, true)
@@ -300,33 +296,25 @@ func (sc *ShellController) run(logCtx context.Context, bdata *waveobj.Block, blo
 			err := wstore.UpdateObjectMeta(ctx, waveobj.MakeORef(waveobj.OType_Block, sc.BlockId), metaUpdate, false)
 			if err != nil {
 				log.Printf("error updating block meta (in blockcontroller.run): %v\n", err)
-				return
+				return err
 			}
 		}
-		runningShellCommand = true
-		go func() {
-			defer func() {
-				panichandler.PanicHandler("blockcontroller:run-shell-command", recover())
-			}()
-			defer sc.UnlockRunLock()
-			var termSize waveobj.TermSize
-			if rtOpts != nil && rtOpts.TermSize.Rows > 0 && rtOpts.TermSize.Cols > 0 {
-				termSize = rtOpts.TermSize
-				// Record the size the shell is actually starting at, so a restart that
-				// arrives without runtime opts starts at the same width instead of at
-				// the default and repainting once the client resizes it.
-				if err := setTermSizeInDB(sc.BlockId, termSize); err != nil {
-					log.Printf("error recording spawn term size: %v\n", err)
-				}
-			} else {
-				termSize = getTermSize(bdata)
+		var termSize waveobj.TermSize
+		if rtOpts != nil && rtOpts.TermSize.Rows > 0 && rtOpts.TermSize.Cols > 0 {
+			termSize = rtOpts.TermSize
+			if err := setTermSizeInDB(sc.BlockId, termSize); err != nil {
+				log.Printf("error recording spawn term size: %v\n", err)
 			}
-			err := sc.DoRunShellCommand(logCtx, &RunShellOpts{TermSize: termSize}, bdata.Meta)
-			if err != nil {
-				debugLog(logCtx, "error running shell: %v\n", err)
-			}
-		}()
+		} else {
+			termSize = getTermSize(bdata)
+		}
+		err := sc.DoRunShellCommand(logCtx, &RunShellOpts{TermSize: termSize}, bdata.Meta)
+		if err != nil {
+			debugLog(logCtx, "error running shell: %v\n", err)
+			return err
+		}
 	}
+	return nil
 }
 
 // [Include all the remaining private methods with bc replaced by sc]
