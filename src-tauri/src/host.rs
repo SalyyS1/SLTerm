@@ -202,15 +202,21 @@ fn open_with_desktop(target: &str) -> Result<(), String> {
         return Ok(());
     }
     #[cfg(target_os = "macos")]
-    let (program, args): (&str, Vec<&str>) = ("open", vec![]);
+    {
+        return std::process::Command::new("open")
+            .arg(target)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "cannot open the selected path with the desktop handler".to_string());
+    }
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-    let (program, args): (&str, Vec<&str>) = ("xdg-open", vec![]);
-    std::process::Command::new(program)
-        .args(args)
-        .arg(target)
-        .spawn()
-        .map(|_| ())
-        .map_err(|_| "cannot open the selected path with the desktop handler".to_string())
+    {
+        return std::process::Command::new("xdg-open")
+            .arg(target)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "cannot open the selected path with the desktop handler".to_string());
+    }
 }
 
 #[tauri::command]
