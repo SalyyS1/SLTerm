@@ -74,21 +74,21 @@ export async function buildAppMenu(): Promise<ElectronContextMenuItem[]> {
 
     const appMenu: ElectronContextMenuItem = {
         id: "menu:app",
-        label: "SLTerm",
+        label: "SL-ADE",
         submenu: items(
-            { id: MenuOnly.About, label: "About SLTerm" },
+            { id: MenuOnly.About, label: "About SL-ADE" },
             { id: MenuOnly.CheckUpdates, label: "Check for Updates" },
             separator(),
             // macOS puts these in the application menu and provides them itself.
             ...(isMacOS()
                 ? [
                       { id: "role:services", label: "Services", role: "services" },
-                      { id: "role:hide", label: "Hide SLTerm", role: "hide" },
+                      { id: "role:hide", label: "Hide SL-ADE", role: "hide" },
                       { id: "role:hideOthers", label: "Hide Others", role: "hideOthers" },
                       separator(),
                   ]
                 : []),
-            { id: "role:quit", label: "Quit SLTerm", role: "quit" }
+            { id: "role:quit", label: "Quit SL-ADE", role: "quit" }
         ),
     };
 

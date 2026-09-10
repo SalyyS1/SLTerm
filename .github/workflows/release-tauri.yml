@@ -1,5 +1,5 @@
 # Builds the Tauri shell's installers on a `tauri-v*` tag and publishes them as a
-# prerelease.
+# manual identity-release candidate.
 #
 # Kept separate from release.yml on purpose. That workflow ships the Electron build,
 # which is the fallback the runtime swap is not allowed to break; this one ships the
@@ -41,13 +41,16 @@ jobs:
                 include:
                     - label: linux-x64
                       runner: ubuntu-latest
-                      bundles: deb,rpm
+                      bundles: appimage,deb,rpm
                     - label: windows-x64
                       runner: windows-latest
-                      bundles: nsis
+                      bundles: nsis,msi
                     - label: macos-arm64
                       runner: macos-latest
-                      bundles: dmg
+                      bundles: dmg,app
+                    - label: macos-x64
+                      runner: macos-15-intel
+                      bundles: dmg,app
         steps:
             - uses: actions/checkout@v6
 
@@ -108,8 +111,9 @@ jobs:
               run: |
                   mkdir -p artifacts
                   find src-tauri/target/release/bundle -type f \
-                      \( -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' \
-                         -o -name '*-setup.exe' \) \
+                      \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \
+                         -o -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' \
+                         -o -name '*.app.tar.gz' \) \
                       -exec cp {} artifacts/ \;
                   ls -la artifacts
 
@@ -121,9 +125,12 @@ jobs:
                   retention-days: 7
 
     release:
-        name: Publish Prerelease
+        name: Publish Identity Release
         needs: build
         runs-on: ubuntu-latest
+        # Preserve successful platform artifacts when one matrix leg fails, but
+        # never publish a branch-dispatch run as a release.
+        if: always() && startsWith(github.ref, 'refs/tags/tauri-v')
         steps:
             - uses: actions/download-artifact@v6
               with:
@@ -133,13 +140,14 @@ jobs:
             - name: List what will be published
               run: ls -la staging
 
-            - name: Create or update the prerelease
+            - name: Create or update the identity release
               uses: softprops/action-gh-release@v2
               with:
                   files: staging/*
                   draft: false
-                  # Prerelease until the engine matrix has been checked on Windows
-                  # and macOS. Only the Linux/WebKitGTK build has been run.
-                  prerelease: true
+                  # This release is the manual SLTerm → SL-ADE reinstall. It must
+                  # be a stable release so the future updater's /releases/latest/
+                  # endpoint has an unambiguous owner; signing remains disabled.
+                  prerelease: false
                   generate_release_notes: true
                   fail_on_unmatched_files: true

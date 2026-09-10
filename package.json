@@ -4,13 +4,13 @@
         "name": "Salyvn",
         "email": "1.tranducnhan.2021@gmail.com"
     },
-    "productName": "SLTerm",
+    "productName": "SL-ADE",
     "description": "Open-Source Modern Terminal by Salyvn",
     "license": "Apache-2.0",
     "version": "0.21.0",
     "homepage": "https://github.com/SalyyS1/SLTerm",
     "build": {
-        "appId": "dev.salyvn.slterm"
+        "appId": "dev.salyvn.sl-ade"
     },
     "private": true,
     "sideEffects": [

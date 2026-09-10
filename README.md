@@ -1,10 +1,14 @@
+# SL-ADE identity release
+
+The Tauri shell identity is now **SL-ADE**. This release is a manual reinstall, not an in-place update: close and uninstall SLTerm before installing SL-ADE. Your existing `~/.slterm` profile is reused automatically; it is aliased, never copied or merged. Automatic updates and release signing are not enabled yet.
+
 <p align="center">
   <a href="https://github.com/SalyyS1/SLTerm">
     <img alt="SLTerm Logo" src="./assets/appicon-windows.png" width="120">
   </a>
 </p>
 
-<h1 align="center">SLTerm</h1>
+<h1 align="center">SL-ADE</h1>
 
 <p align="center">
   <strong>Open-Source Modern Terminal by Salyvn</strong>
@@ -18,7 +22,7 @@
 
 ---
 
-SLTerm is a modern, feature-rich terminal built on Electron. It combines the power of a traditional terminal with a graphical workspace — file previews, web browsing, and rich customization — all in one window.
+SL-ADE is a modern, feature-rich terminal built on a Tauri shell and Go backend. It combines the power of a traditional terminal with a graphical workspace — file previews, web browsing, and rich customization — all in one window.
 
 ## ✨ Features
 
@@ -34,33 +38,33 @@ SLTerm is a modern, feature-rich terminal built on Electron. It combines the pow
 
 ## 📥 Installation
 
-Download from [**Releases**](https://github.com/SalyyS1/SLTerm/releases).
+Download from [**Releases**](https://github.com/SalyyS1/SLTerm/releases). This identity release is a manual reinstall: close and uninstall SLTerm before installing SL-ADE. Automatic updates are not enabled yet.
 
 ### Windows
 
 | File                     | Description                  |
 | ------------------------ | ---------------------------- |
-| `SLTerm-win32-x64-*.exe` | NSIS Installer (recommended) |
-| `SLTerm-win32-x64-*.zip` | Portable ZIP                 |
+| `SL-ADE-win32-x64-*.exe` | NSIS Installer (recommended) |
+| `SL-ADE-win32-x64-*.msi` | MSI Installer |
 
 ### macOS
 
 | File                         | Description                 |
 | ---------------------------- | --------------------------- |
-| `SLTerm-darwin-arm64-*.zip`  | Apple Silicon (recommended) |
-| `SLTerm-darwin-x64-*.zip`    | Intel                       |
+| `SL-ADE-darwin-arm64-*.dmg`  | Apple Silicon (recommended) |
+| `SL-ADE-darwin-x64-*.dmg`    | Intel                       |
 
-Unzip and move `SLTerm.app` to `/Applications`. Builds are currently unsigned, so
+Unzip and move `SL-ADE.app` to `/Applications`. Builds are currently unsigned, so
 the first launch needs right-click → **Open** (or
-`xattr -dr com.apple.quarantine /Applications/SLTerm.app`) to get past Gatekeeper.
-A `.dmg` will return once the project has a signing certificate.
+`xattr -dr com.apple.quarantine /Applications/SL-ADE.app`) to get past Gatekeeper.
+A `.dmg` is included in the Tauri identity release; signing is not enabled yet.
 
 ### Linux
 
-| File                          | Description             |
-| ----------------------------- | ----------------------- |
-| `SLTerm-linux-x86_64-*.AppImage` | Portable (recommended) |
-| `SLTerm-linux-amd64-*.deb`       | Debian / Ubuntu        |
+| File                             | Description             |
+| -------------------------------- | ----------------------- |
+| `SL-ADE-linux-x86_64-*.AppImage` | Portable (recommended) |
+| `SL-ADE-linux-amd64-*.deb`       | Debian / Ubuntu        |
 
 ### Minimum Requirements
 
@@ -92,7 +96,7 @@ See [BUILD.md](BUILD.md) for detailed instructions.
 
 ## 🌐 Internationalization (i18n)
 
-SLTerm supports multiple languages:
+SL-ADE supports multiple languages:
 
 | Language   | Status      |
 | ---------- | ----------- |
@@ -120,7 +124,7 @@ SLTerm/
 
 ## 📝 License
 
-SLTerm is licensed under the [Apache-2.0 License](LICENSE).
+SL-ADE is licensed under the [Apache-2.0 License](LICENSE).
 
 **Based on [Wave Terminal](https://github.com/wavetermdev/waveterm)** — forked and customized by [Salyvn](https://github.com/SalyyS1).
 

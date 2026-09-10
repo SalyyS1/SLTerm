@@ -119,7 +119,7 @@
     },
     "modals": {
         "about": {
-            "title": "SLTerm",
+            "title": "SL-ADE",
             "subtitle": "Open-Source Modern Terminal",
             "description": "Built for Seamless Workflows",
             "clientVersion": "Client Version",

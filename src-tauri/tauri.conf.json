@@ -1,8 +1,9 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "SLTerm",
+    "productName": "SL-ADE",
     "version": "0.21.0",
-    "identifier": "dev.salyvn.slterm",
+    "identifier": "dev.salyvn.sl-ade",
+    "mainBinaryName": "sl-ade",
     "build": {
         "frontendDist": "../dist/frontend-tauri",
         "beforeBuildCommand": "npm run build:prod && node scripts/stage-tauri-frontend.mjs",
@@ -19,11 +20,22 @@
         "active": true,
         "targets": [
             "nsis",
+            "msi",
             "app",
             "dmg",
+            "appimage",
             "deb",
             "rpm"
         ],
+        "createUpdaterArtifacts": false,
+        "windows": {
+            "wix": {
+                "upgradeCode": "796fb6b1-6ab1-5fe6-825a-976ef3a1ebb1"
+            },
+            "nsis": {
+                "installerHooks": "nsis-hook.nsh"
+            }
+        },
         "icon": [
             "icons/32x32.png",
             "icons/128x128.png",

@@ -175,10 +175,24 @@ fn arch_tag() -> &'static str {
 }
 
 fn data_dir_args() -> (PathBuf, PathBuf) {
-    // Mirrors the Electron layout so an existing install's data is found rather
-    // than starting from an empty workspace.
-    let base = dirs_home().join(".slterm");
-    (base.join("data"), base.join("config"))
+    data_dir_args_for(&dirs_home())
+}
+
+/// Selects an existing SL-ADE profile before the legacy SLTerm profile.
+///
+/// This is an alias, not a migration: profile contents are never copied or
+/// merged. A new profile is selected only when neither root exists.
+fn data_dir_args_for(home: &PathBuf) -> (PathBuf, PathBuf) {
+    let ade_root = home.join(".sl-ade");
+    let legacy_root = home.join(".slterm");
+    let root = if ade_root.exists() {
+        ade_root
+    } else if legacy_root.exists() {
+        legacy_root
+    } else {
+        ade_root
+    };
+    (root.join("data"), root.join("config"))
 }
 
 fn dirs_home() -> PathBuf {
@@ -337,7 +351,7 @@ pub fn run() {
                     handle
                         .dialog()
                         .message(detail)
-                        .title("SLTerm could not start")
+                        .title("SL-ADE could not start")
                         .kind(MessageDialogKind::Error)
                         .show(|_| {});
                     return Err(e.into());
@@ -370,7 +384,7 @@ pub fn run() {
             #[allow(unused_mut)]
             let mut builder =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("SLTerm")
+                    .title("SL-ADE")
                     .inner_size(window::DEFAULT_WIDTH, window::DEFAULT_HEIGHT)
                     .min_inner_size(window::MIN_WIDTH, window::MIN_HEIGHT)
                     .decorations(decorations)
@@ -523,7 +537,35 @@ fn round_window_corners(window: &tauri::WebviewWindow) {
 
 #[cfg(test)]
 mod tests {
-    use super::{close_may_proceed, set_close_confirmed, set_update_in_progress};
+    use super::{
+        close_may_proceed, data_dir_args_for, set_close_confirmed, set_update_in_progress,
+    };
+
+    #[test]
+    fn data_dir_prefers_new_profile_without_copying() {
+        let home = std::env::temp_dir().join(format!("sl-ade-data-{}", std::process::id()));
+        let ade = home.join(".sl-ade");
+        let legacy = home.join(".slterm");
+        std::fs::create_dir_all(legacy.join("data")).unwrap();
+        let (data, config) = data_dir_args_for(&home);
+        assert_eq!(data, legacy.join("data"));
+        assert_eq!(config, legacy.join("config"));
+        std::fs::create_dir_all(&ade).unwrap();
+        let (data, config) = data_dir_args_for(&home);
+        assert_eq!(data, ade.join("data"));
+        assert_eq!(config, ade.join("config"));
+        assert!(!ade.join("data").exists());
+        std::fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn data_dir_defaults_to_new_profile_without_creating_it() {
+        let home = std::env::temp_dir().join(format!("sl-ade-empty-{}", std::process::id()));
+        let (data, config) = data_dir_args_for(&home);
+        assert_eq!(data, home.join(".sl-ade/data"));
+        assert_eq!(config, home.join(".sl-ade/config"));
+        assert!(!home.exists());
+    }
 
     #[test]
     fn cancelled_quit_does_not_enable_close() {
