@@ -4,7 +4,7 @@ export type IconName =
     | "terminal" | "plus" | "close" | "split-horizontal" | "split-vertical"
     | "maximize" | "restore" | "search" | "chevron-up" | "chevron-down"
     | "settings" | "sidebar" | "folder" | "sun" | "moon" | "keyboard"
-    | "more" | "rename" | "grid" | "check" | "arrow-right" | "grip";
+    | "more" | "rename" | "grid" | "check" | "arrow-right" | "grip" | "power" | "move";
 
 const paths: Record<IconName, React.ReactNode> = {
     terminal: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3m6 0h4" /></>,
@@ -29,6 +29,8 @@ const paths: Record<IconName, React.ReactNode> = {
     check: <path d="m5 12 4 4L19 6" />,
     "arrow-right": <path d="M4 12h16m-6-6 6 6-6 6" />,
     grip: <path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" />,
+    power: <><path d="M12 3v9" /><path d="M7 5a8 8 0 1 0 10 0" /></>,
+    move: <><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" /></>,
 };
 
 export function Icon({ name, size = 16, ...props }: SVGProps<SVGSVGElement> & { name: IconName; size?: number }) {

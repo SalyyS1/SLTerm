@@ -46,6 +46,15 @@ when testing a replacement. These commands do not create an installer.
 - Edit shortcuts per action with conflict checks. Global appearance/shortcut
   groups can each be overridden by a workspace. An override is a snapshot;
   resetting inheritance returns that group to the global defaults.
+- **Tài nguyên** shows the current SLTerm process and verified descendants,
+  grouped into app, WebView, Zig core, shells and other owned processes. CPU
+  needs two samples and is normalized across logical CPUs. Working set and
+  private commit are separate counters; shared pages can be counted twice in
+  summed working sets. Inaccessible processes produce an incomplete-total
+  warning. WSL, providers or MCP processes outside this tree are excluded.
+  Sampling runs every two seconds only while this panel is open and visible;
+  closing it stops polling. This is local inspection, with no telemetry or
+  terminal/agent count limit.
 
 ## Persistence and shutdown
 

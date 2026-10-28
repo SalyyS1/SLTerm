@@ -2,6 +2,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import appIcon from "../../assets/appicon-windows.svg";
 import { TerminalRuntime } from "./terminal-runtime";
 import { TerminalSearch } from "./terminal-search";
+import { ResourceMonitor } from "./resource-monitor";
 import { useWorkspaceController } from "./use-workspace-controller";
 import { WorkspaceDialog } from "./workspace-dialog";
 import { Icon } from "./workspace-icons";
@@ -16,6 +17,7 @@ import { appearanceFor } from "./workspace-preferences";
 import { appearanceTokens } from "./appearance-settings";
 import { appearancePresets } from "./appearance-presets";
 import "./workspace-customization.css";
+import "./workspace-shell.css";
 
 export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
     const app = useWorkspaceController(runtime);
@@ -27,7 +29,6 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
         document.body.dataset.theme = appearancePresets.find((preset) => preset.id === appearance.themeId)?.mode ?? "dark";
         for (const [key, value] of Object.entries(appearanceTokens(appearance))) document.body.style.setProperty(key, value);
     }, [appearance]);
-    const ids = paneIds(workspace?.layout ?? null);
     const running = Object.values(snapshot.sessions).filter((session) => session.status === "running").length;
     useEffect(() => {
         const element = stage.current!;
@@ -50,12 +51,13 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                     <span className="preview-label">Workspace preview</span>
                 </div>
                 <div className="header-actions">
+                    <ResourceMonitor />
                     <IconButton
                         icon="sidebar"
                         label="Ẩn / hiện danh sách phiên"
                         onClick={() => app.setSidebar(!app.sidebar)}
                     />
-                    <div className="font-controls">
+                    <div className="font-controls" role="group" aria-label="Cỡ chữ terminal">
                         <button
                             title="Giảm cỡ chữ · Ctrl −"
                             aria-label="Giảm cỡ chữ"
@@ -64,7 +66,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                         >
                             A−
                         </button>
-                        <button title="Đặt lại · Ctrl 0" onClick={() => app.changeFont("reset")}>
+                        <button title="Đặt lại · Ctrl 0" aria-label={`Cỡ chữ ${appearance.terminalFontSize} px · đặt lại`} onClick={() => app.changeFont("reset")}>
                             {appearance.terminalFontSize} px
                         </button>
                         <button
@@ -77,8 +79,8 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                         </button>
                     </div>
                     <IconButton icon="settings" label="Tùy chỉnh giao diện và phím tắt" disabled={Boolean(app.dialog) || !app.preferences.ready} onClick={() => app.setSettingsOpen(true)} />
-                    <button className="button button-ghost" onClick={app.quit} disabled={snapshot.phase === "stopping"}>
-                        <Icon name="close" />
+                    <button className="button button-ghost" title="Dừng và thoát" aria-label="Dừng và thoát" onClick={app.quit} disabled={snapshot.phase === "stopping"}>
+                        <Icon name="power" />
                         <span className="button-label">Dừng và thoát</span>
                     </button>
                 </div>
@@ -95,6 +97,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             >
                                 <button
                                     className="tab-select"
+                                    title={owner.name}
                                     aria-current={owner.id === state.activeWorkspaceId ? "page" : undefined}
                                     onClick={() => app.setState((current) => activateWorkspace(current, owner.id))}
                                     onDoubleClick={app.renameWorkspace}
@@ -121,6 +124,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             onClick={app.newWorkspace}
                         >
                             <Icon name="plus" />
+                            <span className="new-workspace-label">Workspace mới</span>
                         </button>
                     </nav>
                     {(snapshot.error || app.preferences.error) && (
@@ -135,7 +139,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             <span>{workspace?.cwd ?? "Chưa có workspace"}</span>
                         </div>
                         <div className="toolbar-actions">
-                            <button className="button layout-mode" disabled={!workspace || disabled} onClick={app.toggleLayout}>{workspace?.layoutMode === "free" ? "Tự do" : "Chia ô"}</button>
+                            <button className="button layout-mode" title="Chuyển bố cục chia ô / tự do" disabled={!workspace || disabled} onClick={app.toggleLayout}><Icon name={workspace?.layoutMode === "free" ? "move" : "grid"} /><span>{workspace?.layoutMode === "free" ? "Tự do" : "Chia ô"}</span></button>
                             <IconButton icon="grid" label="Xếp tự động · tối đa 5 ô mỗi hàng" disabled={!workspace || disabled} onClick={() => workspace && app.setState((current) => arrangePanes(current, workspace.id))} />
                             <IconButton
                                 icon="rename"
@@ -185,7 +189,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                                     </>
                                 ) : (
                                     <div className="empty-state">
-                                        <Icon name="terminal" size={32} />
+                                        <div className="empty-state-symbol"><Icon name="terminal" size={32} /></div>
                                         <h2>Workspace đang trống</h2>
                                         <p>Mở terminal để bắt đầu làm việc trong thư mục này.</p>
                                         <button
@@ -202,13 +206,13 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                         ))}
                         {!workspace && (
                             <div className="empty-state">
-                                <Icon name="terminal" size={32} />
+                                <div className="empty-state-symbol"><Icon name="terminal" size={32} /></div>
                                 <h2>
                                     {snapshot.phase === "starting"
                                         ? "Đang kết nối terminal…"
                                         : "Không gian làm việc của bạn"}
                                 </h2>
-                                <p>Tạo workspace với thư mục local, rồi chia ô theo cách bạn làm việc.</p>
+                                <p>{snapshot.phase === "starting" ? "Đang khởi động kết nối local. Workspace sẽ sẵn sàng khi kết nối hoàn tất." : "Tạo workspace với thư mục local, rồi chia ô theo cách bạn làm việc."}</p>
                                 <button
                                     className="button button-primary"
                                     disabled={disabled}

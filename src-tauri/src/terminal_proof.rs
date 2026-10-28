@@ -16,6 +16,10 @@ mod shell;
 mod shutdown;
 
 #[cfg(windows)]
+#[path = "terminal_proof_resources.rs"]
+mod resources;
+
+#[cfg(windows)]
 #[path = "terminal_proof_clipboard.rs"]
 mod clipboard;
 
@@ -36,6 +40,8 @@ struct ProofState {
     closing: AtomicBool,
     shutdown_failed: AtomicBool,
     profile: Mutex<Option<std::path::PathBuf>>,
+    #[cfg(windows)]
+    resources: Mutex<resources::Sampler>,
 }
 
 fn is_app_origin(url: &tauri::Url) -> bool {
@@ -408,6 +414,29 @@ async fn proof_clipboard_write(window: WebviewWindow, text: String) -> Result<()
     }
 }
 
+#[tauri::command]
+async fn proof_resources(window: WebviewWindow) -> Result<Value, String> {
+    authorize(&window)?;
+    #[cfg(windows)]
+    {
+        let app = window.app_handle().clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let state = app.state::<ProofState>();
+            let mut sampler = state.resources.lock().map_err(|_| "Resource lock poisoned")?;
+            let sample = sampler.sample()?;
+            let items: Vec<Value> = sample.items.into_iter().map(|item| json!({
+                "pid": item.pid, "name": item.name, "category": item.category,
+                "working_bytes": item.working, "private_bytes": item.private
+            })).collect();
+            Ok(json!({"version": 1, "items": items, "missing": sample.missing,
+                "cpu_percent": sample.cpu_percent, "logical_cpus": sample.logical_cpus,
+                "interval_ms": sample.elapsed_ms, "scope": "owned-descendants"}))
+        }).await.map_err(|error| error.to_string())?
+    }
+    #[cfg(not(windows))]
+    Err("Resource counters are currently available on Windows only".into())
+}
+
 pub fn run() {
     let accepted_exit = Arc::new(AtomicI32::new(0));
     let exit_receipt = accepted_exit.clone();
@@ -418,6 +447,7 @@ pub fn run() {
             proof_request,
             proof_quit,
             proof_force_quit,
+            proof_resources,
             proof_clipboard_read,
             proof_clipboard_write
         ])

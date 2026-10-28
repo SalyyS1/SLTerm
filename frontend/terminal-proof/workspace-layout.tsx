@@ -71,7 +71,7 @@ export function TerminalPane({ pane, workspace, runtime, snapshot, actions, disa
                     onClick={() => actions.rename(pane.paneId)}
                     disabled={disabled}
                 >
-                    <Icon name="terminal" />
+                    <Icon name="rename" />
                     <span className="sr-only">Đổi tên</span>
                 </button>
                 <div className="pane-actions">
