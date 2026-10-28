@@ -1,0 +1,51 @@
+{
+  "evidenceDate": "2026-10-28",
+  "codex": {
+    "version": "codex-cli 0.165.0-alpha.1.2",
+    "schemas": {
+      "InitializeParams": {
+        "source": "v1/InitializeParams.json",
+        "sha256": "b55124e7c0f36a1789396daa5578217a92be67f053903696236686e59f6f212e"
+      },
+      "InitializeResponse": {
+        "source": "v1/InitializeResponse.json",
+        "sha256": "62ad689c2cb6379913c1d72749cfd8de5089d35760214123518eb92eef11acc9"
+      },
+      "CommandExecutionRequestApprovalParams": {
+        "source": "CommandExecutionRequestApprovalParams.json",
+        "sha256": "16a71816c2d66e319c2c4aa83dd636dfdc43c61e72b6d5475e421ce08d8e6558"
+      },
+      "CommandExecutionRequestApprovalResponse": {
+        "source": "CommandExecutionRequestApprovalResponse.json",
+        "sha256": "6d0767113e22f311381809b6b236b0dde2b99b01992879c26bf7b1ea0e003cb7"
+      },
+      "TurnInterruptParams": {
+        "source": "v2/TurnInterruptParams.json",
+        "sha256": "6dff382dae73d1dbc58406ed045605f647e7a49660e2540fbd2c6c24d60c5f2b"
+      },
+      "TurnInterruptResponse": {
+        "source": "v2/TurnInterruptResponse.json",
+        "sha256": "531de6be06fe979b5963f249bab82498a175e614bf65ac12fb2e849dfe60bcf1"
+      },
+      "TurnStartedNotification": {
+        "source": "v2/TurnStartedNotification.json",
+        "sha256": "46d86869a7145b82bb97ac3811e50686a92c79bc0e9c12c639462a292dd8495b"
+      },
+      "TurnCompletedNotification": {
+        "source": "v2/TurnCompletedNotification.json",
+        "sha256": "119bde7262f8e3f8f50a590a2eacac2b04083bb0d788d7949bd0d81a18ac7de9"
+      },
+      "ServerRequestResolvedNotification": {
+        "source": "v2/ServerRequestResolvedNotification.json",
+        "sha256": "4f03d586a5af04edd912cad08cc97eceb658e7e06744565e6d41a93e04a55966"
+      }
+    }
+  },
+  "claude": {
+    "sdkVersion": "0.3.312",
+    "bundledClaudeCodeVersion": "2.1.312",
+    "observedInstalledCliVersion": "2.1.286",
+    "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk/-/claude-agent-sdk-0.3.312.tgz",
+    "integrity": "sha512-Ilj5Agx3ak/Z0UPZNLS7+CTnYMa+Ijf8+FKelh9MKGRwHVYyfvmJgL0fsmooI78SdkZwqjI5a4CwOAsJurdjJA=="
+  }
+}
