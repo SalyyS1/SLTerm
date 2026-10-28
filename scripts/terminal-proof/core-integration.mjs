@@ -9,6 +9,7 @@ import { coreExecutable, isAlive, waitForGone } from "./core-client.mjs";
 import { assertOrderedExit, fixturePath, inputCommand, records, spawnFixture, startClient, textOutput, waitRecord } from "./fixtures/test-support.mjs";
 import { waitForOwnedGone } from "./fixtures/windows-process-tree.mjs";
 import { verifyRetiredSessionResources } from "./fixtures/retired-session-checks.mjs";
+import { verifyClosedStdoutShutdown, verifyStalledStdoutOverload, verifyStalledStdoutShutdown } from "./fixtures/stalled-stdout-checks.mjs";
 
 describe("real Windows ConPTY proof", { concurrency: false, skip: process.platform !== "win32", timeout: 300000 }, () => {
     before(async () => {
@@ -187,6 +188,10 @@ describe("real Windows ConPTY proof", { concurrency: false, skip: process.platfo
     }
 
     it("reclaims resources for retired sessions while preserving their identities", { timeout: 150000 }, verifyRetiredSessionResources);
+
+    it("stops owned jobs with stdout paused and drains ordered frames after reading resumes", { timeout: 40000 }, verifyStalledStdoutShutdown);
+    it("reports bounded transport overload with stdout paused and preserves queued frames", { timeout: 40000 }, verifyStalledStdoutOverload);
+    it("returns failure for unconfirmed shutdown after stdout is closed", { timeout: 15000 }, verifyClosedStdoutShutdown);
 
     it("runs ten simultaneous independent terminals and closes every child", { timeout: 40000 }, async (t) => {
         const client = await startClient(t);

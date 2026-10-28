@@ -1,6 +1,7 @@
 const std = @import("std");
 const win = @import("win.zig");
 const c = win.c;
+const OutputWriter = @import("output-writer.zig").OutputWriter;
 
 pub const version = 1;
 pub const max_frame = 64 * 1024;
@@ -22,20 +23,43 @@ pub const Request = struct {
 };
 
 pub const Emitter = struct {
-    lock: c.SRWLOCK = std.mem.zeroes(c.SRWLOCK),
-    handle: c.HANDLE,
+    writer: OutputWriter = .{},
 
-    pub fn send(self: *Emitter, value: anytype) void {
-        const json = std.json.Stringify.valueAlloc(allocator, value, .{}) catch return;
-        defer allocator.free(json);
-        c.AcquireSRWLockExclusive(&self.lock);
-        defer c.ReleaseSRWLockExclusive(&self.lock);
-        win.writeAll(self.handle, json) catch return;
-        win.writeAll(self.handle, "\n") catch return;
+    pub fn start(self: *Emitter, handle: c.HANDLE) !void {
+        try self.writer.start(handle);
     }
 
-    pub fn ok(self: *Emitter, id: u64) void {
-        self.send(.{ .version = version, .id = id, .ok = true });
+    pub fn deinit(self: *Emitter) !void {
+        try self.writer.deinit();
+    }
+
+    pub fn send(self: *Emitter, value: anytype) void {
+        self.sendBlocking(value) catch |err| {
+            self.writer.recordFailure();
+            std.debug.print("{s}: frame delivery is unconfirmed\n", .{@errorName(err)});
+        };
+    }
+
+    pub fn sendBlocking(self: *Emitter, value: anytype) !void {
+        try self.sendValue(value, true);
+    }
+
+    pub fn trySend(self: *Emitter, value: anytype) !void {
+        try self.sendValue(value, false);
+    }
+
+    fn sendValue(self: *Emitter, value: anytype, wait: bool) !void {
+        const json = try std.json.Stringify.valueAlloc(allocator, value, .{});
+        defer allocator.free(json);
+        try self.writer.enqueue(json, wait);
+    }
+
+    pub fn ok(self: *Emitter, id: u64) !void {
+        try self.trySend(.{ .version = version, .id = id, .ok = true });
+    }
+
+    pub fn tryFail(self: *Emitter, id: u64, message: []const u8) !void {
+        try self.trySend(.{ .version = version, .id = id, .ok = false, .error_code = message });
     }
 
     pub fn fail(self: *Emitter, id: u64, message: []const u8) void {

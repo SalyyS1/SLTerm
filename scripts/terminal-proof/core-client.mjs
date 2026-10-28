@@ -161,6 +161,8 @@ export class CoreClient {
     endInput() { this.closing = true; this.child.stdin.end(); }
 
     async dispose() {
+        // Failure cleanup must also drain a transport paused by a test.
+        this.child.stdout.resume();
         let cleanupError;
         if (!this.exit) {
             const active = [...this.spawnedSessions].some((id) => !this.exitedSessions.has(id));
