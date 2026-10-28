@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "terminal-proof",
+  "description": "Isolated terminal proof: events only, no filesystem, shell or external content permissions.",
+  "windows": ["proof"],
+  "local": true,
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

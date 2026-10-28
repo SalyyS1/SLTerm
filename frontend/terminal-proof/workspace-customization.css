@@ -1,0 +1,44 @@
+body { font: var(--weight-normal) var(--text-md)/1.45 var(--font-ui); }
+.workspace-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: stretch; overflow: auto; max-height: 30vh; flex: 0 0 auto; padding: var(--space-2); gap: var(--space-2); }
+.workspace-tab { max-width: none; min-width: 0; height: var(--tab-height); }
+.workspace-tabs .new-workspace { width: 100%; min-height: var(--tab-height); }
+.tab-select { min-width: 0; flex: 1; }
+.workspace-panel { overflow: hidden; isolation: isolate; background: var(--bg); }
+.workspace-backdrop { position: absolute; inset: 0; background-position: center; pointer-events: none; z-index: -1; }
+.workspace-canvas { z-index: 0; }
+.terminal-pane { background: transparent; }
+.pane-drag-title { display: flex; align-items: center; gap: var(--space-2); min-width: 0; flex: 1; overflow: hidden; touch-action: none; cursor: grab; }
+.pane-drag-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-pane { container-type: inline-size; }
+@container (max-width: 420px) { .pane-state, .pane-title-button, .pane-actions > button[aria-label="Chia trái / phải"], .pane-actions > button[aria-label="Ẩn terminal"] { display: none; } }
+.pane-title-button { flex: 0 0 auto; width: var(--control-height); padding: var(--space-2); }
+.pane-title-button > svg { display: none; }
+.pane-title-button::after { content: '✎'; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.session-row { border: var(--hairline) solid var(--line); border-radius: var(--radius-md); }
+.session-row[data-hidden="true"] .session-name { color: var(--text-muted); }
+.session-item[data-active="true"] .session-meta { color: var(--text); }
+.session-row-actions, .sidebar-visibility { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); flex-wrap: wrap; }
+.session-small-action { border: 0; border-radius: var(--radius-sm); color: var(--text-muted); background: transparent; min-height: var(--control-height); padding-inline: var(--space-3); font-size: var(--text-xs); }
+.session-small-action:hover { background: var(--surface-hover); color: var(--text); }
+.session-menu { margin-left: auto; }
+.session-menu > summary { cursor: pointer; display: flex; align-items: center; justify-content: center; width: var(--control-height); height: var(--control-height); border-radius: var(--radius-sm); }
+.session-menu > summary:hover { background: var(--surface-hover); }
+.session-menu-items { display: flex; flex-direction: column; border-top: var(--hairline) solid var(--line); padding: var(--space-2); }
+.session-menu[open] { flex: 1 0 100%; }
+.session-menu[open] > summary { margin-left: auto; }
+.session-menu-items button { background: transparent; color: var(--text); border: 0; border-radius: var(--radius-sm); padding: var(--space-4); text-align: left; min-height: var(--control-height); }
+.session-menu-items button:hover { background: var(--surface-hover); }
+.settings-dialog { width: min(900px, calc(100vw - var(--space-8))); max-height: calc(100dvh - var(--space-8)); padding: 0; }
+.settings-controls { padding: var(--space-6); display: flex; gap: var(--space-4); align-items: center; flex-wrap: wrap; border-bottom: var(--hairline) solid var(--line); }
+.settings-controls label { display: flex; align-items: center; gap: var(--space-4); }
+.settings-controls select { background: var(--surface); color: var(--text); border: var(--hairline) solid var(--line-strong); min-height: var(--field-height); max-width: 100%; border-radius: var(--radius-sm); }
+.settings-tabs { display: flex; gap: var(--space-2); }
+.settings-tabs [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.settings-content { margin: 0; border: 0; padding: var(--space-6); min-width: 0; }
+.settings-dialog .dialog-heading, .settings-dialog .dialog-actions { padding: var(--space-5) var(--space-6); }
+.settings-dialog .dialog-actions { position: sticky; bottom: 0; background: var(--surface); border-top: var(--hairline) solid var(--line); flex-wrap: wrap; }
+.settings-dialog .dialog-error { padding-inline: var(--space-6); }
+.hidden-panes-state { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.hidden-panes-state button { pointer-events: auto; }
+@media (max-width: 760px) { .workspace-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); } .tab-select { padding-inline: var(--space-2); } .tab-select > svg { display: none; } .toolbar-actions { gap: 0; } .layout-mode { padding-inline: var(--space-3); } }

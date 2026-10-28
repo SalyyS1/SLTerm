@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SLTerm Terminal Proof",
+  "identifier": "dev.salyvn.slterm.terminal-proof",
+  "build": {
+    "frontendDist": "../dist/terminal-proof",
+    "beforeBuildCommand": "npm run build:proof-ui",
+    "beforeDevCommand": "npm run build:proof-ui"
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' blob: data:; font-src 'self' blob: data:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+      "capabilities": ["terminal-proof"]
+    }
+  },
+  "bundle": { "active": false, "resources": [] }
+}

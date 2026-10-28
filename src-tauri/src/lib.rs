@@ -13,6 +13,14 @@
 mod host;
 mod menu;
 
+#[cfg(feature = "terminal-proof")]
+mod terminal_proof;
+
+#[cfg(feature = "terminal-proof")]
+pub fn run() {
+    terminal_proof::run();
+}
+
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -207,6 +215,7 @@ fn host_init_script(snapshot: &HostSnapshot) -> String {
     )
 }
 
+#[cfg(not(feature = "terminal-proof"))]
 pub fn run() {
     tauri::Builder::default()
         .manage(Backend(Mutex::new(None)))
