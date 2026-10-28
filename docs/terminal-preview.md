@@ -120,6 +120,33 @@ Provider fixture/schema/declaration checks have their own
 [scope and run guide](../scripts/provider-proof/README.md). They do not launch
 providers or make model requests and are not integrated chat.
 
+## Experimental SSH/SFTP dependency proof
+
+The separate [Zig/C proof](../native-core/ssh-proof/build.zig) builds libssh2
+with WinCNG and tests real SSH/SFTP packets against an in-memory loopback
+fixture. Exact source/compiler/server integrity is recorded in
+[dependency pins](../scripts/ssh-proof/dependency-pins.json) and build receipts.
+This uses a pinned upstream development snapshot: the released trial exposed
+an intermittent WinCNG DH handshake failure. It is not a production dependency
+approval or an SSH connection feature in the workspace UI.
+
+```powershell
+pwsh -NoProfile -File scripts/ssh-proof/build-ssh-proof.ps1 -DownloadDependencies
+pwsh -NoProfile -File scripts/ssh-proof/install-fixture.ps1
+node --test --test-concurrency=1 scripts/ssh-proof/ssh-integration.mjs
+```
+
+Requires the existing Zig distribution, CMake, Ninja and Node. Downloads/builds
+stay under ignored `proof-results/ssh-proof`; no global installation or root
+package dependency changes. The builder checks available space and refuses
+integrity mismatches. The fixture requires free loopback port19232, generates
+keys only in memory and uses synthetic `none` authentication. It never accesses
+accounts, real hosts, `.ssh`, known_hosts or credentials. Tests cover trusted,
+changed/unknown host keys before authentication, Unicode, symlinks, permission
+denial, cancellation, disconnect and repeated fresh handshakes. Real-host
+authentication, OpenSSH interoperability, persisted trust, upload/edit/resume
+and production lifecycle/security remain separate gates.
+
 ## Measurements and remaining gates
 
 `node scripts/terminal-proof/proof-idle-resources.mjs` runs a disposable,

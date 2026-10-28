@@ -1,0 +1,6 @@
+{
+  "name": "slterm-ssh-proof-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": { "ssh2": "1.17.0" }
+}

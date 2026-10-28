@@ -1,0 +1,25 @@
+{
+  "libssh2": {
+    "version": "1.11.2_DEV",
+    "commit": "f216bbe3aa5ec02033de53ed0809a2461fc062c7",
+    "url": "https://codeload.github.com/libssh2/libssh2/zip/f216bbe3aa5ec02033de53ed0809a2461fc062c7",
+    "sha256": "c3b0009b1a06d653049d6aff0538ba41afe69136551dd0b0db1d0474b193a617",
+    "archiveName": "libssh2-f216bbe3aa5ec02033de53ed0809a2461fc062c7.zip",
+    "sourceDirectory": "libssh2-f216bbe3aa5ec02033de53ed0809a2461fc062c7",
+    "backend": "WinCNG",
+    "license": "BSD-3-Clause",
+    "source": "https://github.com/libssh2/libssh2/commit/f216bbe3aa5ec02033de53ed0809a2461fc062c7",
+    "securityStatus": "isolated development snapshot compatibility proof; production dependency/security approval remains required"
+  },
+  "rejectedReleaseTrial": {
+    "version": "1.11.1",
+    "url": "https://libssh2.org/download/libssh2-1.11.1.zip",
+    "sha256": "1452bed856eb7f82d6e18db481f34dc18c435dd77d56f884725f72fc3757f30a",
+    "reason": "Intermittent WinCNG DH key exchange failure; fixed upstream by f216bbe. Also lacks later upstream transport bounds fixes."
+  },
+  "fixture": {
+    "package": "ssh2",
+    "version": "1.17.0",
+    "integrity": "sha512-wPldCk3asibAjQ/kziWQQt1Wh3PgDFpC0XpwclzKcdT1vql6KeYxf5LIt4nlFkUeR8WuphYMKqUA56X4rjbfgQ=="
+  }
+}
