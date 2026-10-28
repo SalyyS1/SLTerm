@@ -46,3 +46,8 @@ build-log*.txt
 # Tauri shell build output
 src-tauri/target/
 src-tauri/gen/
+
+# Isolated Zig milestone-zero build and evidence
+native-core/.zig-cache/
+native-core/zig-out/
+proof-results/
