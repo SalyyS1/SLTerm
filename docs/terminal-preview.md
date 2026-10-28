@@ -163,9 +163,38 @@ owns counter definitions. Include browser/backend/shell/conhost resources;
 report WSL and provider/MCP resources separately when present. Private commit,
 private working set and summed working sets are distinct metrics.
 
-A warm-idle diagnostic does not pass the performance gate. Startup, burst,
-resize, tab switching and input latency still need controlled old/new runs
-with matching viewport/visibility/workload, followed by user-approved budgets.
+The controlled workload runner uses the existing built artifacts and fresh
+disposable profiles. Run applications sequentially with no other build/test
+workload. It refuses occupied ports and requires confirmed graceful cleanup:
+
+```powershell
+node scripts/terminal-proof/performance-run.mjs --app native --hidden
+node scripts/terminal-proof/performance-run.mjs --app baseline --hidden
+node --test scripts/terminal-proof/performance-controls.test.mjs
+```
+
+Each run prints its result directory. Pass the baseline directory followed by
+the native directory to `node scripts/terminal-proof/performance-compare.mjs`.
+`--help` lists geometry controls. `--out` and `--temp` accept fresh absolute
+directories with existing parents, including on another volume when needed;
+TEMP/TMP change only for the owned child launch. Storage volumes are recorded
+and mismatches invalidate equivalence. Profiles and failed evidence are retained.
+
+Measurements include a launch-to-observed-safe-shell upper bound (including
+CDP/probe overhead), ten verified shells/ten idle samples, known-payload burst
+render callbacks, synthetic keyboard input, resize stabilization/ConPTY
+dimensions, and warm tab transitions. Tab tests add an eleventh shell after the
+ten-shell phases. Electron tabs use separate CDP targets. Tab timing stops after
+destination initialization/animation frames; final native positioning and
+physical presentation are outside that boundary. These traces are not bare
+startup, backend-only latency, or physical display timings.
+
+Comparison checks bootstrap and controlled viewport/visibility, shell/modules,
+pane topology, payload, artifact/source stability, shared instrumentation hashes
+and storage volumes. Missing or mismatched controls remain visible; one run is
+not statistical evidence. No threshold or gate approval is embedded in tools.
+Measurements still require reviewed comparable evidence and user-approved
+budgets before broad migration.
 The first-input PSReadLine delay remains unresolved. WSL sandbox, SSH/SFTP,
 live provider/runtime behavior, SQLite/import, project preview isolation and
 installer/update compatibility retain their own gates. No release publication

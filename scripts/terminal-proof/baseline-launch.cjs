@@ -391,6 +391,7 @@ async function runParent() {
     env.SLTERM_BASELINE_TERMINALS = String(terminalCount);
     const electronArgs = [`--user-data-dir=${dirs.electron}`, __filename, "--electron-child", root];
     if (debugPort) electronArgs.unshift(`--remote-debugging-port=${debugPort}`, "--remote-debugging-address=127.0.0.1");
+    const spawnRequestedAtMs = Date.now();
     const child = spawn(require("electron"), electronArgs, { cwd: dirs.home, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     const stdout = fs.createWriteStream(path.join(reportDir, "electron.stdout.log"));
     const stderr = fs.createWriteStream(path.join(reportDir, "electron.stderr.log"));
@@ -399,7 +400,7 @@ async function runParent() {
     function requestStop() { fs.writeFileSync(path.join(root, "stop-request"), "stop"); }
     process.once("SIGINT", requestStop); process.once("SIGTERM", requestStop);
     child.once("spawn", () => {
-        writeJson(path.join(reportDir, "process.json"), { pid: child.pid, launcherPid: process.pid, command: require("electron"), args: electronArgs, cwd: dirs.home });
+        writeJson(path.join(reportDir, "process.json"), { pid: child.pid, launcherPid: process.pid, spawnRequestedAtMs, spawnObservedAtMs: Date.now(), command: require("electron"), args: electronArgs, cwd: dirs.home });
         console.log(JSON.stringify({ event: "started", pid: child.pid, launcherPid: process.pid, profileRoot: root, reportDir }));
         hardStop = setTimeout(() => {
             if (child.exitCode === null && child.signalCode === null) spawn(path.join(systemRoot, "System32/taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
