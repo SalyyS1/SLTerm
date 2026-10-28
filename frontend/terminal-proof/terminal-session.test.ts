@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITerminalOptions } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ProofTransport } from "./proof-protocol";
+import type { Frame, ProofTransport } from "./proof-protocol";
 import { TerminalSession } from "./terminal-session";
 import { TerminalRuntime } from "./terminal-runtime";
 
@@ -389,5 +389,48 @@ describe("terminal runtime appearance", () => {
         expect(runtime.getSnapshot()).toMatchObject({ fontSize: 13, theme: "light" });
         await vi.advanceTimersByTimeAsync(60);
         expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe("terminal runtime shutdown recovery", () => {
+    async function startRuntime() {
+        vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); });
+        let receive!: (frame: Frame) => void;
+        vi.mocked(listen).mockImplementation(async (_event, callback) => {
+            receive = (payload) => callback({ event: "proof-event", id: 0, payload } as Parameters<typeof callback>[0]);
+            return () => {};
+        });
+        vi.mocked(invoke).mockImplementation(async (command, args) => {
+            if (command === "proof_start") return { executable: "pwsh.exe", cwd: "C:/work", pid: 1, args: [] } as never;
+            if (command === "proof_request") receive({ id: (args as { request: { id: number } }).request.id, ok: true });
+            return undefined as never;
+        });
+        const runtime = new TerminalRuntime();
+        await runtime.start();
+        return { runtime, receive };
+    }
+
+    it("requires a failed shutdown before force quit and preserves a live retry after native failure", async () => {
+        const { runtime, receive } = await startRuntime();
+        await expect(runtime.forceQuit()).rejects.toThrow("Chưa có shutdown lỗi");
+        expect(vi.mocked(invoke).mock.calls.some(([name]) => name === "proof_force_quit")).toBe(false);
+        await runtime.quit();
+        receive({ event: "shutdown_stalled", message: "Still draining" });
+        vi.mocked(invoke).mockRejectedValueOnce(new Error("Native stop failed"));
+        await expect(runtime.forceQuit()).rejects.toThrow("Native stop failed");
+        expect(runtime.getSnapshot()).toMatchObject({ phase: "connected", shutdownIssue: "Still draining", error: "Error: Native stop failed" });
+        await runtime.quit();
+        expect(vi.mocked(invoke).mock.calls.at(-1)?.[0]).toBe("proof_quit");
+    });
+
+    it("keeps a crashed backend disconnected through shutdown failure and sends only the confirmed force action", async () => {
+        const { runtime, receive } = await startRuntime();
+        receive({ event: "transport_error", message: "Final output was not delivered" });
+        await runtime.quit();
+        receive({ event: "transport_closed" });
+        receive({ event: "shutdown_stalled", message: "Missing shutdown acknowledgement" });
+        expect(runtime.getSnapshot()).toMatchObject({ phase: "disconnected", shutdownIssue: "Missing shutdown acknowledgement" });
+        await runtime.forceQuit();
+        expect(vi.mocked(invoke).mock.calls.at(-1)?.[0]).toBe("proof_force_quit");
     });
 });

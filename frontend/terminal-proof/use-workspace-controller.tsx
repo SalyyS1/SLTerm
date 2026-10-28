@@ -190,19 +190,25 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
 
     });
     const quit = () => {
+        const force = Boolean(snapshot.shutdownIssue);
+        const exit = () => force ? runtime.forceQuit() : runtime.quit();
+        const saveAndExit = async (forced = force) => {
+            if (preferences.writable) await preferences.commit((value) => withDescriptors(value, state));
+            await preferences.flush();
+            await (forced ? runtime.forceQuit() : runtime.quit());
+        };
         if (!dialog)
             setDialog({
                 kind: "quit",
-                title: "Dừng và thoát SLTerm?",
+                title: force ? "Buộc dừng và thoát SLTerm?" : "Dừng và thoát SLTerm?",
                 body: <><p>Tất cả terminal sẽ dừng. Tùy chỉnh và danh sách workspace được lưu; process và transcript không khôi phục sau khi thoát.</p>
+                    {force && <><p role="alert">{snapshot.shutdownIssue}</p><p>Buộc thoát có thể làm mất output cuối chưa nhận được.</p>
+                        <button type="button" className="button button-ghost" onClick={() => { void saveAndExit(false).then(() => setDialog(null)).catch(runtime.report); }}>Thử dừng lại</button></>}
                     {preferences.error && <><p role="alert">Chưa lưu được tùy chỉnh: {preferences.error}</p>
-                        <button type="button" className="button button-danger" onClick={() => { void runtime.quit().catch(runtime.report); }}>Thoát không lưu tùy chỉnh</button></>}</>,
+                        <button type="button" className="button button-danger" onClick={() => { void exit().catch(runtime.report); }}>{force ? "Buộc thoát không lưu tùy chỉnh" : "Thoát không lưu tùy chỉnh"}</button></>}</>,
                 danger: true,
-                accept: "Dừng và thoát",
-                submit: async () => {
-                    if (preferences.writable) await preferences.commit((value) => withDescriptors(value, state));
-                    await preferences.flush(); await runtime.quit();
-                },
+                accept: force ? "Buộc dừng và thoát" : "Dừng và thoát",
+                submit: () => saveAndExit(),
             });
     };
     useEffect(() => {

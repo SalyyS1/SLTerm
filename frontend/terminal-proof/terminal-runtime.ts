@@ -12,6 +12,7 @@ export type RuntimeSnapshot = {
     theme: "dark" | "light";
     sessions: Record<number, SessionInfo>;
     closeRequested: boolean;
+    shutdownIssue: string | null;
 };
 
 /** Owns live terminal identity independently of React tabs or split-tree positions. */
@@ -25,6 +26,7 @@ export class TerminalRuntime {
         theme: "dark",
         sessions: {},
         closeRequested: false,
+        shutdownIssue: null,
     };
     private transport = new ProofTransport((request) => invoke("proof_request", { request }));
     private environment?: ShellEnvironment;
@@ -161,11 +163,24 @@ export class TerminalRuntime {
         this.update({ sessions });
     }
     async quit() {
+        const phase = this.snapshot.phase;
         this.update({ phase: "stopping" });
         try {
             await invoke("proof_quit");
         } catch (error) {
-            this.update({ phase: "connected" });
+            this.update({ phase, shutdownIssue: String(error) });
+            this.report(error);
+            throw error;
+        }
+    }
+
+    async forceQuit() {
+        if (!this.snapshot.shutdownIssue) throw new Error("Chưa có shutdown lỗi để buộc thoát.");
+        const phase = this.snapshot.phase;
+        this.update({ phase: "stopping" });
+        try { await invoke("proof_force_quit"); }
+        catch (error) {
+            this.update({ phase });
             this.report(error);
             throw error;
         }
@@ -188,7 +203,8 @@ export class TerminalRuntime {
             } else if (frame.event === "close_requested") this.update({ closeRequested: true });
             else if (frame.event === "shutdown_started") this.update({ phase: "stopping" });
             else if (frame.event === "shutdown_stalled")
-                this.update({ phase: "connected", error: frame.message ?? "Chưa xác nhận được dừng. Thử lại." });
+                this.update({ phase: this.snapshot.phase === "disconnected" ? "disconnected" : "connected", error: frame.message ?? "Chưa xác nhận được dừng. Thử lại.",
+                    shutdownIssue: frame.message ?? "Chưa xác nhận được dừng. Thử lại." });
         } catch (error) {
             this.report(error);
         }

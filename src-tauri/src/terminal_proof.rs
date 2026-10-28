@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicI32, Ordering},
     mpsc, Arc, Mutex,
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -11,6 +11,9 @@ use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindow};
 
 #[path = "terminal_proof_shell.rs"]
 mod shell;
+
+#[path = "terminal_proof_shutdown.rs"]
+mod shutdown;
 
 #[cfg(windows)]
 #[path = "terminal_proof_clipboard.rs"]
@@ -24,12 +27,14 @@ struct Core {
     process: Arc<Mutex<Child>>,
     input: mpsc::SyncSender<Vec<u8>>,
     output_closed: Arc<AtomicBool>,
+    shutdown: Arc<shutdown::ShutdownReceipt>,
 }
 
 #[derive(Default)]
 struct ProofState {
     core: Mutex<Option<Core>>,
     closing: AtomicBool,
+    shutdown_failed: AtomicBool,
     profile: Mutex<Option<std::path::PathBuf>>,
 }
 
@@ -97,6 +102,9 @@ fn proof_start(window: WebviewWindow, state: State<ProofState>) -> Result<Value,
         return Err("Proof host is shutting down".into());
     }
     let mut guard = state.core.lock().map_err(|_| "Core lock poisoned")?;
+    if state.closing.load(Ordering::SeqCst) {
+        return Err("Proof host is shutting down".into());
+    }
     if guard.is_some() {
         return Err("Core already started".into());
     }
@@ -133,18 +141,22 @@ fn proof_start(window: WebviewWindow, state: State<ProofState>) -> Result<Value,
     let output = process.stdout.take().expect("piped stdout");
     let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(QUEUED_FRAMES);
     let output_closed = Arc::new(AtomicBool::new(false));
+    let shutdown = Arc::new(shutdown::ShutdownReceipt::default());
     *guard = Some(Core {
         process: Arc::new(Mutex::new(process)),
         input: sender,
         output_closed: output_closed.clone(),
+        shutdown: shutdown.clone(),
     });
     let writer_app = window.app_handle().clone();
     let writer_closed = output_closed.clone();
+    let writer_shutdown = shutdown.clone();
     std::thread::spawn(move || {
         while !writer_closed.load(Ordering::SeqCst) {
             match receiver.recv_timeout(Duration::from_millis(100)) {
                 Ok(frame) => {
                     if let Err(error) = input.write_all(&frame) {
+                        writer_shutdown.fail();
                         let _ = emit(
                             &writer_app,
                             json!({"event":"transport_error", "message":format!("Core write failed: {error}")}),
@@ -165,12 +177,15 @@ fn proof_start(window: WebviewWindow, state: State<ProofState>) -> Result<Value,
         loop {
             match read_frame(&mut reader) {
                 Ok(Some(payload)) => {
+                    shutdown.observe(&payload);
                     if emit(&app, payload).is_err() {
+                        shutdown.fail();
                         break;
                     }
                 }
                 Ok(None) => break,
                 Err(message) => {
+                    shutdown.fail();
                     let _ = emit(&app, json!({"event":"transport_error", "message":message}));
                     break;
                 }
@@ -194,6 +209,7 @@ fn proof_request(
     }
     if request["version"].as_u64() != Some(1)
         || request["id"].as_u64().unwrap_or(0) == 0
+        || request["id"].as_u64() == Some(shutdown::REQUEST_ID)
         || !matches!(
             request["method"].as_str(),
             Some("hello" | "spawn" | "input" | "resize" | "ack" | "stop")
@@ -207,6 +223,11 @@ fn proof_request(
     }
     frame.push(b'\n');
     let guard = state.core.lock().map_err(|_| "Core lock poisoned")?;
+    // Serialize admission with shutdown's queue insertion, so a request cannot
+    // be accepted behind the final shutdown frame.
+    if state.closing.load(Ordering::SeqCst) {
+        return Err("Core is shutting down".into());
+    }
     let core = guard.as_ref().ok_or("Core not started")?;
     if core.output_closed.load(Ordering::SeqCst) {
         return Err("Core output pipe is closed".into());
@@ -233,9 +254,13 @@ fn begin_shutdown(app: &tauri::AppHandle) -> Result<(), String> {
                 b"{\"version\":1,\"id\":9000000,\"method\":\"shutdown\"}\n".to_vec(),
             )?;
         }
-        Ok(Some((core.process.clone(), core.output_closed.clone())))
+        Ok(Some((
+            core.process.clone(),
+            core.output_closed.clone(),
+            core.shutdown.clone(),
+        )))
     })();
-    let (process, output_closed) = match prepared {
+    let (process, output_closed, shutdown) = match prepared {
         Ok(Some(core)) => core,
         Ok(None) => {
             app.exit(0);
@@ -243,6 +268,7 @@ fn begin_shutdown(app: &tauri::AppHandle) -> Result<(), String> {
         }
         Err(error) => {
             state.closing.store(false, Ordering::SeqCst);
+            state.shutdown_failed.store(true, Ordering::SeqCst);
             return Err(error);
         }
     };
@@ -255,35 +281,100 @@ fn begin_shutdown(app: &tauri::AppHandle) -> Result<(), String> {
                 .lock()
                 .ok()
                 .and_then(|mut child| child.try_wait().ok())
-                .flatten()
-                .is_some();
-            if exited && output_closed.load(Ordering::SeqCst) {
-                if let Ok(mut guard) = app.state::<ProofState>().core.lock() {
-                    guard.take();
+                .flatten();
+            if let Some(status) = exited {
+                if output_closed.load(Ordering::SeqCst) {
+                    if shutdown.confirmed(status.success()) {
+                        let cleared = app
+                            .state::<ProofState>()
+                            .core
+                            .lock()
+                            .map(|mut guard| guard.take())
+                            .is_ok();
+                        if !cleared {
+                            shutdown_failed(&app, "Core lock poisoned; chưa thể hoàn tất shutdown.");
+                            return;
+                        }
+                        app.exit(0);
+                        return;
+                    }
+                    shutdown_failed(&app, "Backend đã thoát nhưng chưa xác nhận đủ output và shutdown. Bạn có thể thử dừng lại hoặc xác nhận buộc thoát.");
+                    return;
                 }
-                app.exit(0);
-                return;
             }
             if Instant::now() >= deadline {
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        app.state::<ProofState>()
-            .closing
-            .store(false, Ordering::SeqCst);
-        let _ = emit(
-            &app,
-            json!({"event":"shutdown_stalled", "message":"Shutdown did not finish in 10 seconds. Retry stop; no timeout force-kill was attempted."}),
-        );
+        shutdown_failed(&app, "Chưa xác nhận được shutdown sau 10 giây. Thử dừng lại hoặc xác nhận buộc thoát; app chưa tự buộc dừng.");
     });
     Ok(())
+}
+
+fn shutdown_failed(app: &tauri::AppHandle, message: &str) {
+    let state = app.state::<ProofState>();
+    state.shutdown_failed.store(true, Ordering::SeqCst);
+    state.closing.store(false, Ordering::SeqCst);
+    let _ = emit(app, json!({"event":"shutdown_stalled", "message":message}));
 }
 
 #[tauri::command]
 fn proof_quit(window: WebviewWindow) -> Result<(), String> {
     authorize(&window)?;
     begin_shutdown(window.app_handle())
+}
+
+#[tauri::command]
+async fn proof_force_quit(window: WebviewWindow) -> Result<(), String> {
+    authorize(&window)?;
+    let app = window.app_handle().clone();
+    if !app
+        .state::<ProofState>()
+        .shutdown_failed
+        .load(Ordering::SeqCst)
+    {
+        return Err("Force quit requires a failed shutdown and explicit confirmation".into());
+    }
+    let result = async {
+        let process = {
+            let state = app.state::<ProofState>();
+            state.closing.store(true, Ordering::SeqCst);
+            let guard = state.core.lock().map_err(|_| "Core lock poisoned")?;
+            guard.as_ref().map(|core| core.process.clone())
+        };
+        if let Some(process) = process {
+            tauri::async_runtime::spawn_blocking(move || {
+                let mut child = process
+                    .lock()
+                    .map_err(|_| "Process lock poisoned".to_string())?;
+                if child
+                    .try_wait()
+                    .map_err(|error| error.to_string())?
+                    .is_none()
+                {
+                    child.kill().map_err(|error| error.to_string())?;
+                    child.wait().map_err(|error| error.to_string())?;
+                }
+                Ok::<(), String>(())
+            })
+            .await
+            .map_err(|error| error.to_string())??;
+        }
+        app.state::<ProofState>()
+            .core
+            .lock()
+            .map_err(|_| "Core lock poisoned")?
+            .take();
+        // A consented force exit is never reported as a successful graceful shutdown.
+        app.exit(1);
+        Ok::<(), String>(())
+    }
+    .await;
+    if let Err(message) = &result {
+        shutdown_failed(&app, message);
+    }
+    result
 }
 
 #[tauri::command]
@@ -318,12 +409,15 @@ async fn proof_clipboard_write(window: WebviewWindow, text: String) -> Result<()
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let accepted_exit = Arc::new(AtomicI32::new(0));
+    let exit_receipt = accepted_exit.clone();
+    let runtime_exit = tauri::Builder::default()
         .manage(ProofState::default())
         .invoke_handler(tauri::generate_handler![
             proof_start,
             proof_request,
             proof_quit,
+            proof_force_quit,
             proof_clipboard_read,
             proof_clipboard_write
         ])
@@ -386,8 +480,8 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("Cannot build isolated terminal proof")
-        .run(|app, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+        .run_return(move |app, event| {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
                 let has_core = app
                     .state::<ProofState>()
                     .core
@@ -399,9 +493,20 @@ pub fn run() {
                     if let Err(message) = begin_shutdown(app) {
                         let _ = emit(app, json!({"event":"shutdown_stalled", "message":message}));
                     }
+                } else if let Some(code) = code {
+                    exit_receipt.store(code, Ordering::SeqCst);
                 }
             }
         });
+    // Wry currently exits its Windows event loop with status zero even when
+    // AppHandle::exit requested failure. Let Tauri finish cleanup, then preserve
+    // the accepted failure status for the parent process.
+    let requested_exit = accepted_exit.load(Ordering::SeqCst);
+    std::process::exit(if requested_exit != 0 {
+        requested_exit
+    } else {
+        runtime_exit
+    });
 }
 
 #[cfg(test)]
