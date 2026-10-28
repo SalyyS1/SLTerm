@@ -20,6 +20,18 @@
 
 SLTerm is a modern, feature-rich terminal built on Electron. It combines the power of a traditional terminal with a graphical workspace — file previews, web browsing, and rich customization — all in one window.
 
+## Windows ADE development preview
+
+The `feat/ade-zig-core` branch also includes an isolated **Tauri + Zig + ConPTY**
+workspace preview. It supports tiled/free terminal panes, session actions, custom
+shortcuts, themes, local backgrounds/fonts and persisted workspace preferences.
+See the [preview build and test guide](docs/terminal-preview.md).
+
+This source-only, unsigned preview is not the completed ADE or a replacement for
+the Electron release. AI chat, SSH/SFTP, SQLite migration and durable background
+sessions are not connected to this entrypoint. Broader migration remains gated
+by measurements, compatibility checks and approved performance budgets.
+
 ## ✨ Features
 
 - **Drag & Drop Workspace** — Organize terminal blocks, editors, and web browsers in a flexible tiled layout
@@ -88,7 +100,7 @@ npm run build:prod
 npx electron-builder --win --x64 --config electron-builder.config.cjs
 ```
 
-See [BUILD.md](BUILD.md) for detailed instructions.
+Build commands are defined in [package.json](package.json).
 
 ## 🌐 Internationalization (i18n)
 

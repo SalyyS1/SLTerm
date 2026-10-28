@@ -1,0 +1,136 @@
+# Windows terminal workspace preview
+
+This isolated entrypoint exercises Tauri → private IPC → Zig → ConPTY → xterm.
+It does not start the Go backend or import the existing application profile.
+The Electron/Go entrypoints remain the release path. This preview is unsigned,
+source-only and not the completed ADE.
+
+## Build and run
+
+Use the repository root as the working directory. Prerequisites: existing npm
+dependencies, Rust/MSVC, system WebView2, PowerShell 7, and the exact local Zig
+distribution described in [toolchain.json](../native-core/toolchain.json).
+The core build script verifies its version/integrity and downloads nothing.
+
+```powershell
+npm run build:proof-core
+npm run test:proof-core
+npm run build:proof-host
+& .\src-tauri\target\release\slterm.exe
+```
+
+Keep the executable in this checkout: the core executable is source-relative.
+The ordinary Tauri build uses the same output path and can replace it. Close the
+preview through **Dừng và thoát** before rebuilding; retain the prior executable
+when testing a replacement. These commands do not create an installer.
+
+## Available interactions
+
+- Switch **Chia ô / Tự do**. Dock panes on any side, resize dividers and their
+  intersections, or move free panes and resize their edges/corners.
+- Auto arrangement wraps after five columns, as do workspace tabs. This rule
+  does not limit running sessions. Manual docking stays manual until reset.
+- The left session list supports focus, rename, split, zoom, show-only,
+  hide/show, stop and close. Hidden sessions continue running. Stopping retains
+  the transcript; closing removes a pane after confirmed exit/output drain.
+- Right-click pastes. Ctrl+C copies a selection; another distinct Ctrl+C
+  interrupts. Without selection it interrupts immediately. Ctrl+Shift+C/V are
+  explicit copy/paste shortcuts. Clipboard errors remain visible.
+- Ctrl+plus/minus, Ctrl+0, Ctrl+wheel and the font controls adjust terminal text.
+  The native window supports edge resizing and maximize/restore.
+- Settings include twelve themes, ANSI/custom colors, UI/terminal fonts and
+  sizes, cursor, scrollback, spacing, density, radius, and local backgrounds.
+  Backgrounds: PNG/JPEG/WebP/GIF, up to 8 MiB/32 megapixels. Fonts:
+  TTF/OTF/WOFF/WOFF2, up to 4 MiB. Imports validate signature/decode; remote
+  assets and SVG backgrounds are excluded.
+- Edit shortcuts per action with conflict checks. Global appearance/shortcut
+  groups can each be overridden by a workspace. An override is a snapshot;
+  resetting inheritance returns that group to the global defaults.
+
+## Persistence and shutdown
+
+Versioned IndexedDB stores preferences, local uploaded blobs and workspace
+descriptors in the isolated WebView profile:
+`%LOCALAPPDATA%\dev.salyvn.slterm.terminal-proof\workspace-customization`.
+For disposable tests, `SLTERM_PROOF_PROFILE_DIR` accepts an absolute directory.
+Shell/history scratch stays in per-run ignored `proof-results/host-*` paths.
+
+Restart restores empty workspace descriptors. It does not restore running
+processes, terminal transcripts or pane geometry/visibility. This preference
+store is separate from the planned Zig/SQLite store. Failed writes remain
+visible; unsupported/corrupt schemas preserve data and disable writes. Quit
+flushes preference writes; exiting without saving requires a separate choice.
+
+Normal quit stops admission, requests shutdown, then requires the exact
+versioned shutdown acknowledgement, successful core exit, output EOF and no
+observed transport failure. Missing acknowledgement, failed transport or the
+ten-second timeout keeps the host open with a visible issue. The user can retry,
+cancel, or explicitly confirm **Buộc dừng và thoát**, which may lose final output.
+Force recovery terminates only the owned core handle and exits with status 1;
+confirmed graceful shutdown exits 0 after Tauri cleanup. Force is unavailable
+before a shutdown failure. It never reports an unconfirmed shutdown as success.
+
+The core has a 256 KiB output queue plus one in-flight frame of at most 64 KiB.
+Serialization memory is separately bounded per active session; it is not a
+global memory cap or a session-count limit. It preserves queued frames under
+backpressure. Permanent unread stdout remains unconfirmed until it drains or
+the user authorizes force recovery. Overload/write failure is explicit.
+
+## Verification commands
+
+```powershell
+npx vitest run
+npx tsc --noEmit -p tsconfig.proof.json
+npm run typecheck
+npm run test:proof-tools
+npm run test:proof-core
+npm run test:provider-proof
+node scripts/terminal-proof/shutdown-recovery.mjs
+```
+
+Vitest owns frontend tests. The other scripts use Node's test runner; their
+exclusions in Vitest avoid loading a suite with the wrong runner.
+The shutdown GUI regression uses the current built executable, a disposable
+profile and local test CDP port 19231. It refuses an occupied port, exercises a
+deliberately killed test-owned core, verifies force confirmation/cancellation,
+checks restored preferences without restored processes, and checks cleanup.
+
+Native Rust unit tests must use the proof build configuration. For example:
+
+```powershell
+$priorConfig = $env:TAURI_CONFIG
+try {
+    $env:TAURI_CONFIG = Get-Content src-tauri/tauri.proof.conf.json -Raw
+    cargo test --manifest-path src-tauri/Cargo.toml --features terminal-proof --lib
+} finally {
+    $env:TAURI_CONFIG = $priorConfig
+}
+```
+
+Provider fixture/schema/declaration checks have their own
+[scope and run guide](../scripts/provider-proof/README.md). They do not launch
+providers or make model requests and are not integrated chat.
+
+## Measurements and remaining gates
+
+`node scripts/terminal-proof/proof-idle-resources.mjs` runs a disposable,
+hidden-window ten-shell warm-idle diagnostic. It records executable/harness
+hashes, shell identities, viewport, process-tree samples and shutdown outcome
+under ignored `proof-results/idle-proof-*`. Test-only debugging is enabled only
+for that owned launch. The normal application does not enable CDP.
+
+The unchanged Electron comparison uses
+[baseline-build.ps1](../scripts/terminal-proof/baseline-build.ps1) and
+[baseline-launch.cjs](../scripts/terminal-proof/baseline-launch.cjs).
+[measure-process-tree.ps1](../scripts/terminal-proof/measure-process-tree.ps1)
+owns counter definitions. Include browser/backend/shell/conhost resources;
+report WSL and provider/MCP resources separately when present. Private commit,
+private working set and summed working sets are distinct metrics.
+
+A warm-idle diagnostic does not pass the performance gate. Startup, burst,
+resize, tab switching and input latency still need controlled old/new runs
+with matching viewport/visibility/workload, followed by user-approved budgets.
+The first-input PSReadLine delay remains unresolved. WSL sandbox, SSH/SFTP,
+live provider/runtime behavior, SQLite/import, project preview isolation and
+installer/update compatibility retain their own gates. No release publication
+or account/host access is implied by this preview.
