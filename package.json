@@ -33,6 +33,8 @@
         "build:proof-ui": "vite build --config vite.proof.config.ts",
         "build:proof-core": "pwsh -NoProfile -File scripts/terminal-proof/build-core.ps1",
         "test:proof-core": "node --test --test-concurrency=1 scripts/terminal-proof/core-integration.mjs",
+        "test:proof-tools": "node --test scripts/terminal-proof/baseline-output.test.mjs",
+        "test:provider-proof": "node --experimental-transform-types --test --test-concurrency=1 scripts/provider-proof/*.test.mjs",
         "build:proof-host": "tauri build --config src-tauri/tauri.proof.conf.json --features terminal-proof --no-bundle",
         "coverage": "vitest run --coverage",
         "test": "vitest",
