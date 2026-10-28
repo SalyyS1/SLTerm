@@ -5,6 +5,7 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
+const { readPtyOutput, baselineOutcome, compactPtyOutput } = require("./baseline-output.cjs");
 const repoRoot = path.resolve(__dirname, "../..");
 const markerName = "baseline-profile.json";
 const psReadLineManifest = "C:\\Program Files\\WindowsPowerShell\\Modules\\PSReadLine\\2.0.0\\PSReadLine.psd1";
@@ -125,7 +126,7 @@ function checkProfile(root) {
 
 // Runs in the real renderer: existing public RPC + service routes own every
 // block and shell. The probe never writes directly to the baseline databases.
-async function runTerminalWorkload(count) {
+async function runTerminalWorkload(count, readOutput, compactOutput) {
     const state = { status: "starting", requested: count, started: Date.now(), terminals: [], readRetries: [] };
     window.__sltermBaselineWorkload = state;
     const pause = () => new Promise((resolve) => setTimeout(resolve, 250));
@@ -166,27 +167,25 @@ async function runTerminalWorkload(count) {
             // Keep the framed response short enough for narrow panes. Long
             // lines can be wrapped and repainted by ConPTY's cursor protocol.
             // Concatenation keeps the expected marker out of echoed input.
-            const command = `$baselineOpts = Get-PSReadLineOption; $baselineSafe = $baselineOpts.HistorySaveStyle -eq 'SaveNothing' -and $baselineOpts.HistorySavePath.StartsWith($env:SLTERM_BASELINE_PROFILE + '\\history\\') -and [Console]::InputEncoding.CodePage -eq 65001 -and [Console]::OutputEncoding.CodePage -eq 65001 -and $OutputEncoding.CodePage -eq 65001; if ($baselineSafe) { Write-Output ('B' + '${index}:' + $PID + ':E') } else { Write-Output 'BASELINE_SAFETY_FAILED' }\r`;
+            const command = `$baselineOpts = Get-PSReadLineOption; $baselineSafe = $baselineOpts.HistorySaveStyle -eq 'SaveNothing' -and $baselineOpts.HistorySavePath.StartsWith($env:SLTERM_BASELINE_PROFILE + '\\history\\') -and [Console]::InputEncoding.CodePage -eq 65001 -and [Console]::OutputEncoding.CodePage -eq 65001 -and $OutputEncoding.CodePage -eq 65001; if ($baselineSafe) { Write-Output ('B' + '${index}:' + $PID + ':E') } else { Write-Output ('BASELINE_' + 'SAFETY_FAILED') }\r`;
             state.phase = "send-one-command";
             await RpcApi.ControllerInputCommand(TabRpcClient, { blockid: id, inputdata64: btoa(command) }, { timeout: 30000 });
             state.phase = "verify-pty-output";
             let readFailures = 0;
             const shellPid = await until(async () => {
-                const query = new URLSearchParams({ zoneid: id, name: "term", offset: "0" });
                 let output;
                 try {
-                    const response = await fetch(`${endpoint}/wave/file?${query}`, { headers: { "X-AuthKey": api.getAuthKey() } });
-                    if (!response.ok) throw new Error(`PTY read HTTP ${response.status}`);
-                    output = await response.text();
+                    output = await readOutput(endpoint, id, api.getAuthKey());
                 } catch (error) {
                     // Only retry the idempotent read, never the input command.
                     state.readRetries.push({ index, at: Date.now(), error: error.message });
                     if (++readFailures > 3) throw error;
                     return false;
                 }
-                if (output.includes("\r\nBASELINE_SAFETY_FAILED\r\n")) throw new Error(`Live shell safety failed: ${index}`);
+                const compact = compactOutput(output);
+                if (compact.includes("BASELINE_SAFETY_FAILED")) throw new Error(`Live shell safety failed: ${index}`);
                 // End framing prevents accepting a read that ends mid-PID.
-                const match = output.match(new RegExp(`${marker}(\\d+):E`));
+                const match = compact.match(new RegExp(`${marker}(\\d+):E`));
                 return match ? Number(match[1]) : false;
             }, `real PTY output ${index}`);
             state.terminals.push({ blockId: id, shellPid, outputVerified: true, historyAndUtf8Verified: true });
@@ -265,7 +264,7 @@ async function runElectronChild() {
                         const ready = await contents.executeJavaScript("Boolean(window.TabRpcClient && window.WOS && document.querySelector('.xterm'))");
                         if (!ready) continue;
                         workloadContents = contents;
-                        contents.executeJavaScript(`(${runTerminalWorkload.toString()})(${terminalCount})`).catch((error) => {
+                        contents.executeJavaScript(`(${runTerminalWorkload.toString()})(${terminalCount}, ${readPtyOutput.toString()}, ${compactPtyOutput.toString()})`).catch((error) => {
                             fs.writeFileSync(path.join(root, "workload.json"), JSON.stringify({ status: "failed", error: error.message }));
                         });
                         break;
@@ -366,7 +365,16 @@ async function runParent() {
     checkProfile(root);
     const reportDir = path.join(repoRoot, "proof-results/baseline-runs", path.basename(root));
     fs.mkdirSync(reportDir, { recursive: true });
-    const receipt = { profileRoot: root, reportDir, seconds, debugPort, terminalCount, baseline: "unchanged unpackaged Electron + Go backend; production-built bundles; controlled shell startup", keyring: "file key seeded; OS keyring not needed", network: "renderer external requests blocked; standard HTTP proxies refuse external traffic; NOT an OS network sandbox", shell, shellOptions, shellStartup, visible: args.includes("--show"), launchRequested: args.includes("--launch") };
+    const artifactPaths = ["scripts/terminal-proof/baseline-launch.cjs", "scripts/terminal-proof/baseline-output.cjs"];
+    for (const directory of ["dist/main", "dist/preload", "dist/frontend", "dist/bin"]) {
+        for (const relativePath of fs.readdirSync(path.join(repoRoot, directory), { recursive: true })) {
+            const artifactPath = path.join(directory, relativePath);
+            if (fs.statSync(path.join(repoRoot, artifactPath)).isFile()) artifactPaths.push(artifactPath);
+        }
+    }
+    artifactPaths.sort();
+    const artifacts = artifactPaths.map((relativePath) => ({ path: relativePath, sha256: crypto.createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relativePath))).digest("hex") }));
+    const receipt = { profileRoot: root, reportDir, seconds, debugPort, terminalCount, artifacts, baseline: "unchanged unpackaged Electron + Go backend; production-built bundles; controlled shell startup", keyring: "file key seeded; OS keyring not needed", network: "renderer external requests blocked; standard HTTP proxies refuse external traffic; NOT an OS network sandbox", shell, shellOptions, shellStartup, visible: args.includes("--show"), launchRequested: args.includes("--launch") };
     writeJson(path.join(reportDir, "launch-receipt.json"), receipt);
     console.log(JSON.stringify({ event: "prepared", ...receipt }));
     const env = makeIsolatedEnvironment(root, dirs, systemRoot, shell);
@@ -406,10 +414,12 @@ async function runParent() {
         }
         const shellReceipts = fs.readdirSync(dirs["shell-receipts"]).filter((name) => /^shell-\d+\.json$/.test(name)).map((name) => JSON.parse(fs.readFileSync(path.join(dirs["shell-receipts"], name), "utf8").replace(/^\uFEFF/, "")));
         writeJson(path.join(reportDir, "shell-startup-receipts.json"), shellReceipts);
-        const outcome = { event: "closed", code, signal, at: Date.now(), profileRoot: root, reportDir, retainedDisposableProfile: true };
+        let workload;
+        try { workload = JSON.parse(fs.readFileSync(path.join(root, "workload.json"), "utf8")); } catch { /* Missing/corrupt evidence fails the requested workload. */ }
+        const outcome = { event: "closed", code, ...baselineOutcome(code, signal, terminalCount, workload), at: Date.now(), profileRoot: root, reportDir, retainedDisposableProfile: true };
         writeJson(path.join(reportDir, "exit.json"), outcome);
         console.log(JSON.stringify(outcome));
-        process.exitCode = code || 0;
+        process.exitCode = outcome.harnessExitCode;
     });
 }
 
