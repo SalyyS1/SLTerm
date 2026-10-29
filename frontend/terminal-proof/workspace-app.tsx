@@ -15,6 +15,7 @@ import { WorkspaceCanvas } from "./workspace-canvas";
 import { WorkspaceSessionList } from "./workspace-session-list";
 import { WorkspaceSettings } from "./workspace-settings";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
+import { WslStatus } from "./wsl-status";
 import { appearanceFor } from "./workspace-preferences";
 import { appearanceTokens } from "./appearance-settings";
 import { appearancePresets } from "./appearance-presets";
@@ -56,6 +57,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                 </div>
                 <div className="header-actions">
                     <ResourceMonitor />
+                    <WslStatus />
                     <IconButton
                         icon="sidebar"
                         label="Ẩn / hiện danh sách phiên"

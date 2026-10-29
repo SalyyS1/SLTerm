@@ -462,6 +462,73 @@ async fn proof_resources(window: WebviewWindow) -> Result<Value, String> {
     Err("Resource counters are currently available on Windows only".into())
 }
 
+fn decode_wsl_output(bytes: &[u8]) -> String {
+    if bytes.len() >= 2 && (bytes[0] == 0xff && bytes[1] == 0xfe || bytes[1] == 0) {
+        let mut units = Vec::with_capacity(bytes.len() / 2);
+        for pair in bytes.chunks_exact(2) {
+            units.push(u16::from_le_bytes([pair[0], pair[1]]));
+        }
+        if units.first() == Some(&0xfeff) {
+            units.remove(0);
+        }
+        return String::from_utf16_lossy(&units).replace('\0', "").trim().to_string();
+    }
+    String::from_utf8_lossy(bytes).replace('\0', "").trim().to_string()
+}
+
+fn run_wsl_command(executable: &std::path::Path, args: &[&str]) -> Result<std::process::Output, String> {
+    let mut child = std::process::Command::new(executable)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            child.stdout.take().ok_or("WSL stdout was unavailable")?.read_to_end(&mut stdout).map_err(|error| error.to_string())?;
+            child.stderr.take().ok_or("WSL stderr was unavailable")?.read_to_end(&mut stderr).map_err(|error| error.to_string())?;
+            return Ok(std::process::Output { status, stdout, stderr });
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("WSL command timed out after 3 seconds".into());
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
+#[tauri::command]
+async fn proof_wsl_status(window: WebviewWindow) -> Result<Value, String> {
+    authorize(&window)?;
+    tauri::async_runtime::spawn_blocking(|| {
+        let windir = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
+        let executable = std::path::PathBuf::from(windir).join("System32").join("wsl.exe");
+        let status = run_wsl_command(&executable, &["--status"]);
+        let list = run_wsl_command(&executable, &["--list", "--quiet"]);
+        let (status_text, status_error, available) = match status {
+            Ok(output) => (decode_wsl_output(&output.stdout), decode_wsl_output(&output.stderr), output.status.success()),
+            Err(error) => (String::new(), error.to_string(), false),
+        };
+        let distros = match list {
+            Ok(output) => decode_wsl_output(&output.stdout).lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_owned).collect::<Vec<_>>(),
+            Err(_) => Vec::new(),
+        };
+        Ok(json!({
+            "version": 1,
+            "available": available,
+            "executable": executable,
+            "status": status_text,
+            "error": status_error,
+            "distros": distros,
+            "setup_required": available && distros.is_empty(),
+        }))
+    }).await.map_err(|error| error.to_string())?
+}
+
 pub fn run() {
     let accepted_exit = Arc::new(AtomicI32::new(0));
     let exit_receipt = accepted_exit.clone();
@@ -474,6 +541,7 @@ pub fn run() {
             proof_background,
             proof_force_quit,
             proof_resources,
+            proof_wsl_status,
             proof_clipboard_read,
             proof_clipboard_write
         ])
@@ -624,5 +692,11 @@ mod tests {
         assert!(queue(&sender, vec![2]).unwrap_err().contains("full"));
         drop(receiver);
         assert!(queue(&sender, vec![3]).unwrap_err().contains("closed"));
+    }
+
+    #[test]
+    fn wsl_output_decoder_handles_utf16_and_utf8() {
+        assert_eq!(decode_wsl_output(&[0xff, 0xfe, b'D', 0, b'e', 0, b'b', 0, 0, 0]), "Deb");
+        assert_eq!(decode_wsl_output(b"Ubuntu\r\n"), "Ubuntu");
     }
 }

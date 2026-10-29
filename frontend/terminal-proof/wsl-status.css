@@ -1,0 +1,9 @@
+.wsl-status { position: relative; }
+.wsl-popover { position: absolute; z-index: 20; top: calc(100% + var(--space-3)); right: 0; width: min(360px, calc(100vw - 32px)); padding: var(--space-5); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 14px 32px var(--shadow); color: var(--text); }
+.wsl-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-3); }
+.wsl-popover p { margin: var(--space-3) 0; }
+.wsl-state[data-state="ready"] { color: var(--success); }
+.wsl-state[data-state="empty"] { color: var(--warning); }
+.wsl-state[data-state="missing"] { color: var(--danger); }
+.wsl-distros { margin: var(--space-3) 0; padding-left: var(--space-6); }
+.wsl-output { max-height: 120px; margin: var(--space-3) 0; padding: var(--space-3); overflow: auto; white-space: pre-wrap; color: var(--text-muted); background: var(--surface); font: var(--text-xs)/1.4 var(--font-mono); }
