@@ -68,6 +68,10 @@ when testing a replacement. These commands do not create an installer.
   discarded; typing while a save is pending keeps the newer edits unsaved.
   External changes use revision checks and offer compare/reload/explicit
   overwrite. Even overwrite compares against a freshly read revision.
+- HTML/XHTML files also expose **Preview**. The preview runs in a sandboxed
+  iframe with a unique origin and restrictive CSP (`connect-src 'none'`, no
+  forms, frames, objects or parent navigation); scripts and native bridges are
+  not enabled. It is a static preview, not a browser or project server.
 - **SSH / SFTP** buttons open a dedicated pane using the Windows OpenSSH
   `ssh.exe` or `sftp.exe` binary. Host, optional user and port are validated
   before spawning; no password, key or token is collected. OpenSSH owns

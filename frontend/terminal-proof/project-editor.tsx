@@ -3,6 +3,8 @@ import { EditorState, documentDirty } from "./editor-state";
 import { ProjectExplorer } from "./project-explorer";
 import { ProjectCodeEditor } from "./project-code-editor";
 import type { ProjectRequest } from "./project-files";
+import { isPreviewableProjectPath } from "./project-preview";
+import { ProjectPreview } from "./project-preview-frame";
 import { Icon } from "./workspace-icons";
 import "./project-editor.css";
 
@@ -26,6 +28,7 @@ export function ProjectEditor({ root, request, onClose, onDirtyChange, onControl
     const pendingRef = useRef<Pending | null>(null);
     const changePending = (value: Pending | null) => { pendingRef.current = value; setPending(value); setSaveProblem(null); };
     const [explorerVisible, setExplorerVisible] = useState(true);
+    const [previewOpen, setPreviewOpen] = useState(false);
     const dirty = state.hasUnsaved();
     const anySaving = snapshot.documents.some((document) => document.saving);
     const active = snapshot.documents.find((document) => document.path === snapshot.active);
@@ -39,6 +42,7 @@ export function ProjectEditor({ root, request, onClose, onDirtyChange, onControl
         callbacks.current.onControllerReady?.(state);
         return () => { state.dispose(); callbacks.current.onControllerReady?.(null); callbacks.current.onDirtyChange?.(false); };
     }, [state]);
+    useEffect(() => { setPreviewOpen(false); }, [active?.path]);
     useEffect(() => {
         if (pending && dialog.current && !dialog.current.open) dialog.current.showModal();
         if (!pending && dialog.current?.open) dialog.current.close();
@@ -92,7 +96,8 @@ export function ProjectEditor({ root, request, onClose, onDirtyChange, onControl
                 </div>
                 {active ? <>
                     <div className="project-editor-toolbar"><span title={active.path}>{active.path}</span><div>
-                        <button className="button button-ghost" disabled={active.loading || !active.revision} aria-pressed={active.diff} onClick={() => state.toggleDiff(active.path)}>{active.diff ? "Soạn thảo" : "So sánh thay đổi"}</button>
+                        <button className="button button-ghost" disabled={active.loading || !active.revision} aria-pressed={active.diff} onClick={() => { if (previewOpen) setPreviewOpen(false); else state.toggleDiff(active.path); }}>{previewOpen ? "Soạn thảo" : active.diff ? "Soạn thảo" : "So sánh thay đổi"}</button>
+                        {isPreviewableProjectPath(active.path) && <button className="button button-ghost" disabled={active.loading || !active.revision} aria-pressed={previewOpen} onClick={() => { setPreviewOpen((value) => { if (!value && active.diff) state.toggleDiff(active.path); return !value; }); }}>{previewOpen ? "Đóng preview" : "Preview"}</button>}
                         <button className="button" disabled={active.loading || active.saving} onClick={() => void state.compareDisk(active.path)}>Bản trên đĩa</button>
                         <button className="button button-primary" title="Lưu · Ctrl S" disabled={active.loading || active.saving || !active.revision || !documentDirty(active)} onClick={() => void state.save(active.path)}>{active.saving ? "Đang lưu…" : "Lưu"}</button>
                     </div></div>
@@ -101,7 +106,7 @@ export function ProjectEditor({ root, request, onClose, onDirtyChange, onControl
                     {active.diff && !active.conflict && <div className="project-diff-label">Trái: bản đã mở/lưu · Phải: bộ đệm hiện tại</div>}
                     <div className="project-editor-content">
                         {snapshot.documents.map((document) => <div key={document.id} className="project-document" hidden={document.path !== snapshot.active}>
-                            {document.loading ? <div className="project-editor-placeholder" role="status">Đang đọc tệp…</div> : !document.revision ? <div className="project-editor-placeholder"><p>Chưa thể mở tệp này.</p><button className="button" onClick={() => void state.reload(document.path)}>Đọc lại</button></div> : <ProjectCodeEditor path={document.path} text={document.text} original={document.conflict?.text ?? document.savedText} diff={document.diff} onChange={(text) => state.edit(document.path, text)} onSave={() => void state.save(document.path)} />}
+                            {document.loading ? <div className="project-editor-placeholder" role="status">Đang đọc tệp…</div> : !document.revision ? <div className="project-editor-placeholder"><p>Chưa thể mở tệp này.</p><button className="button" onClick={() => void state.reload(document.path)}>Đọc lại</button></div> : previewOpen && document.path === active.path ? <ProjectPreview path={document.path} source={document.text} /> : <ProjectCodeEditor path={document.path} text={document.text} original={document.conflict?.text ?? document.savedText} diff={document.diff} onChange={(text) => state.edit(document.path, text)} onSave={() => void state.save(document.path)} />}
                         </div>)}
                     </div>
                     <footer className="project-editor-status" role="status"><span>{active.saving ? "Đang lưu…" : documentDirty(active) ? "Chưa lưu" : active.revision ? "Đã lưu" : "Chưa mở được tệp"}</span><span>UTF-8</span></footer>
