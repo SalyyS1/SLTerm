@@ -179,6 +179,12 @@ export class TerminalRuntime {
         this.sessions.get(id)?.search.clearDecorations();
     }
 
+    sendInput(id: number, data: string) {
+        const session = this.sessions.get(id);
+        if (!session) return Promise.reject(new Error("Không tìm thấy terminal đích."));
+        return session.sendInput(data);
+    }
+
     async close(id: number) {
         await this.sessions.get(id)?.close();
     }

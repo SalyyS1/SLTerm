@@ -16,6 +16,7 @@ import { WorkspaceSessionList } from "./workspace-session-list";
 import { WorkspaceSettings } from "./workspace-settings";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
 import { WorkspaceToolsPanel } from "./workspace-tools-panel";
+import { AiChatPanel } from "./ai-chat-panel";
 import { WslStatus } from "./wsl-status";
 import { appearanceFor } from "./workspace-preferences";
 import { appearanceTokens } from "./appearance-settings";
@@ -29,6 +30,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
     const stage = useRef<HTMLDivElement>(null);
     const [editorOpen, setEditorOpen] = useState<Record<string, boolean>>({});
     const [toolsOpen, setToolsOpen] = useState(false);
+    const [chatOpen, setChatOpen] = useState(false);
     const disabled = !app.connected || Boolean(app.dialog) || app.settingsOpen;
     const appearance = appearanceFor(app.preferences.value, workspace?.id);
     useEffect(() => {
@@ -158,6 +160,9 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             <button className="button" aria-pressed={toolsOpen} disabled={!workspace || disabled} onClick={() => setToolsOpen((value) => !value)} title="Xem Skills, MCP, Agents và Commands của workspace">
                                 <Icon name="terminal" /><span>AI tools</span>
                             </button>
+                            <button className="button" aria-pressed={chatOpen} disabled={!workspace || disabled} onClick={() => setChatOpen((value) => !value)} title="Gửi prompt vào Claude hoặc Codex CLI">
+                                <Icon name="terminal" /><span>Chat</span>
+                            </button>
                             <button className="button" disabled={!workspace || disabled} onClick={() => app.openRemoteDialog("ssh")} title="Mở SSH bằng OpenSSH hệ thống">
                                 <Icon name="terminal" /><span>SSH</span>
                             </button>
@@ -203,6 +208,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             >
                                 <WorkspaceBackdrop settings={appearanceFor(app.preferences.value, owner.id)} assets={app.preferences.assets} />
                                 {toolsOpen && state.activeWorkspaceId === owner.id && <WorkspaceToolsPanel root={owner.cwd} request={runtime.request} close={() => setToolsOpen(false)} />}
+                                {chatOpen && state.activeWorkspaceId === owner.id && <AiChatPanel runtime={runtime} openProvider={app.openProvider} close={() => setChatOpen(false)} />}
                                 {editorOpen[owner.id] && <div className="workspace-editor-dock">
                                     <ProjectEditor root={owner.cwd} request={runtime.request}
                                         onClose={() => setEditorOpen((current) => ({ ...current, [owner.id]: false }))}

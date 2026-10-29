@@ -35,6 +35,9 @@ export class TerminalSession {
     private rows = 0;
     private resizing = false;
     private waiters = new Set<{ resolve: () => void; reject: (error: Error) => void }>();
+    private attachReadyResolve!: () => void;
+    private attachReady = new Promise<void>((resolve) => { this.attachReadyResolve = resolve; });
+    private attachReadySettled = false;
 
     constructor(
         readonly id: number,
@@ -113,6 +116,7 @@ export class TerminalSession {
             this.cols = this.terminal.cols;
             this.rows = this.terminal.rows;
             this.spawned = this.replay ? this.restoreTranscript() : this.spawn();
+            if (!this.attachReadySettled) { this.attachReadySettled = true; this.attachReadyResolve(); }
         }
         this.resize();
     }
@@ -249,6 +253,15 @@ export class TerminalSession {
         this.waiters.clear();
     }
 
+    /** Send a one-shot prompt from the integrated chat after the CLI is ready. */
+    async sendInput(data: string): Promise<void> {
+        if (this.finished || this.closeRequested) throw new Error("Terminal đã dừng.");
+        await this.attachReady;
+        await this.spawned;
+        if (this.finished || this.closeRequested || this.info.status !== "running") throw new Error("CLI chưa sẵn sàng nhận prompt.");
+        await this.transport.request("input", { session_id: this.id, data, run_id: this.runId });
+    }
+
     close(): Promise<void> {
         if (this.finished) return Promise.resolve();
         if (this.closing) return this.closing;
@@ -263,6 +276,7 @@ export class TerminalSession {
         this.input.stop();
         this.update({ ...this.info, status: "closing" });
         if (!this.opened) {
+            if (!this.attachReadySettled) { this.attachReadySettled = true; this.attachReadyResolve(); }
             this.confirmExit();
             return;
         }

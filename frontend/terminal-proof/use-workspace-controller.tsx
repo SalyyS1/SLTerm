@@ -67,9 +67,9 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
         } catch (error) { runtime.report(error); }
     };
     const openProvider = (provider: AiProvider) => {
-        if (!workspace || !connected || dialog) return;
+        if (!workspace || !connected || dialog) return undefined;
+        const paneId = nextSerial("pane");
         try {
-            const paneId = nextSerial("pane");
             const command = runtime.providerCommand(provider);
             const runId = runtime.prepare(paneId, workspace.cwd,
                 terminalAppearance(appearanceFor(preferences.value, workspace.id)), workspace.id, command);
@@ -81,6 +81,7 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             runtime.report(error);
             throw error;
         }
+        return paneId;
     };
     const openRemote = (protocol: RemoteProtocol, values: Record<string, string>) => {
         if (!workspace || !connected || dialog) return;
@@ -113,8 +114,8 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             title: "Mở AI CLI",
             body: <p>Chạy CLI nguyên bản trong một terminal riêng của workspace. SLTerm không nhận hoặc sao chép token; lần đầu dùng provider có thể yêu cầu đăng nhập trong CLI.</p>,
             actions: [
-                { label: "Mở Claude CLI", run: () => openProvider("claude") },
-                { label: "Mở Codex CLI", run: () => openProvider("codex") },
+                { label: "Mở Claude CLI", run: () => { openProvider("claude"); } },
+                { label: "Mở Codex CLI", run: () => { openProvider("codex"); } },
             ],
         });
     };
