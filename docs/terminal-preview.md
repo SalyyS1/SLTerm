@@ -91,6 +91,11 @@ when testing a replacement. These commands do not create an installer.
   login flow and SLTerm does not read, copy or send provider tokens. The pane's
   provider label is persisted with the layout, while restart restores its
   transcript as stopped history and never relaunches the CLI automatically.
+- **AI tools** reads the current workspace's `.claude/skills`, agents,
+  commands and `.mcp.json` as a read-only inventory. It shows descriptions and
+  safe MCP field/transport summaries, redacts secret-valued fields, never
+  executes repository commands and never auto-enables a server or copies a
+  credential.
 - **Chạy nền** in the quit dialog hides the window while preserving the same
   application/core, sessions and editor buffers. Use the Windows tray to reopen
   it or request the normal quit confirmation. This requires a registered tray
