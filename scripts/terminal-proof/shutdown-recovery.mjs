@@ -128,8 +128,8 @@ async function scenario() {
     const reopened = await launch();
     await reopened.wait("document.querySelector('.font-controls')?.textContent.includes('14 px')");
     assert.deepEqual(await reopened.evaluate(descriptors), savedDescriptors, "Workspace descriptors must persist");
-    assert.equal(await reopened.evaluate("document.querySelectorAll('.terminal-pane').length"), 0);
-    assert(await reopened.evaluate("document.querySelector('.empty-state h2')?.textContent === 'Workspace đang trống' && document.querySelector('.footer-count')?.textContent.includes('0 đang chạy · 0 terminal')"));
+    assert.equal(await reopened.evaluate("document.querySelectorAll('.terminal-pane').length"), 1);
+    assert(await reopened.evaluate("document.querySelector('.pane-state')?.textContent.includes('Lịch sử · đã dừng') && document.querySelector('.footer-count')?.textContent.includes('0 đang chạy · 1 terminal')"), "Interrupted transcript must restore as stopped history");
     const reopenedCore = await findCore(reopened);
     const coreTree = await snapshotProcessTree(reopenedCore.pid);
     assert(coreTree.some((item) => item.pid === reopenedCore.pid && item.createdAt === reopenedCore.createdAt), "Core identity changed during reopen inspection");
@@ -141,7 +141,7 @@ async function scenario() {
     // The hidden CUI core has a system console helper even without a ConPTY session.
     const consoleHost = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32/conhost.exe").toLowerCase();
     assert(coreDetails.filter((item) => item.ProcessId !== reopenedCore.pid).every((item) => item.Name?.toLowerCase() === "conhost.exe" && item.ExecutablePath?.toLowerCase() === consoleHost), "Reopen must not restore shells or unexpected descendant processes");
-    results.push("Same disposable profile restores 14 px and empty workspace descriptors without sessions");
+    results.push("Same disposable profile restores 14 px, layout and interrupted history without starting a shell");
     await confirm(reopened, "Dừng và thoát SLTerm?");
     await capture(reopened);
     await reopened.evaluate("document.querySelector('dialog form').requestSubmit()").catch(() => {});
