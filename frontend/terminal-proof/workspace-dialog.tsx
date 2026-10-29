@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { Icon } from "./workspace-icons";
 
 export type DialogSpec = {
@@ -7,7 +7,7 @@ export type DialogSpec = {
     body: ReactNode;
     accept?: string;
     danger?: boolean;
-    fields?: { name: string; label: string; value: string; hint?: string }[];
+    fields?: { name: string; label: string; value: string; hint?: string; required?: boolean; inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"] }[];
     submit?: (values: Record<string, string>) => void | Promise<void>;
     actions?: { label: string; danger?: boolean; run: () => void | Promise<void> }[];
 };
@@ -66,7 +66,8 @@ export function WorkspaceDialog({ spec, close }: { spec: DialogSpec; close: () =
                                 id={titleId + field.name}
                                 name={field.name}
                                 defaultValue={field.value}
-                                required
+                                required={field.required !== false}
+                                inputMode={field.inputMode}
                                 disabled={busy}
                                 maxLength={field.name === "cwd" ? 32767 : 128}
                                 autoComplete="off"

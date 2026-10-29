@@ -5,6 +5,7 @@ import { Frame, ProofTransport } from "./proof-protocol";
 import { DEFAULT_FONT_SIZE, nextFontSize } from "./terminal-font";
 import { TerminalSession, type SessionInfo, type ShellEnvironment, type SpawnCommand } from "./terminal-session";
 import { aiCommand, type AiProvider } from "./ai-cli";
+import { remoteCommand, type RemoteConnection } from "./remote";
 
 export type RuntimeSnapshot = {
     phase: "starting" | "connected" | "stopping" | "disconnected";
@@ -101,13 +102,18 @@ export class TerminalRuntime {
         return aiCommand(provider, this.environment.executable);
     }
 
-    restore(id: number, cwd: string, runId?: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string) {
+    remoteCommand(connection: RemoteConnection): SpawnCommand {
+        if (!this.environment) throw new Error("Terminal chưa kết nối.");
+        return remoteCommand(connection);
+    }
+
+    restore(id: number, cwd: string, runId?: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string, command?: SpawnCommand) {
         if (this.snapshot.phase !== "connected") throw new Error("Terminal chưa kết nối.");
         if (this.sessions.has(id)) throw new Error("Duplicate terminal identity");
         const runIdentity = runId ?? crypto.randomUUID();
         const session = new TerminalSession(id, cwd, this.transport, this.environment, (paneId, info) => {
             this.update({ sessions: { ...this.snapshot.sessions, [paneId]: info } });
-        }, this.report, this.snapshot.fontSize, this.palette(), options, runIdentity, { request: this.request, runId }, workspaceId);
+        }, this.report, this.snapshot.fontSize, this.palette(), options, runIdentity, { request: this.request, runId }, workspaceId, command);
         this.sessions.set(id, session);
         this.update({ sessions: { ...this.snapshot.sessions, [id]: session.info } });
         return runId;

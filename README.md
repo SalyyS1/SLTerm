@@ -32,8 +32,10 @@ are never restarted automatically.
 See the [preview build and test guide](docs/terminal-preview.md).
 
 This source-only, unsigned preview is not the completed ADE or a replacement for
-the Electron release. AI chat, SSH/SFTP, legacy-profile import and durable
-daemon/resume sessions are not connected to this entrypoint. The numerical
+the Electron release. SSH/SFTP interactive panes use the installed Windows
+OpenSSH client with host-key verification in the terminal; durable remote file
+sessions, AI chat, legacy-profile import and daemon/resume sessions are not
+connected to this entrypoint. The numerical
 performance gate was explicitly deferred for implementation; comparable
 measurements, compatibility checks and approved budgets remain release work.
 

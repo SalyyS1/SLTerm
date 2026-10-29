@@ -77,6 +77,23 @@ describe("workspace lifecycle", () => {
         expect(addWorkspace(other, duplicateRun)).toBe(other);
     });
 
+    it("persists remote connection metadata without admitting unsafe host values", () => {
+        const connection = { protocol: "ssh" as const, host: "server.example.com", user: "deploy", port: 2222 };
+        const state = addTerminal(workspace(), "one", { paneId: 7, title: "SSH", remote: connection });
+        expect(findPane(state.workspaces[0].layout, 7)?.remote).toEqual(connection);
+        expect(() => assertWorkspaceState(state)).not.toThrow();
+        for (const remote of [
+            { protocol: "ssh", host: "bad host", port: 22 },
+            { protocol: "ssh", host: "host", user: "deploy@evil", port: 22 },
+            { protocol: "sftp", host: "host", port: 65536 },
+        ]) {
+            const invalid = { ...state, workspaces: state.workspaces.map((owner) => ({
+                ...owner, layout: { ...owner.layout!, remote },
+            })) };
+            expect(() => assertWorkspaceState(invalid)).toThrow();
+        }
+    });
+
     it("seeds pane and generated split serials from every restored workspace", () => {
         const state = addWorkspace(splitPane(threePanes(), "one", 1, { paneId: 17, title: "Restored" }, "split-27", "horizontal"),
             createWorkspace("two", "Two", ""));

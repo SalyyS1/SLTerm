@@ -1,10 +1,11 @@
 import { clampPaneRect, layoutGeometry } from "./workspace-geometry";
+import type { RemoteConnection } from "./remote";
 
 export type Axis = "horizontal" | "vertical";
 export type DockSide = "left" | "right" | "up" | "down";
 export type PaneRect = { x: number; y: number; width: number; height: number };
 export type PaneProvider = "claude" | "codex";
-export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string; provider?: PaneProvider };
+export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string; provider?: PaneProvider; remote?: RemoteConnection };
 export type SplitNode = {
     kind: "split";
     splitId: string;
@@ -37,6 +38,14 @@ export const maxWorkspaceLayoutDepth = 128;
 const objectRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === "object" && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 const onlyKeys = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
+const validRemote = (value: unknown): value is RemoteConnection => {
+    if (!objectRecord(value) || !onlyKeys(value, ["protocol", "host", "user", "port"]) ||
+        (value.protocol !== "ssh" && value.protocol !== "sftp") || typeof value.host !== "string" ||
+        !value.host || value.host.length > 255 || /[\u0000-\u0020\u007f\\/@]/.test(value.host) ||
+        (Object.hasOwn(value, "user") && (typeof value.user !== "string" || value.user.length > 128 || !/^[A-Za-z0-9._-]*$/.test(value.user))) ||
+        typeof value.port !== "number" || !Number.isSafeInteger(value.port) || value.port < 1 || value.port > 65535) return false;
+    return true;
+};
 
 /** Validate the complete document before admitting any persisted workspace. */
 export function assertWorkspaceState(value: unknown): asserts value is WorkspaceState {
@@ -59,10 +68,11 @@ export function assertWorkspaceState(value: unknown): asserts value is Workspace
             const current = node as Record<string, unknown>;
             nodes.add(current);
             if (current.kind === "pane") {
-                if (!onlyKeys(current, ["kind", "paneId", "title", "runId", "provider"]) || typeof current.paneId !== "number" ||
+                if (!onlyKeys(current, ["kind", "paneId", "title", "runId", "provider", "remote"]) || typeof current.paneId !== "number" ||
                     !validPaneId(current.paneId) || panes.has(current.paneId) || typeof current.title !== "string" ||
                     (Object.hasOwn(current, "runId") && (!isCanonicalRunId(current.runId) || runs.has(current.runId))) ||
-                    (Object.hasOwn(current, "provider") && current.provider !== "claude" && current.provider !== "codex")) invalid();
+                    (Object.hasOwn(current, "provider") && current.provider !== "claude" && current.provider !== "codex") ||
+                    (Object.hasOwn(current, "remote") && !validRemote(current.remote))) invalid();
                 const pane = current as PaneNode;
                 panes.add(pane.paneId); localPanes.add(pane.paneId);
                 if (pane.runId !== undefined) runs.add(pane.runId);
@@ -96,7 +106,8 @@ export function assertWorkspaceState(value: unknown): asserts value is Workspace
 export function snapshotWorkspaceState(value: unknown): WorkspaceState {
     assertWorkspaceState(value);
     const cloneLayout = (node: LayoutNode | null): LayoutNode | null => !node ? null : node.kind === "pane"
-        ? { ...node } : { ...node, first: cloneLayout(node.first)!, second: cloneLayout(node.second)! };
+        ? { ...node, ...(node.remote ? { remote: { ...node.remote } } : {}) }
+        : { ...node, first: cloneLayout(node.first)!, second: cloneLayout(node.second)! };
     return { activeWorkspaceId: value.activeWorkspaceId, workspaces: value.workspaces.map((workspace) => ({
         ...workspace, layout: cloneLayout(workspace.layout), hiddenPaneIds: [...workspace.hiddenPaneIds],
         floating: Object.fromEntries(Object.entries(workspace.floating).map(([id, rect]) => [id, { ...rect }])),
@@ -253,7 +264,7 @@ export function splitPane(
     state: WorkspaceState,
     workspaceId: string,
     targetPaneId: number | null,
-    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider">,
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider" | "remote">,
     splitId: string,
     axis: Axis
 ): WorkspaceState {
@@ -267,7 +278,8 @@ export function splitPane(
     return edit(state, workspaceId, (workspace) => {
         const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
             ...(newPane.runId === undefined ? {} : { runId: newPane.runId }),
-            ...(newPane.provider === undefined ? {} : { provider: newPane.provider }) };
+            ...(newPane.provider === undefined ? {} : { provider: newPane.provider }),
+            ...(newPane.remote === undefined ? {} : { remote: newPane.remote }) };
         if (!workspace.layout)
             return targetPaneId === null
                 ? { ...workspace, layout: pane, activePaneId: pane.paneId, zoomedPaneId: null, arrangement: "manual" }
@@ -478,7 +490,7 @@ export function arrangePanes(state: WorkspaceState, workspaceId: string): Worksp
 export function addTerminal(
     state: WorkspaceState,
     workspaceId: string,
-    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider">
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider" | "remote">
 ): WorkspaceState {
     if (
         !validPaneId(newPane.paneId) ||
@@ -489,7 +501,8 @@ export function addTerminal(
     return edit(state, workspaceId, (workspace) => {
         const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
             ...(newPane.runId === undefined ? {} : { runId: newPane.runId }),
-            ...(newPane.provider === undefined ? {} : { provider: newPane.provider }) };
+            ...(newPane.provider === undefined ? {} : { provider: newPane.provider }),
+            ...(newPane.remote === undefined ? {} : { remote: newPane.remote }) };
         const panes = [...paneIds(workspace.layout).map((id) => findPane(workspace.layout, id)!), pane];
         // Manual docking remains intact; the explicit Arrange command restores the default grid.
         if (workspace.arrangement === "manual" && workspace.layout) {

@@ -10,6 +10,7 @@ import * as model from "./workspace-model";
 import { workspacePath } from "./workspace-path";
 import type { EditorState } from "./editor-state";
 import type { AiProvider } from "./ai-cli";
+import { parseRemoteConnection, remoteLabel, type RemoteProtocol } from "./remote";
 
 export function useWorkspaceController(runtime: TerminalRuntime) {
     const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
@@ -81,6 +82,31 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             throw error;
         }
     };
+    const openRemote = (protocol: RemoteProtocol, values: Record<string, string>) => {
+        if (!workspace || !connected || dialog) return;
+        const connection = parseRemoteConnection({ protocol, host: values.host, user: values.user, port: values.port });
+        const paneId = nextSerial("pane");
+        const runId = runtime.prepare(paneId, workspace.cwd,
+            terminalAppearance(appearanceFor(preferences.value, workspace.id)), workspace.id, runtime.remoteCommand(connection));
+        setState((current) => model.addTerminal(current, workspace.id, {
+            paneId, title: `${remoteLabel(connection)} · Terminal ${paneId}`, runId, remote: connection,
+        }));
+    };
+    const openRemoteDialog = (protocol: RemoteProtocol) => {
+        if (!workspace || !connected || dialog) return;
+        const label = protocol === "ssh" ? "SSH" : "SFTP";
+        setDialog({
+            title: `Mở kết nối ${label}`,
+            body: <><p>SLTerm dùng OpenSSH có sẵn trên Windows. Host key vẫn do OpenSSH xác minh trong terminal; không tự chấp nhận key mới và không lưu mật khẩu.</p><p className="field-hint">Nếu host key thay đổi, kết nối sẽ bị OpenSSH chặn để bạn xử lý thủ công.</p></>,
+            fields: [
+                { name: "host", label: "Host / IP", value: "", hint: "Ví dụ: server.example.com hoặc 192.168.1.20" },
+                { name: "user", label: "User (không bắt buộc)", value: "", required: false, hint: "Để trống để OpenSSH dùng user mặc định." },
+                { name: "port", label: "Port", value: "22", inputMode: "numeric" },
+            ],
+            accept: `Mở ${label}`,
+            submit: (values) => openRemote(protocol, values),
+        });
+    };
     const openAiDialog = () => {
         if (!workspace || !connected || dialog) return;
         setDialog({
@@ -102,8 +128,11 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
                     const restored = restoreDescriptors(saved);
                     serial.current = model.workspaceIdentitySeed(restored);
                     for (const owner of restored.workspaces) for (const id of model.paneIds(owner.layout)) {
-                        runtime.restore(id, owner.cwd, model.findPane(owner.layout, id)?.runId,
-                            terminalAppearance(appearanceFor(saved, owner.id)), owner.id);
+                        const pane = model.findPane(owner.layout, id);
+                        const command = pane?.remote ? runtime.remoteCommand(pane.remote)
+                            : pane?.provider ? runtime.providerCommand(pane.provider) : undefined;
+                        runtime.restore(id, owner.cwd, pane?.runId,
+                            terminalAppearance(appearanceFor(saved, owner.id)), owner.id, command);
                     }
                     setState(restored); setHydrated(true); return;
                 }
@@ -379,6 +408,7 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
         renameWorkspace,
         openProvider,
         openAiDialog,
+        openRemoteDialog,
         actions,
         quit,
     };

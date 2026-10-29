@@ -68,6 +68,13 @@ when testing a replacement. These commands do not create an installer.
   discarded; typing while a save is pending keeps the newer edits unsaved.
   External changes use revision checks and offer compare/reload/explicit
   overwrite. Even overwrite compares against a freshly read revision.
+- **SSH / SFTP** buttons open a dedicated pane using the Windows OpenSSH
+  `ssh.exe` or `sftp.exe` binary. Host, optional user and port are validated
+  before spawning; no password, key or token is collected. OpenSSH owns
+  `known_hosts` verification and prompts inside the terminal, so changed or
+  unknown host keys are never silently accepted. The connection descriptor is
+  persisted without secrets and restored as a stopped transcript after restart;
+  it is not a durable remote session or remote editor yet.
 - **AI CLI** opens Claude or Codex's official local CLI in a dedicated pane. The
   provider command is a fixed allowlist; authentication stays inside the CLI
   login flow and SLTerm does not read, copy or send provider tokens. The pane's
@@ -177,8 +184,10 @@ with WinCNG and tests real SSH/SFTP packets against an in-memory loopback
 fixture. Exact source/compiler/server integrity is recorded in
 [dependency pins](../scripts/ssh-proof/dependency-pins.json) and build receipts.
 This uses a pinned upstream development snapshot: the released trial exposed
-an intermittent WinCNG DH handshake failure. It is not a production dependency
-approval or an SSH connection feature in the workspace UI.
+an intermittent WinCNG DH handshake failure. It is not a production libssh2
+dependency approval. The workspace UI currently uses the installed Windows
+OpenSSH client for interactive SSH/SFTP panes; the pinned Zig/libssh2 path is
+still isolated proof for a future native remote file/session service.
 
 ```powershell
 pwsh -NoProfile -File scripts/ssh-proof/build-ssh-proof.ps1 -DownloadDependencies
@@ -246,7 +255,8 @@ not statistical evidence. No threshold or gate approval is embedded in tools.
 The user explicitly deferred the numerical gate for feature implementation.
 Reviewed comparable evidence and user-approved budgets remain required before
 claiming the final Windows release ready.
-The first-input PSReadLine delay remains unresolved. WSL sandbox, SSH/SFTP,
-live provider/runtime behavior, legacy import, project preview isolation and
+The first-input PSReadLine delay remains unresolved. WSL sandbox, durable
+remote file/session behavior, live provider/runtime behavior, legacy import,
+project preview isolation and
 installer/update compatibility retain their own gates. No release publication
 or account/host access is implied by this preview.

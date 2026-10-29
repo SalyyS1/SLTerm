@@ -151,6 +151,12 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             <button className="button" disabled={!workspace || disabled} onClick={app.openAiDialog} title="Mở Claude hoặc Codex CLI trong pane riêng">
                                 <Icon name="terminal" /><span>AI CLI</span>
                             </button>
+                            <button className="button" disabled={!workspace || disabled} onClick={() => app.openRemoteDialog("ssh")} title="Mở SSH bằng OpenSSH hệ thống">
+                                <Icon name="terminal" /><span>SSH</span>
+                            </button>
+                            <button className="button" disabled={!workspace || disabled} onClick={() => app.openRemoteDialog("sftp")} title="Mở SFTP bằng OpenSSH hệ thống">
+                                <Icon name="folder" /><span>SFTP</span>
+                            </button>
                             <button className="button layout-mode" title="Chuyển bố cục chia ô / tự do" disabled={!workspace || disabled} onClick={app.toggleLayout}><Icon name={workspace?.layoutMode === "free" ? "move" : "grid"} /><span>{workspace?.layoutMode === "free" ? "Tự do" : "Chia ô"}</span></button>
                             <IconButton icon="grid" label="Xếp tự động · tối đa 5 ô mỗi hàng" disabled={!workspace || disabled} onClick={() => workspace && app.setState((current) => arrangePanes(current, workspace.id))} />
                             <IconButton
