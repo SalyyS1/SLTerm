@@ -42,3 +42,6 @@ body { font: var(--weight-normal) var(--text-md)/1.45 var(--font-ui); }
 .hidden-panes-state { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 .hidden-panes-state button { pointer-events: auto; }
 @media (max-width: 760px) { .workspace-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); } .tab-select { padding-inline: var(--space-2); } .tab-select > svg { display: none; } .toolbar-actions { gap: 0; } .layout-mode { padding-inline: var(--space-3); } }
+.settings-import { display: grid; gap: var(--space-2); margin: var(--space-4) 0; padding: var(--space-4); border: var(--hairline) solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.settings-import h3 { margin: 0; font-size: var(--text-md); }
+.settings-import-preview { display: grid; gap: var(--space-1); font-size: var(--text-sm); color: var(--text-muted); }
