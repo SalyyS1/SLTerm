@@ -43,12 +43,14 @@ when testing a replacement. These commands do not create an installer.
   Backgrounds: PNG/JPEG/WebP/GIF, up to 8 MiB/32 megapixels. Fonts:
   TTF/OTF/WOFF/WOFF2, up to 4 MiB. Imports validate signature/decode; remote
   assets and SVG backgrounds are excluded.
-- Settings also include a manual **Nhập profile cũ** preview. It reads a JSON
-  file selected by the user and applies only whitelisted terminal settings
-  after the user applies the draft. Secrets, `$ENV` references, commands,
-  connections and old workspace/process graphs are shown as skipped and are
-  never evaluated or copied. Full legacy SQLite/WAL and protected-secret
-  migration remains a separate gated phase.
+- Settings also include manual **Nhập profile cũ** previews. JSON and selected
+  SQLite/WAL snapshots are read-only and apply only whitelisted terminal
+  settings after the user applies the draft. SQLite headers, page bounds, WAL
+  salts/checksums and the narrow legacy `db_client.data` shape are validated;
+  unsupported or overflow records fail closed. Secrets, `$ENV` references,
+  commands, connections and old workspace/process graphs are shown as skipped
+  and are never evaluated, copied or auto-reconnected. The native profile is
+  never mutated by this preview.
 - Edit shortcuts per action with conflict checks. Global appearance/shortcut
   groups can each be overridden by a workspace. An override is a snapshot;
   resetting inheritance returns that group to the global defaults.
@@ -61,6 +63,11 @@ when testing a replacement. These commands do not create an installer.
   Sampling runs every two seconds only while this panel is open and visible;
   closing it stops polling. This is local inspection, with no telemetry or
   terminal/agent count limit.
+- **WSL2** is a read-only capability check. It calls the fixed system
+  `wsl.exe` path with a three-second timeout, lists installed distributions and
+  shows the raw status output. It never installs a distro, changes WSL
+  settings, starts a distro or copies credentials; setup remains a separate
+  consented wizard.
 - **Tệp dự án** opens a resizable local editor dock. Browse/search file names,
   open multiple UTF-8 files, save with Ctrl+S, compare changes and inspect the
   latest disk version. Monaco, its workers and language grammars are bundled

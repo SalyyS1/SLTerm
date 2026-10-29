@@ -5,6 +5,7 @@ import { appearanceFor, shortcutsFor, type WorkspacePreferences } from "./worksp
 import { validateShortcutBindings } from "./workspace-shortcuts";
 import type { useWorkspacePreferences } from "./use-workspace-preferences";
 import { parseLegacyProfileJson, type LegacyImportPreview } from "./legacy-profile-import";
+import { parseLegacySqliteFile, type LegacySqliteImportPreview } from "./legacy-sqlite-import";
 
 export function WorkspaceSettings({ preferences, workspaceId, workspaceName, close }: {
     preferences: ReturnType<typeof useWorkspacePreferences>; workspaceId?: string; workspaceName?: string; close: () => void;
@@ -17,7 +18,11 @@ export function WorkspaceSettings({ preferences, workspaceId, workspaceName, clo
     const [assetBusy, setAssetBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [legacyImport, setLegacyImport] = useState<LegacyImportPreview | null>(null);
+    const [legacySqliteImport, setLegacySqliteImport] = useState<LegacySqliteImportPreview | null>(null);
+    const [legacySqliteFile, setLegacySqliteFile] = useState<File | null>(null);
     const legacyInput = useRef<HTMLInputElement>(null);
+    const legacySqliteInput = useRef<HTMLInputElement>(null);
+    const legacyWalInput = useRef<HTMLInputElement>(null);
     const local = scope === "workspace" && workspaceId;
     const settings = appearanceFor(draft, local || undefined);
     const bindings = shortcutsFor(draft, local || undefined);
@@ -63,6 +68,41 @@ export function WorkspaceSettings({ preferences, workspaceId, workspaceName, clo
                 {legacyImport.importedFields.length > 0 && <button className="button button-ghost" onClick={() => setDraft((value) => local
                     ? { ...value, overrides: { ...value.overrides, [local]: { ...value.overrides[local], appearance: { ...settings, ...legacyImport.appearance } } } }
                     : { ...value, appearance: { ...value.appearance, ...legacyImport.appearance } })}>Áp dụng vào bản nháp</button>}
+            </div>}
+        </section>
+        <section className="settings-import" aria-label="Nhập snapshot SQLite SLTerm cũ">
+            <h3>Nhập snapshot SQLite cũ</h3>
+            <p className="field-hint">Chỉ đọc snapshot do bạn chọn. Bộ đọc kiểm tra header/WAL và chỉ whitelist setting giao diện; workspace, process, connections, lệnh và secrets luôn bị bỏ qua.</p>
+            <input ref={legacySqliteInput} type="file" accept=".sqlite,.sqlite3,.db,application/vnd.sqlite3" hidden onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                try {
+                    setError(null);
+                    setLegacySqliteFile(file);
+                    setLegacySqliteImport(await parseLegacySqliteFile(file));
+                } catch (failure) { setLegacySqliteFile(null); setLegacySqliteImport(null); setError(String(failure)); }
+            }} />
+            <input ref={legacyWalInput} type="file" accept=".wal,application/octet-stream" hidden onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file || !legacySqliteFile) return;
+                try { setError(null); setLegacySqliteImport(await parseLegacySqliteFile(legacySqliteFile, file)); }
+                catch (failure) { setLegacySqliteImport(null); setError(String(failure)); }
+            }} />
+            <div className="settings-import-actions">
+                <button className="button" disabled={busy || assetBusy} onClick={() => legacySqliteInput.current?.click()}>Chọn SQLite</button>
+                <button className="button button-ghost" disabled={busy || assetBusy || !legacySqliteFile} onClick={() => legacyWalInput.current?.click()}>Thêm WAL tùy chọn</button>
+            </div>
+            {legacySqliteImport && <div className="settings-import-preview" role="status">
+                <strong>{legacySqliteImport.sourceName}</strong>
+                <span>{legacySqliteImport.receipt.schemaRecognized ? "Đã nhận diện schema legacy; chỉ dữ liệu được whitelist mới có thể nhập." : "Schema chưa được nhận diện; không có dữ liệu được nhập."}</span>
+                <span>{legacySqliteImport.importedFields.length ? `Đọc được: ${legacySqliteImport.importedFields.join(", ")}.` : "Không có setting được hỗ trợ."}</span>
+                {legacySqliteImport.skippedFields.map((field) => <span key={field}>Bỏ qua: {field}.</span>)}
+                {legacySqliteImport.warnings.map((warning) => <span key={warning}>{warning}</span>)}
+                {legacySqliteImport.importedFields.length > 0 && <button className="button button-ghost" onClick={() => setDraft((value) => local
+                    ? { ...value, overrides: { ...value.overrides, [local]: { ...value.overrides[local], appearance: { ...settings, ...legacySqliteImport.appearance } } } }
+                    : { ...value, appearance: { ...value.appearance, ...legacySqliteImport.appearance } })}>Áp dụng vào bản nháp</button>}
             </div>}
         </section>
         {error && <p className="dialog-error" role="alert">{error}</p>}
