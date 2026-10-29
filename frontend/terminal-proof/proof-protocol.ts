@@ -12,9 +12,13 @@ export type Frame = {
     affected_bytes?: number;
     last_sequence?: number;
     message?: string;
+    result?: Record<string, unknown>;
 };
 
-type Waiter = { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
+export class CoreRequestError extends Error {
+    constructor(public readonly code: string, message = code) { super(message); this.name = "CoreRequestError"; }
+}
+type Waiter = { resolve: (frame: Frame) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
 type Send = (request: Record<string, unknown>) => Promise<void>;
 
 export class ProofTransport {
@@ -25,6 +29,17 @@ export class ProofTransport {
     constructor(private send: Send) {}
 
     request(method: string, args: Record<string, unknown> = {}): Promise<void> {
+        return this.requestFrame(method, args).then(() => {});
+    }
+
+    async requestValue(method: string, args: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+        const frame = await this.requestFrame(method, args);
+        if (!frame.result || typeof frame.result !== "object" || Array.isArray(frame.result))
+            throw new Error(`Missing core result: ${method}`);
+        return frame.result;
+    }
+
+    private requestFrame(method: string, args: Record<string, unknown>): Promise<Frame> {
         if (this.closed) return Promise.reject(new Error("Core transport is closed"));
         if (this.pending.size >= 64)
             return Promise.reject(new Error("Too many pending requests; input was not accepted"));
@@ -53,8 +68,8 @@ export class ProofTransport {
             clearTimeout(waiter.timer);
             this.pending.delete(frame.id);
             frame.ok === true
-                ? waiter.resolve()
-                : waiter.reject(new Error(frame.error_code ?? "Invalid core response"));
+                ? waiter.resolve(frame)
+                : waiter.reject(new CoreRequestError(frame.error_code ?? "InvalidCoreResponse", frame.message ?? frame.error_code ?? "Invalid core response"));
         }
         return true;
     }

@@ -7,13 +7,15 @@ rust-version = "1.82"
 
 [lib]
 name = "slterm_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop entrypoints link this Rust library directly; do not also emit unused
+# C ABI libraries with a second copy of the complete WebView dependency tree.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [features]
-terminal-proof = []
+terminal-proof = ["tauri/tray-icon"]
 
 [dependencies]
 tauri = { version = "2", features = [] }

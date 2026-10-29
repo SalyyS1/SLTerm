@@ -15,6 +15,13 @@ mod shell;
 #[path = "terminal_proof_shutdown.rs"]
 mod shutdown;
 
+#[path = "terminal_proof_contract.rs"]
+mod contract;
+
+#[cfg(windows)]
+#[path = "terminal_proof_tray.rs"]
+mod tray;
+
 #[cfg(windows)]
 #[path = "terminal_proof_resources.rs"]
 mod resources;
@@ -40,6 +47,7 @@ struct ProofState {
     closing: AtomicBool,
     shutdown_failed: AtomicBool,
     profile: Mutex<Option<std::path::PathBuf>>,
+    database: Mutex<Option<std::path::PathBuf>>,
     #[cfg(windows)]
     resources: Mutex<resources::Sampler>,
 }
@@ -64,7 +72,10 @@ fn authorize(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
-fn emit(app: &tauri::AppHandle, payload: Value) -> Result<(), String> {
+fn emit(app: &tauri::AppHandle, mut payload: Value) -> Result<(), String> {
+    if let Some(fields) = payload.as_object_mut() {
+        fields.entry("version").or_insert(json!(1));
+    }
     app.emit_to("proof", "proof-event", payload)
         .map_err(|e| e.to_string())
 }
@@ -125,11 +136,14 @@ fn proof_start(window: WebviewWindow, state: State<ProofState>) -> Result<Value,
         .clone()
         .ok_or("Missing proof profile")?;
     let shell = shell::prepare(&profile)?;
+    let database = state.database.lock().map_err(|_| "Database path lock poisoned")?
+        .clone().ok_or("Missing ADE database path")?;
     let mut command = Command::new(&binary);
     command
         .current_dir(root)
         .env_clear()
         .envs(shell.environment.iter().map(|(key, value)| (*key, value)))
+        .env("SLTERM_ADE_DATABASE", database)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
@@ -216,10 +230,7 @@ fn proof_request(
     if request["version"].as_u64() != Some(1)
         || request["id"].as_u64().unwrap_or(0) == 0
         || request["id"].as_u64() == Some(shutdown::REQUEST_ID)
-        || !matches!(
-            request["method"].as_str(),
-            Some("hello" | "spawn" | "input" | "resize" | "ack" | "stop")
-        )
+        || !request["method"].as_str().is_some_and(|method| contract::METHODS.contains(&method))
     {
         return Err("Invalid proof request".into());
     }
@@ -329,6 +340,16 @@ fn shutdown_failed(app: &tauri::AppHandle, message: &str) {
 fn proof_quit(window: WebviewWindow) -> Result<(), String> {
     authorize(&window)?;
     begin_shutdown(window.app_handle())
+}
+
+#[tauri::command]
+fn proof_background(window: WebviewWindow, state: State<ProofState>) -> Result<(), String> {
+    authorize(&window)?;
+    if state.closing.load(Ordering::SeqCst) { return Err("Shutdown is already in progress".into()); }
+    #[cfg(windows)]
+    { tray::hide(&window) }
+    #[cfg(not(windows))]
+    { Err("Background tray is currently available on Windows".into()) }
 }
 
 #[tauri::command]
@@ -446,6 +467,7 @@ pub fn run() {
             proof_start,
             proof_request,
             proof_quit,
+            proof_background,
             proof_force_quit,
             proof_resources,
             proof_clipboard_read,
@@ -480,6 +502,10 @@ pub fn run() {
                     .join("workspace-customization"),
             };
             std::fs::create_dir_all(&webview_profile)?;
+            let data_profile = webview_profile.join("ade-profile");
+            std::fs::create_dir_all(&data_profile)?;
+            *app.state::<ProofState>().database.lock()
+                .map_err(|_| "Database path lock poisoned")? = Some(data_profile.join("profile.sqlite3"));
             tauri::WebviewWindowBuilder::new(app, "proof", WebviewUrl::App("index.html".into()))
                 .title("SLTerm — Workspace preview")
                 .inner_size(1100.0, 720.0)
@@ -499,6 +525,8 @@ pub fn run() {
                 .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
                 .on_download(|_, _| false)
                 .build()?;
+            #[cfg(windows)]
+            tray::setup(app).map_err(std::io::Error::other)?;
             Ok(())
         })
         .on_window_event(|window, event| {

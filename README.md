@@ -24,14 +24,16 @@ SLTerm is a modern, feature-rich terminal built on Electron. It combines the pow
 
 The `feat/ade-zig-core` branch also includes an isolated **Tauri + Zig + ConPTY**
 workspace preview. It supports tiled/free terminal panes, session actions, custom
-shortcuts, themes, local backgrounds/fonts, persisted workspace preferences and
-an on-demand Windows process resource panel.
+shortcuts, themes, local backgrounds/fonts, Zig-owned SQLite preferences,
+an on-demand Windows process resource panel, a local Monaco editor/diff and
+explicit background operation through the Windows tray.
 See the [preview build and test guide](docs/terminal-preview.md).
 
 This source-only, unsigned preview is not the completed ADE or a replacement for
-the Electron release. AI chat, SSH/SFTP, SQLite migration and durable background
-sessions are not connected to this entrypoint. Broader migration remains gated
-by measurements, compatibility checks and approved performance budgets.
+the Electron release. AI chat, SSH/SFTP, legacy-profile import and durable
+background sessions are not connected to this entrypoint. The numerical
+performance gate was explicitly deferred for implementation; comparable
+measurements, compatibility checks and approved budgets remain release work.
 
 ## ✨ Features
 

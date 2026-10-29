@@ -9,6 +9,7 @@ export type DialogSpec = {
     danger?: boolean;
     fields?: { name: string; label: string; value: string; hint?: string }[];
     submit?: (values: Record<string, string>) => void | Promise<void>;
+    actions?: { label: string; danger?: boolean; run: () => void | Promise<void> }[];
 };
 
 export function WorkspaceDialog({ spec, close }: { spec: DialogSpec; close: () => void }) {
@@ -16,6 +17,14 @@ export function WorkspaceDialog({ spec, close }: { spec: DialogSpec; close: () =
     const titleId = useId();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const working = useRef(false);
+    const perform = async (action: () => void | Promise<void>) => {
+        if (working.current) return;
+        working.current = true; setBusy(true); setError(null);
+        try { await action(); close(); }
+        catch (failure) { setError(String(failure)); }
+        finally { working.current = false; setBusy(false); }
+    };
     useEffect(() => {
         ref.current?.showModal();
     }, []);
@@ -26,23 +35,14 @@ export function WorkspaceDialog({ spec, close }: { spec: DialogSpec; close: () =
             aria-labelledby={titleId}
             onCancel={(event) => {
                 event.preventDefault();
-                if (!busy) close();
+                if (!working.current) close();
             }}
         >
             <form
                 onSubmit={async (event) => {
                     event.preventDefault();
-                    if (busy) return;
                     const values = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
-                    setBusy(true);
-                    setError(null);
-                    try {
-                        await spec.submit?.(values);
-                        close();
-                    } catch (error) {
-                        setError(String(error));
-                        setBusy(false);
-                    }
+                    await perform(() => spec.submit?.(values));
                 }}
             >
                 <div className="dialog-heading">
@@ -81,6 +81,9 @@ export function WorkspaceDialog({ spec, close }: { spec: DialogSpec; close: () =
                     )}
                 </div>
                 <div className="dialog-actions">
+                    {spec.actions?.map((action) => <button key={action.label} type="button" disabled={busy}
+                        className={"button " + (action.danger ? "button-danger" : "button-primary")}
+                        onClick={() => { void perform(action.run); }}>{action.label}</button>)}
                     <button type="button" className="button button-ghost" disabled={busy} onClick={close}>
                         {spec.submit ? "Hủy" : "Đóng"}
                     </button>

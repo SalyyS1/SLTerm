@@ -8,19 +8,7 @@ pub const max_frame = 64 * 1024;
 pub const max_output_chunk = 4096;
 pub const allocator = std.heap.page_allocator;
 
-pub const Request = struct {
-    version: u32,
-    id: u64,
-    method: []const u8,
-    session_id: u64 = 0,
-    executable: ?[]const u8 = null,
-    args: []const []const u8 = &.{},
-    cwd: ?[]const u8 = null,
-    cols: i16 = 100,
-    rows: i16 = 30,
-    data: ?[]const u8 = null,
-    sequence: u64 = 0,
-};
+pub const Request = @import("core-contract.zig").Request;
 
 pub const Emitter = struct {
     writer: OutputWriter = .{},

@@ -4,6 +4,20 @@ import { OutputOrder, ProofTransport, splitInput } from "./proof-protocol";
 afterEach(() => vi.useRealTimers());
 
 describe("proof transport", () => {
+    it("correlates data replies and preserves typed conflict errors", async () => {
+        const transport = new ProofTransport(async () => {});
+        const read = transport.requestValue("files.read", { path: "main.ts" });
+        transport.receive({ version: 1, id: 1, ok: true, result: { revision: "abc", data: "eA==" } });
+        await expect(read).resolves.toEqual({ revision: "abc", data: "eA==" });
+        const save = transport.requestValue("files.save.commit", { upload_id: "1" });
+        const rejected = expect(save).rejects.toMatchObject({ code: "RevisionConflict" });
+        transport.receive({ version: 1, id: 2, ok: false, error_code: "RevisionConflict" });
+        await rejected;
+        const missing = transport.requestValue("preferences.load");
+        const invalid = expect(missing).rejects.toThrow("Missing core result");
+        transport.receive({ version: 1, id: 3, ok: true });
+        await invalid;
+    });
     it("settles responses once and rejects pending work on EOF", async () => {
         const send = vi.fn().mockResolvedValue(undefined);
         const transport = new ProofTransport(send);

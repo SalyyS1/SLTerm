@@ -3,6 +3,8 @@ const win = @import("win.zig");
 const c = win.c;
 const rpc = @import("protocol.zig");
 const Session = @import("session.zig").Session;
+const Preferences = @import("preferences-service.zig").Service;
+const Files = @import("workspace-files.zig").Service;
 
 // Keep only lightweight identity tombstones after a session exits. A late ACK
 // must never target a different process that reused an old session identifier.
@@ -19,6 +21,10 @@ pub fn main() u8 {
 }
 
 fn run(emitter: *rpc.Emitter) u8 {
+    var preferences: Preferences = .{};
+    defer preferences.deinit();
+    var files = Files.init();
+    defer files.deinit();
     var sessions: std.ArrayList(Entry) = .empty;
     defer {
         stopAll(sessions.items);
@@ -56,7 +62,7 @@ fn run(emitter: *rpc.Emitter) u8 {
                     };
                     return 0;
                 }
-                dispatch(request, &sessions, emitter) catch |err| {
+                dispatch(request, &sessions, &preferences, &files, emitter) catch |err| {
                     if (err == error.TransportBackpressure or err == error.TransportClosed)
                         return abortTransport(sessions.items, emitter, request.id, err);
                     emitter.tryFail(request.id, @errorName(err)) catch |transport_err| return abortTransport(sessions.items, emitter, request.id, transport_err);
@@ -92,7 +98,7 @@ fn abortTransport(sessions: []const Entry, emitter: *rpc.Emitter, id: u64, reaso
     return 1;
 }
 
-fn dispatch(req: rpc.Request, sessions: *std.ArrayList(Entry), emitter: *rpc.Emitter) !void {
+fn dispatch(req: rpc.Request, sessions: *std.ArrayList(Entry), preferences: *Preferences, files: *Files, emitter: *rpc.Emitter) !void {
     // Only the command owner reaps: reader/waiter threads must never join
     // themselves. Completed sessions release buffers/handles at the next RPC.
     for (sessions.items) |*entry| {
@@ -104,9 +110,14 @@ fn dispatch(req: rpc.Request, sessions: *std.ArrayList(Entry), emitter: *rpc.Emi
         }
     }
     if (std.mem.eql(u8, req.method, "hello")) {
-        try emitter.ok(req.id);
+        try emitter.trySend(.{ .version = rpc.version, .id = req.id, .ok = true, .result = .{
+            .protocol_version = rpc.version,
+            .capabilities = .{ "terminal.conpty", "preferences.sqlite", "files.local.revisions" },
+        } });
         return;
     }
+    if (try preferences.handle(req, emitter)) return;
+    if (try files.handle(req, emitter)) return;
     var existing: ?Entry = null;
     for (sessions.items) |entry| {
         if (entry.id == req.session_id) existing = entry;
@@ -141,4 +152,5 @@ fn dispatch(req: rpc.Request, sessions: *std.ArrayList(Entry), emitter: *rpc.Emi
 test {
     _ = @import("command_line.zig");
     _ = @import("protocol.zig");
+    _ = @import("workspace-files-recovery.zig");
 }

@@ -8,6 +8,7 @@ import { type DialogSpec } from "./workspace-dialog";
 import type { LayoutActions } from "./workspace-layout";
 import * as model from "./workspace-model";
 import { workspacePath } from "./workspace-path";
+import type { EditorState } from "./editor-state";
 
 export function useWorkspaceController(runtime: TerminalRuntime) {
     const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
@@ -16,10 +17,32 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
     const [sidebar, setSidebar] = useState(true);
     const [searching, setSearching] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const preferences = useWorkspacePreferences();
+    const preferences = useWorkspacePreferences(runtime);
     const [hydrated, setHydrated] = useState(false);
     const [defaultCwd, setDefaultCwd] = useState("");
+    const focusOwner = useRef<"terminal" | "editor">("terminal");
+    useEffect(() => {
+        const onFocus = (event: FocusEvent) => {
+            if (!(event.target instanceof HTMLElement)) return;
+            if (event.target.closest(".project-editor")) focusOwner.current = "editor";
+            else if (event.target.closest(".terminal-pane")) focusOwner.current = "terminal";
+        };
+        document.addEventListener("focusin", onFocus);
+        return () => document.removeEventListener("focusin", onFocus);
+    }, []);
     const serial = useRef({ pane: 0, workspace: 0, split: 0 });
+    const editors = useRef(new Map<string, EditorState>());
+    const [editorDirty, setEditorDirty] = useState<Record<string, boolean>>({});
+    const editorController = (id: string, controller: EditorState | null) => {
+        if (controller) editors.current.set(id, controller); else editors.current.delete(id);
+    };
+    const editorChanged = (id: string, dirty: boolean) => setEditorDirty((current) =>
+        current[id] === dirty ? current : { ...current, [id]: dirty });
+    const ensureEditorsIdle = (id?: string) => {
+        const selected = id ? [editors.current.get(id)] : [...editors.current.values()];
+        if (selected.some((editor) => editor?.getSnapshot().documents.some((document) => document.saving)))
+            throw new Error("Đang lưu tệp. Chờ kết quả trước khi đóng.");
+    };
     const workspace = model.activeWorkspace(state);
     const connected = snapshot.phase === "connected" && hydrated;
     const splitId = () => `split-${++serial.current.split}`;
@@ -68,7 +91,7 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
     }, [preferences.value, state.workspaces.length, runtime]);
     useEffect(() => {
         runtime.scheduleResize();
-        if (!dialog && !searching && !settingsOpen) runtime.focus(workspace?.activePaneId ?? null);
+        if (!dialog && !searching && !settingsOpen && (focusOwner.current !== "editor" || !workspace || !editors.current.has(workspace.id))) runtime.focus(workspace?.activePaneId ?? null);
     }, [runtime, state.activeWorkspaceId, workspace?.activePaneId, workspace?.zoomedPaneId, dialog, searching, settingsOpen]);
     const newWorkspace = () => {
         if (!connected || dialog) return;
@@ -122,11 +145,13 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
     const requestCloseWorkspace = (owner: model.Workspace) => {
         if (dialog) return;
         const ids = model.paneIds(owner.layout);
+        const dirty = editors.current.get(owner.id)?.hasUnsaved();
         const close = async () => {
+            ensureEditorsIdle(owner.id);
             for (const id of ids) await closePane(owner, id);
             setState((current) => model.removeWorkspace(current, owner.id));
         };
-        if (!ids.length) {
+        if (!ids.length && !dirty) {
             void close().catch(runtime.report);
             return;
         }
@@ -135,10 +160,11 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             body: (
                 <p>
                     Dừng {ids.length} terminal trong <strong>{owner.name}</strong> và xóa bố cục của workspace này.
+                    {dirty && <> Nội dung file chưa lưu sẽ bị bỏ. Bạn có thể hủy để lưu trong editor.</>}
                 </p>
             ),
             danger: true,
-            accept: "Dừng và đóng",
+            accept: dirty ? "Bỏ thay đổi và đóng workspace" : "Dừng và đóng",
             submit: close,
         });
     };
@@ -191,8 +217,10 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
     });
     const quit = () => {
         const force = Boolean(snapshot.shutdownIssue);
-        const exit = () => force ? runtime.forceQuit() : runtime.quit();
+        const hasUnsaved = [...editors.current.values()].some((editor) => editor.hasUnsaved());
+        const exit = () => { ensureEditorsIdle(); return force ? runtime.forceQuit() : runtime.quit(); };
         const saveAndExit = async (forced = force) => {
+            ensureEditorsIdle();
             if (preferences.writable) await preferences.commit((value) => withDescriptors(value, state));
             await preferences.flush();
             await (forced ? runtime.forceQuit() : runtime.quit());
@@ -202,12 +230,21 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
                 kind: "quit",
                 title: force ? "Buộc dừng và thoát SLTerm?" : "Dừng và thoát SLTerm?",
                 body: <><p>Tất cả terminal sẽ dừng. Tùy chỉnh và danh sách workspace được lưu; process và transcript không khôi phục sau khi thoát.</p>
-                    {force && <><p role="alert">{snapshot.shutdownIssue}</p><p>Buộc thoát có thể làm mất output cuối chưa nhận được.</p>
-                        <button type="button" className="button button-ghost" onClick={() => { void saveAndExit(false).then(() => setDialog(null)).catch(runtime.report); }}>Thử dừng lại</button></>}
-                    {preferences.error && <><p role="alert">Chưa lưu được tùy chỉnh: {preferences.error}</p>
-                        <button type="button" className="button button-danger" onClick={() => { void exit().catch(runtime.report); }}>{force ? "Buộc thoát không lưu tùy chỉnh" : "Thoát không lưu tùy chỉnh"}</button></>}</>,
+                    {hasUnsaved && <p role="alert">Có file chưa lưu trong editor. Đóng sẽ bỏ phần nội dung chưa lưu.</p>}
+                    {force && <><p role="alert">{snapshot.shutdownIssue}</p><p>Buộc thoát có thể làm mất output cuối chưa nhận được.</p></>}
+                    {preferences.error && <p role="alert">Chưa lưu được tùy chỉnh: {preferences.error}</p>}</>,
+                actions: [
+                    ...(!force && snapshot.phase !== "disconnected" ? [{ label: "Chạy nền", run: runtime.background }] : []),
+                    ...(hasUnsaved ? [{ label: "Lưu mọi file rồi thoát", run: async () => {
+                        for (const editor of editors.current.values()) if (!await editor.saveAll() || editor.hasUnsaved())
+                            throw new Error("File chưa lưu xong hoặc có xung đột. Quay lại editor để xử lý.");
+                        await saveAndExit();
+                    } }] : []),
+                    ...(force ? [{ label: "Thử dừng lại", run: () => saveAndExit(false) }] : []),
+                    ...(preferences.error ? [{ label: force ? "Buộc thoát không lưu tùy chỉnh" : "Thoát không lưu tùy chỉnh", danger: true, run: exit }] : []),
+                ],
                 danger: true,
-                accept: force ? "Buộc dừng và thoát" : "Dừng và thoát",
+                accept: hasUnsaved ? "Bỏ thay đổi, dừng và thoát" : force ? "Buộc dừng và thoát" : "Dừng và thoát",
                 submit: () => saveAndExit(),
             });
     };
@@ -240,6 +277,8 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             if (dialog || searching || settingsOpen) return;
             const action = matchShortcut(event, shortcutsFor(preferences.value, workspace?.id));
             if (!action) return;
+            if (event.target instanceof HTMLElement && event.target.closest(".project-editor") &&
+                ["search", "closePane", "stopPane", "fontIncrease", "fontDecrease", "fontReset"].includes(action)) return;
             const active = workspace?.activePaneId;
             const switchWorkspace = (delta: number) => {
                 const index = state.workspaces.findIndex((item) => item.id === state.activeWorkspaceId);
@@ -267,6 +306,7 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
     });
     return {
         preferences, settingsOpen, setSettingsOpen, changeFont, toggleLayout,
+        editorController, editorChanged, editorDirty,
         runtime,
         snapshot,
         state,

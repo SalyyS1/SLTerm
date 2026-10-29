@@ -1,0 +1,57 @@
+.project-editor { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; color: var(--text); background: var(--surface); container: project-editor / inline-size; }
+.project-editor-header, .project-editor-header > div, .project-editor-toolbar, .project-editor-toolbar > div, .project-conflict, .project-conflict > div { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.project-editor-header { justify-content: space-between; min-height: var(--toolbar-height); padding: var(--space-2) var(--space-5); border-bottom: var(--hairline) solid var(--line); background: var(--surface-raised); }
+.project-editor-header > div > svg { color: var(--accent); }
+.project-editor-header strong { font-weight: var(--weight-semibold); }
+.project-editor-header span { color: var(--text-muted); font: var(--text-xs)/1.5 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-editor-body { display: grid; grid-template-columns: minmax(160px, var(--sidebar-width)) minmax(0, 1fr); flex: 1; min-width: 0; min-height: 0; }
+.project-editor-body[data-explorer="false"] { grid-template-columns: minmax(0, 1fr); }
+.project-explorer { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: var(--hairline) solid var(--line); background: var(--bg); }
+.project-explorer-heading { display: flex; align-items: center; justify-content: space-between; min-height: var(--tab-height); padding-inline: var(--space-5) var(--space-2); font-size: var(--text-sm); }
+.project-search { display: flex; align-items: center; gap: var(--space-3); margin-inline: var(--space-4); padding-inline: var(--space-4); border: var(--hairline) solid var(--line-strong); border-radius: var(--radius-sm); color: var(--text-dim); background: var(--surface); }
+.project-search input { width: 100%; min-width: 0; height: var(--control-height); border: 0; color: var(--text); background: transparent; font-size: var(--text-xs); }
+.project-breadcrumbs { padding: var(--space-4) var(--space-5); color: var(--text-dim); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.project-breadcrumbs button { padding: var(--space-1); border: 0; color: var(--text-muted); background: transparent; overflow-wrap: anywhere; text-align: left; }
+.project-breadcrumbs button:hover { color: var(--accent); }
+.project-parent { display: flex; align-items: center; gap: var(--space-3); min-height: var(--control-height); padding: var(--space-3) var(--space-5); border: 0; background: transparent; color: var(--text-muted); text-align: left; font-size: var(--text-xs); }
+.project-file-list { flex: 1; min-height: 0; margin: 0; padding: var(--space-2) var(--space-3); overflow: auto; list-style: none; }
+.project-file-row { display: flex; align-items: center; gap: var(--space-4); width: 100%; min-height: var(--control-height); padding: var(--space-3) var(--space-4); border: var(--hairline) solid transparent; border-radius: var(--radius-sm); text-align: left; font-size: var(--text-sm); background: transparent; }
+.project-file-row:hover:not(:disabled), .project-parent:hover { background: var(--surface-hover); }
+.project-file-row[data-active="true"] { background: var(--accent-soft); border-color: var(--accent-border); }
+.project-file-row > svg { color: var(--accent); }
+.project-file-glyph { width: var(--space-6); color: var(--text-dim); text-align: center; flex-shrink: 0; }
+.project-file-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.project-file-copy > span, .project-file-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-file-row small { color: var(--text-muted); font-size: var(--text-xs); }
+.project-explorer-status { padding: var(--space-3) var(--space-5); color: var(--text-muted); font-size: var(--text-xs); }
+.project-more { margin: var(--space-4); }
+.project-explorer-error { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); color: var(--danger); overflow-wrap: anywhere; font-size: var(--text-xs); }
+.project-editor-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.project-editor-tabs { display: flex; align-items: stretch; flex-shrink: 0; min-height: var(--tab-height); overflow-x: auto; border-bottom: var(--hairline) solid var(--line); background: var(--bg); }
+.project-editor-tabs > .icon-button { align-self: center; margin-inline: var(--space-3); }
+.project-editor-tab { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; max-width: var(--tab-max-width); border-bottom: var(--focus-width) solid transparent; }
+.project-editor-tab[data-active="true"] { background: var(--surface); border-bottom-color: var(--accent); }
+.project-editor-tab > button:first-child { display: flex; align-items: center; gap: var(--space-4); min-width: 0; align-self: stretch; padding: var(--space-4) 0 var(--space-4) var(--space-5); border: 0; font-size: var(--text-sm); background: transparent; }
+.project-editor-tab > button:first-child > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-editor-tab > .tab-close { margin-right: var(--space-3); }
+.project-dirty-dot { color: var(--accent); font-size: var(--text-xs); }
+.project-editor-toolbar { justify-content: space-between; flex-shrink: 0; min-height: var(--toolbar-height); padding: var(--space-3) var(--space-5); border-bottom: var(--hairline) solid var(--line); }
+.project-editor-toolbar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-xs)/1.5 var(--font-mono); color: var(--text-muted); }
+.project-editor-toolbar > div { flex-shrink: 0; }
+.project-editor-error, .project-conflict { padding: var(--space-4) var(--space-5); border-bottom: var(--hairline) solid var(--line); overflow-wrap: anywhere; font-size: var(--text-sm); }
+.project-editor-error { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); color: var(--danger); background: var(--danger-soft); }
+.project-editor-error > span { min-width: 0; }
+.project-conflict { flex-wrap: wrap; justify-content: space-between; color: var(--warning); background: var(--bg); }
+.project-conflict > div { flex-wrap: wrap; }
+.project-diff-label { padding: var(--space-2) var(--space-5); color: var(--text-muted); background: var(--bg); font-size: var(--text-xs); }
+.project-editor-content { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.project-document, .project-monaco-shell, .project-monaco { position: absolute; inset: 0; min-width: 0; min-height: 0; }
+.project-editor-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-5); flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; padding: var(--space-6); text-align: center; overflow-wrap: anywhere; color: var(--text-muted); background: var(--surface); }
+.project-monaco-shell > .project-editor-placeholder { position: absolute; inset: 0; }
+.project-editor-placeholder h2, .project-editor-placeholder p { margin: 0; }
+.project-editor-placeholder h2 { font-size: var(--text-lg); font-weight: var(--weight-medium); color: var(--text); }
+.project-editor-status { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: var(--footer-height); padding: var(--space-2) var(--space-5); border-top: var(--hairline) solid var(--line); color: var(--text-muted); font-size: var(--text-xs); }
+.project-close-dialog .dialog-actions { flex-wrap: wrap; }
+.project-close-dialog strong { overflow-wrap: anywhere; }
+@container project-editor (max-width: 800px) { .project-editor-toolbar { flex-wrap: wrap; } .project-editor-toolbar > span { flex-basis: 100%; } .project-editor-toolbar > div { flex-wrap: wrap; flex-basis: 100%; flex-shrink: 1; max-width: 100%; } }
+@container project-editor (max-width: 620px) { .project-editor-body { grid-template-columns: minmax(0, 1fr); } .project-explorer { position: absolute; z-index: 5; top: var(--toolbar-height); bottom: 0; left: 0; width: min(var(--sidebar-width), 85%); box-shadow: var(--space-4) 0 var(--space-6) var(--shadow); } .project-editor-toolbar > div { gap: var(--space-2); } .project-editor-toolbar .button { font-size: var(--text-xs); padding-inline: var(--space-3); } .project-conflict .button { white-space: normal; } .project-editor-error { align-items: flex-start; flex-direction: column; } }

@@ -1,4 +1,6 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { ProjectEditor } from "./project-editor";
+import "./workspace-project.css";
 import appIcon from "../../assets/appicon-windows.svg";
 import { TerminalRuntime } from "./terminal-runtime";
 import { TerminalSearch } from "./terminal-search";
@@ -23,6 +25,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
     const app = useWorkspaceController(runtime);
     const { workspace, state, snapshot } = app;
     const stage = useRef<HTMLDivElement>(null);
+    const [editorOpen, setEditorOpen] = useState<Record<string, boolean>>({});
     const disabled = !app.connected || Boolean(app.dialog) || app.settingsOpen;
     const appearance = appearanceFor(app.preferences.value, workspace?.id);
     useEffect(() => {
@@ -33,7 +36,8 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
     useEffect(() => {
         const element = stage.current!;
         const wheel = (event: WheelEvent) => {
-            if (event.ctrlKey && !event.altKey && !event.metaKey && event.deltaY && !app.dialog && !app.settingsOpen) {
+            if (event.ctrlKey && !event.altKey && !event.metaKey && event.deltaY && !app.dialog && !app.settingsOpen &&
+                !(event.target instanceof HTMLElement && event.target.closest(".project-editor"))) {
                 event.preventDefault();
                 event.stopPropagation();
                 app.changeFont(event.deltaY < 0 ? 1 : -1);
@@ -130,6 +134,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                     {(snapshot.error || app.preferences.error) && (
                         <div className="error-banner" role="alert">
                             <span>{snapshot.error || app.preferences.error}</span>
+                            {app.preferences.error && <button className="button" onClick={() => { void app.preferences.resync().catch(runtime.report); }}>Đọc lại tùy chỉnh đã lưu</button>}
                             <IconButton icon="close" label="Ẩn thông báo lỗi" onClick={runtime.clearError} />
                         </div>
                     )}
@@ -139,6 +144,10 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             <span>{workspace?.cwd ?? "Chưa có workspace"}</span>
                         </div>
                         <div className="toolbar-actions">
+                            <button className="button" aria-pressed={Boolean(workspace && editorOpen[workspace.id])} disabled={!workspace || disabled}
+                                onClick={() => workspace && setEditorOpen((current) => ({ ...current, [workspace.id]: true }))}>
+                                <Icon name="folder" /><span>Tệp dự án{workspace && app.editorDirty[workspace.id] ? " ●" : ""}</span>
+                            </button>
                             <button className="button layout-mode" title="Chuyển bố cục chia ô / tự do" disabled={!workspace || disabled} onClick={app.toggleLayout}><Icon name={workspace?.layoutMode === "free" ? "move" : "grid"} /><span>{workspace?.layoutMode === "free" ? "Tự do" : "Chia ô"}</span></button>
                             <IconButton icon="grid" label="Xếp tự động · tối đa 5 ô mỗi hàng" disabled={!workspace || disabled} onClick={() => workspace && app.setState((current) => arrangePanes(current, workspace.id))} />
                             <IconButton
@@ -177,6 +186,13 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                                 style={appearanceTokens(appearanceFor(app.preferences.value, owner.id)) as CSSProperties}
                             >
                                 <WorkspaceBackdrop settings={appearanceFor(app.preferences.value, owner.id)} assets={app.preferences.assets} />
+                                {editorOpen[owner.id] && <div className="workspace-editor-dock">
+                                    <ProjectEditor root={owner.cwd} request={runtime.request}
+                                        onClose={() => setEditorOpen((current) => ({ ...current, [owner.id]: false }))}
+                                        onDirtyChange={(dirty) => app.editorChanged(owner.id, dirty)}
+                                        onControllerReady={(controller) => app.editorController(owner.id, controller)} />
+                                </div>}
+                                <div className="workspace-terminal-dock">
                                 {owner.layout ? (
                                     <>
                                     <WorkspaceCanvas workspace={owner}
@@ -202,6 +218,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                                         </button>
                                     </div>
                                 )}
+                                </div>
                             </div>
                         ))}
                         {!workspace && (

@@ -1,0 +1,22 @@
+// Generated from schema/ade-ipc.json; edit the schema and run generate-contract.mjs.
+pub const Request = struct {
+    version: u32,
+    id: u64,
+    method: []const u8,
+    session_id: u64 = 0,
+    executable: ?[]const u8 = null,
+    args: []const []const u8 = &.{},
+    cwd: ?[]const u8 = null,
+    cols: i16 = 100,
+    rows: i16 = 30,
+    data: ?[]const u8 = null,
+    sequence: u64 = 0,
+    root: ?[]const u8 = null,
+    path: ?[]const u8 = null,
+    offset: u64 = 0,
+    cursor: u64 = 0,
+    total_bytes: u64 = 0,
+    expected_revision: u64 = 0,
+    if_match: ?[]const u8 = null,
+    upload_id: ?[]const u8 = null,
+};

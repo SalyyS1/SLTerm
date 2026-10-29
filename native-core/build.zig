@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     module.linkSystemLibrary("kernel32", .{});
+    module.linkSystemLibrary("advapi32", .{});
     // Zig 0.17 translates C headers at build time, not through @cImport.
     const bindings = b.addTranslateC(.{
         .root_source_file = b.path("src/windows-api.h"),

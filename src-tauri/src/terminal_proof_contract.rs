@@ -1,0 +1,20 @@
+// Generated from schema/ade-ipc.json; edit the schema and run generate-contract.mjs.
+pub const METHODS: &[&str] = &[
+    "hello",
+    "spawn",
+    "input",
+    "resize",
+    "ack",
+    "stop",
+    "preferences.load",
+    "preferences.save.begin",
+    "preferences.save.chunk",
+    "preferences.save.commit",
+    "preferences.save.cancel",
+    "files.list",
+    "files.read",
+    "files.save.begin",
+    "files.save.chunk",
+    "files.save.commit",
+    "files.save.cancel",
+];

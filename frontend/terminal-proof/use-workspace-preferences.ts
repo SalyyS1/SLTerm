@@ -1,9 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import { importAppearanceAsset, loadAppearanceFont, type PreviewAsset } from "./appearance-assets";
-import { listAssets, loadPreferences, putAsset, savePreferences } from "./preview-preferences-store";
+import { listAssets, loadPreferences, putAsset } from "./preview-preferences-store";
+import { CorePreferencesStore } from "./core-preferences-store";
+import type { TerminalRuntime } from "./terminal-runtime";
 import { newPreferences, parsePreferences, type WorkspacePreferences } from "./workspace-preferences";
 
-export function useWorkspacePreferences() {
+export function useWorkspacePreferences(runtime: TerminalRuntime) {
+    const store = useRef<CorePreferencesStore | null>(null);
+    store.current ??= new CorePreferencesStore(runtime.request);
     const [value, setValue] = useState(newPreferences);
     const [assets, setAssets] = useState<PreviewAsset[]>([]);
     const [ready, setReady] = useState(false);
@@ -15,7 +19,18 @@ export function useWorkspacePreferences() {
     const queue = useRef<Promise<unknown>>(Promise.resolve());
     const load = useCallback(() => loading.current ??= (async () => {
         try {
-            const [raw, storedAssets] = await Promise.all([loadPreferences(), listAssets()]);
+            await runtime.start();
+            let raw = await store.current!.load();
+            // Copy only the isolated preview's settings. The IndexedDB source
+            // remains untouched; legacy Electron profiles require selective import.
+            if (raw === null) {
+                const previous = await loadPreferences();
+                if (previous !== null) {
+                    raw = parsePreferences(previous);
+                    await store.current!.save(raw);
+                }
+            }
+            const storedAssets = await listAssets();
             const next = parsePreferences(raw);
             existed.current = raw !== null;
             for (const asset of storedAssets.filter((item) => item.kind === "font")) await loadAppearanceFont(asset);
@@ -32,13 +47,25 @@ export function useWorkspacePreferences() {
         const operation = queue.current.catch(() => {}).then(async () => {
             if (!writable.current) throw new Error("Tùy chỉnh chưa đọc được; chưa ghi đè dữ liệu đã lưu.");
             const next = update(current.current);
-            await savePreferences(next);
+            await store.current!.save(next);
             current.current = next; setValue(next); setError(null);
         });
         queue.current = operation;
-        operation.catch((failure) => setError(String(failure)));
+        operation.catch((failure) => { writable.current = false; setError(String(failure)); });
         return operation;
     }, []);
+    const resync = () => {
+        writable.current = false;
+        const operation = queue.current.catch(() => {}).then(async () => {
+            const raw = await store.current!.load();
+            const next = parsePreferences(raw);
+            current.current = next; setValue(next); existed.current = raw !== null;
+            writable.current = true; setError(null);
+        });
+        queue.current = operation;
+        operation.catch((failure) => { writable.current = false; setError(String(failure)); });
+        return operation;
+    };
     const importAsset = async (file: File, kind: "background" | "font") => {
         if (!writable.current) throw new Error("Chưa mở được kho tùy chỉnh.");
         const asset = await importAppearanceAsset(file, kind);
@@ -48,5 +75,5 @@ export function useWorkspacePreferences() {
         return asset;
     };
     const flush = () => queue.current;
-    return { value, assets, ready, error, load, commit, importAsset, flush, existed, writable: writable.current };
+    return { value, assets, ready, error, load, commit, importAsset, flush, resync, existed, writable: writable.current };
 }

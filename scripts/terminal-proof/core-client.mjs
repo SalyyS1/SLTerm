@@ -18,7 +18,7 @@ export async function waitForGone(pids, timeoutMs = 5000) {
 
 // Private stdio transport only: no sockets, existing terminal sessions, or user profiles.
 export class CoreClient {
-    constructor({ autoAck = true, onOutput, executable = coreExecutable } = {}) {
+    constructor({ autoAck = true, onOutput, executable = coreExecutable, env = process.env } = {}) {
         this.autoAck = autoAck;
         this.onOutput = onOutput;
         this.frames = [];
@@ -34,7 +34,7 @@ export class CoreClient {
         this.nextId = 1;
         this.stderr = "";
         this.partial = "";
-        this.child = spawn(executable, [], { cwd: repoRoot, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+        this.child = spawn(executable, [], { cwd: repoRoot, env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
         this.closed = new Promise((resolve) => {
             this.child.once("close", (code, signal) => {
                 this.exit = { code, signal };

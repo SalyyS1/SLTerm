@@ -13,9 +13,15 @@ export async function verifyStalledStdoutShutdown(t) {
         children.push(await waitRecord(client, id, "ready"));
     }
     await client.captureProcessTree();
+    const hello = await client.request("hello");
+    // Capabilities make handshake replies larger than empty acknowledgements.
+    // Saturate the OS/Node pipe while keeping this graceful-drain workload
+    // below the writer's byte budget; overload has its own separate fixture.
+    const frameBytes = Buffer.byteLength(JSON.stringify({ ...hello, id: 9999999 })) + 5;
+    const requestCount = Math.floor((192 * 1024) / frameBytes);
     client.child.stdout.pause();
     t.after(() => client.child.stdout.resume());
-    const replies = Array.from({ length: 5000 }, () => client.request("hello", {}, 20000).catch((error) => error));
+    const replies = Array.from({ length: requestCount }, () => client.request("hello", {}, 20000).catch((error) => error));
     await delay(500);
     assert.ok(client.child.stdout.readableLength >= client.child.stdout.readableHighWaterMark,
         "paused stdout must fill the Node read buffer before shutdown");

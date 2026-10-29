@@ -55,18 +55,53 @@ when testing a replacement. These commands do not create an installer.
   Sampling runs every two seconds only while this panel is open and visible;
   closing it stops polling. This is local inspection, with no telemetry or
   terminal/agent count limit.
+- **Tệp dự án** opens a resizable local editor dock. Browse/search file names,
+  open multiple UTF-8 files, save with Ctrl+S, compare changes and inspect the
+  latest disk version. Monaco, its workers and language grammars are bundled
+  locally. Dirty close/quit prompts preserve the buffer unless explicitly
+  discarded; typing while a save is pending keeps the newer edits unsaved.
+  External changes use revision checks and offer compare/reload/explicit
+  overwrite. Even overwrite compares against a freshly read revision.
+- **Chạy nền** in the quit dialog hides the window while preserving the same
+  application/core, sessions and editor buffers. Use the Windows tray to reopen
+  it or request the normal quit confirmation. This requires a registered tray
+  icon and is not a daemon or a restart-resume guarantee.
+
+## Local editor save boundary
+
+The current file API handles existing UTF-8 files, up to 8 MiB, in drive-local
+workspace roots. Reads/uploads use bounded chunks. UNC paths, new-file creation,
+hardlink saves and paths crossing reparse points are currently unsupported.
+Directory handles stay pinned, revision checks happen under an exclusive target
+handle, and the original file ACL protects staging/recovery copies.
+
+Before mutating a target, the core writes, verifies and flushes a sibling
+`.slterm-recovery-*.bak`. Saving then writes through the exclusively held target
+handle, verifies and flushes it. Failed writes attempt restoration; failed
+restoration retains the recovery path and reports an error. This is **not a
+crash-atomic replacement**: a mid-save crash can require recovery from that
+backup. Recovery copies are not automatically pruned. Actual post-mutation
+disk/flush failure and a crash during commit still need fault-injection checks.
 
 ## Persistence and shutdown
 
-Versioned IndexedDB stores preferences, local uploaded blobs and workspace
-descriptors in the isolated WebView profile:
+The Zig core exclusively owns versioned SQLite preferences in the isolated
+WebView profile:
 `%LOCALAPPDATA%\dev.salyvn.slterm.terminal-proof\workspace-customization`.
+The database is `ade-profile/profile.sqlite3`; Windows loads SQLite from the
+system `winsqlite3.dll`. WAL/FULL writes use revision CAS and a checked online
+pre-write backup at `profile.sqlite3.previous`. Foreign/future/corrupt schemas
+or failed writes disable further changes until a successful fresh read.
+**Đọc lại tùy chỉnh đã lưu** performs that read without replaying uncertain writes.
+Local uploaded background/font blobs retain their IndexedDB owner. If SQLite
+has no preferences document, the isolated preview's earlier settings are copied
+once from IndexedDB; the original record is retained. This does not import the
+legacy Electron profile or its secrets.
 For disposable tests, `SLTERM_PROOF_PROFILE_DIR` accepts an absolute directory.
 Shell/history scratch stays in per-run ignored `proof-results/host-*` paths.
 
 Restart restores empty workspace descriptors. It does not restore running
-processes, terminal transcripts or pane geometry/visibility. This preference
-store is separate from the planned Zig/SQLite store. Failed writes remain
+processes, terminal transcripts or pane geometry/visibility. Failed writes remain
 visible; unsupported/corrupt schemas preserve data and disable writes. Quit
 flushes preference writes; exiting without saving requires a separate choice.
 
@@ -193,9 +228,10 @@ Comparison checks bootstrap and controlled viewport/visibility, shell/modules,
 pane topology, payload, artifact/source stability, shared instrumentation hashes
 and storage volumes. Missing or mismatched controls remain visible; one run is
 not statistical evidence. No threshold or gate approval is embedded in tools.
-Measurements still require reviewed comparable evidence and user-approved
-budgets before broad migration.
+The user explicitly deferred the numerical gate for feature implementation.
+Reviewed comparable evidence and user-approved budgets remain required before
+claiming the final Windows release ready.
 The first-input PSReadLine delay remains unresolved. WSL sandbox, SSH/SFTP,
-live provider/runtime behavior, SQLite/import, project preview isolation and
+live provider/runtime behavior, legacy import, project preview isolation and
 installer/update compatibility retain their own gates. No release publication
 or account/host access is implied by this preview.

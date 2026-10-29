@@ -47,6 +47,7 @@ export class TerminalRuntime {
     report = (error: unknown) => this.update({ error: String(error) });
     clearError = () => this.update({ error: null });
     consumeCloseRequest = () => this.update({ closeRequested: false });
+    request = (method: string, args: Record<string, unknown> = {}) => this.transport.requestValue(method, args);
 
     start() {
         return (this.starting ??= (async () => {
@@ -173,6 +174,8 @@ export class TerminalRuntime {
             throw error;
         }
     }
+
+    background = () => invoke<void>("proof_background");
 
     async forceQuit() {
         if (!this.snapshot.shutdownIssue) throw new Error("Chưa có shutdown lỗi để buộc thoát.");
