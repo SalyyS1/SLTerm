@@ -11,6 +11,7 @@ import { replayTranscript, type TranscriptRequest } from "./terminal-transcript"
 export type SessionStatus = "starting" | "running" | "closing" | "exited" | "error";
 export type SessionInfo = { status: SessionStatus; exitCode?: number; message?: string; restored?: boolean; warning?: string };
 export type ShellEnvironment = { executable: string; cwd: string; pid: number; args: string[] };
+export type SpawnCommand = { executable: string; args: string[] };
 
 export class TerminalSession {
     readonly surface = document.createElement("div");
@@ -47,7 +48,8 @@ export class TerminalSession {
         options: Partial<ITerminalOptions> = {},
         readonly runId: string = crypto.randomUUID(),
         private replay?: { request: TranscriptRequest; runId?: string },
-        readonly workspaceId?: string
+        readonly workspaceId?: string,
+        private command?: SpawnCommand
     ) {
         if (replay) {
             this.info = { status: "exited", restored: true, message: replay.runId ? "Bản phát lại transcript; không có tiến trình đang chạy." : "Không có transcript đã lưu cho phiên terminal này." };
@@ -126,9 +128,9 @@ export class TerminalSession {
         try {
             await this.transport.request("spawn", {
                 session_id: this.id,
-                executable: environment.executable,
+                executable: this.command?.executable ?? environment.executable,
                 cwd: this.cwd,
-                args: environment.args,
+                args: this.command?.args ?? environment.args,
                 run_id: this.runId,
                 workspace_id: this.workspaceId,
                 cols: this.cols,

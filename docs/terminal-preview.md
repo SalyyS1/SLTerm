@@ -68,6 +68,11 @@ when testing a replacement. These commands do not create an installer.
   discarded; typing while a save is pending keeps the newer edits unsaved.
   External changes use revision checks and offer compare/reload/explicit
   overwrite. Even overwrite compares against a freshly read revision.
+- **AI CLI** opens Claude or Codex's official local CLI in a dedicated pane. The
+  provider command is a fixed allowlist; authentication stays inside the CLI
+  login flow and SLTerm does not read, copy or send provider tokens. The pane's
+  provider label is persisted with the layout, while restart restores its
+  transcript as stopped history and never relaunches the CLI automatically.
 - **Chạy nền** in the quit dialog hides the window while preserving the same
   application/core, sessions and editor buffers. Use the Windows tray to reopen
   it or request the normal quit confirmation. This requires a registered tray

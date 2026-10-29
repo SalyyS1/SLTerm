@@ -74,12 +74,27 @@ fn child_environment(
     module_roots: &[PathBuf],
 ) -> Result<Vec<(&'static str, OsString)>, String> {
     let shell_root = windows.join("System32/WindowsPowerShell/v1.0");
-    let path = std::env::join_paths([
+    // Provider CLIs are commonly installed as npm shims. Expose only their
+    // executable locations while keeping HOME/APPDATA disposable, so a CLI
+    // must use its own explicit login flow and no host token is copied in.
+    let user_profile = std::env::var_os("USERPROFILE").map(PathBuf::from);
+    let user_appdata = std::env::var_os("APPDATA").map(PathBuf::from);
+    let node_roots = [
         windows.join("System32"),
         windows.to_path_buf(),
         windows.join("System32/Wbem"),
-        shell_root,
-    ])
+        shell_root.clone(),
+        windows.join("System32/OpenSSH"),
+        PathBuf::from(r"C:\Program Files\nodejs"),
+    ];
+    let mut path_roots = node_roots.to_vec();
+    if let Some(profile) = user_profile {
+        path_roots.push(profile.join("AppData/Roaming/npm"));
+    }
+    if let Some(appdata) = user_appdata {
+        path_roots.push(appdata.join("npm"));
+    }
+    let path = std::env::join_paths(path_roots)
     .map_err(|e| e.to_string())?;
     let modules = std::env::join_paths(module_roots).map_err(|e| e.to_string())?;
     Ok(vec![

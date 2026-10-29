@@ -3,7 +3,8 @@ import { clampPaneRect, layoutGeometry } from "./workspace-geometry";
 export type Axis = "horizontal" | "vertical";
 export type DockSide = "left" | "right" | "up" | "down";
 export type PaneRect = { x: number; y: number; width: number; height: number };
-export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string };
+export type PaneProvider = "claude" | "codex";
+export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string; provider?: PaneProvider };
 export type SplitNode = {
     kind: "split";
     splitId: string;
@@ -58,9 +59,10 @@ export function assertWorkspaceState(value: unknown): asserts value is Workspace
             const current = node as Record<string, unknown>;
             nodes.add(current);
             if (current.kind === "pane") {
-                if (!onlyKeys(current, ["kind", "paneId", "title", "runId"]) || typeof current.paneId !== "number" ||
+                if (!onlyKeys(current, ["kind", "paneId", "title", "runId", "provider"]) || typeof current.paneId !== "number" ||
                     !validPaneId(current.paneId) || panes.has(current.paneId) || typeof current.title !== "string" ||
-                    (Object.hasOwn(current, "runId") && (!isCanonicalRunId(current.runId) || runs.has(current.runId)))) invalid();
+                    (Object.hasOwn(current, "runId") && (!isCanonicalRunId(current.runId) || runs.has(current.runId))) ||
+                    (Object.hasOwn(current, "provider") && current.provider !== "claude" && current.provider !== "codex")) invalid();
                 const pane = current as PaneNode;
                 panes.add(pane.paneId); localPanes.add(pane.paneId);
                 if (pane.runId !== undefined) runs.add(pane.runId);
@@ -251,7 +253,7 @@ export function splitPane(
     state: WorkspaceState,
     workspaceId: string,
     targetPaneId: number | null,
-    newPane: Pick<PaneNode, "paneId" | "title" | "runId">,
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider">,
     splitId: string,
     axis: Axis
 ): WorkspaceState {
@@ -264,7 +266,8 @@ export function splitPane(
         return state;
     return edit(state, workspaceId, (workspace) => {
         const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
-            ...(newPane.runId === undefined ? {} : { runId: newPane.runId }) };
+            ...(newPane.runId === undefined ? {} : { runId: newPane.runId }),
+            ...(newPane.provider === undefined ? {} : { provider: newPane.provider }) };
         if (!workspace.layout)
             return targetPaneId === null
                 ? { ...workspace, layout: pane, activePaneId: pane.paneId, zoomedPaneId: null, arrangement: "manual" }
@@ -475,7 +478,7 @@ export function arrangePanes(state: WorkspaceState, workspaceId: string): Worksp
 export function addTerminal(
     state: WorkspaceState,
     workspaceId: string,
-    newPane: Pick<PaneNode, "paneId" | "title" | "runId">
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider">
 ): WorkspaceState {
     if (
         !validPaneId(newPane.paneId) ||
@@ -485,7 +488,8 @@ export function addTerminal(
         return state;
     return edit(state, workspaceId, (workspace) => {
         const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
-            ...(newPane.runId === undefined ? {} : { runId: newPane.runId }) };
+            ...(newPane.runId === undefined ? {} : { runId: newPane.runId }),
+            ...(newPane.provider === undefined ? {} : { provider: newPane.provider }) };
         const panes = [...paneIds(workspace.layout).map((id) => findPane(workspace.layout, id)!), pane];
         // Manual docking remains intact; the explicit Arrange command restores the default grid.
         if (workspace.arrangement === "manual" && workspace.layout) {

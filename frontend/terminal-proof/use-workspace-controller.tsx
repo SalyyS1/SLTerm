@@ -9,6 +9,7 @@ import type { LayoutActions } from "./workspace-layout";
 import * as model from "./workspace-model";
 import { workspacePath } from "./workspace-path";
 import type { EditorState } from "./editor-state";
+import type { AiProvider } from "./ai-cli";
 
 export function useWorkspaceController(runtime: TerminalRuntime) {
     const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
@@ -63,6 +64,33 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
                     : model.addTerminal(current, owner.id, { paneId, title: `Terminal ${paneId}`, runId })
             );
         } catch (error) { runtime.report(error); }
+    };
+    const openProvider = (provider: AiProvider) => {
+        if (!workspace || !connected || dialog) return;
+        try {
+            const paneId = nextSerial("pane");
+            const command = runtime.providerCommand(provider);
+            const runId = runtime.prepare(paneId, workspace.cwd,
+                terminalAppearance(appearanceFor(preferences.value, workspace.id)), workspace.id, command);
+            const label = provider === "claude" ? "Claude CLI" : "Codex CLI";
+            setState((current) => model.addTerminal(current, workspace.id, {
+                paneId, title: `${label} · Terminal ${paneId}`, runId, provider,
+            }));
+        } catch (error) {
+            runtime.report(error);
+            throw error;
+        }
+    };
+    const openAiDialog = () => {
+        if (!workspace || !connected || dialog) return;
+        setDialog({
+            title: "Mở AI CLI",
+            body: <p>Chạy CLI nguyên bản trong một terminal riêng của workspace. SLTerm không nhận hoặc sao chép token; lần đầu dùng provider có thể yêu cầu đăng nhập trong CLI.</p>,
+            actions: [
+                { label: "Mở Claude CLI", run: () => openProvider("claude") },
+                { label: "Mở Codex CLI", run: () => openProvider("codex") },
+            ],
+        });
     };
     useEffect(() => {
         let mounted = true;
@@ -349,6 +377,8 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
         newWorkspace,
         requestCloseWorkspace,
         renameWorkspace,
+        openProvider,
+        openAiDialog,
         actions,
         quit,
     };

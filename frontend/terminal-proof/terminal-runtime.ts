@@ -3,7 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { Frame, ProofTransport } from "./proof-protocol";
 import { DEFAULT_FONT_SIZE, nextFontSize } from "./terminal-font";
-import { TerminalSession, type SessionInfo, type ShellEnvironment } from "./terminal-session";
+import { TerminalSession, type SessionInfo, type ShellEnvironment, type SpawnCommand } from "./terminal-session";
+import { aiCommand, type AiProvider } from "./ai-cli";
 
 export type RuntimeSnapshot = {
     phase: "starting" | "connected" | "stopping" | "disconnected";
@@ -73,7 +74,7 @@ export class TerminalRuntime {
         };
     }
 
-    prepare(id: number, cwd: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string) {
+    prepare(id: number, cwd: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string, command?: SpawnCommand) {
         if (!this.environment || this.snapshot.phase !== "connected") throw new Error("Terminal chưa kết nối.");
         if (this.sessions.has(id)) throw new Error("Duplicate terminal identity");
         const runId = crypto.randomUUID();
@@ -88,11 +89,16 @@ export class TerminalRuntime {
             this.report,
             this.snapshot.fontSize,
             this.palette(),
-            options, runId, undefined, workspaceId
+            options, runId, undefined, workspaceId, command
         );
         this.sessions.set(id, session);
         this.update({ sessions: { ...this.snapshot.sessions, [id]: session.info } });
         return runId;
+    }
+
+    providerCommand(provider: AiProvider): SpawnCommand {
+        if (!this.environment) throw new Error("Terminal chưa kết nối.");
+        return aiCommand(provider, this.environment.executable);
     }
 
     restore(id: number, cwd: string, runId?: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string) {
