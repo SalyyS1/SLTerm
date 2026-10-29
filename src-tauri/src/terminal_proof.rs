@@ -280,8 +280,12 @@ fn begin_shutdown(app: &tauri::AppHandle) -> Result<(), String> {
     let (process, output_closed, shutdown) = match prepared {
         Ok(Some(core)) => core,
         Ok(None) => {
-            app.exit(0);
-            return Ok(());
+            // A disconnected/missing core has an unknown shutdown outcome.
+            // Never report a graceful exit when output EOF and the versioned
+            // shutdown acknowledgement were not observed.
+            state.closing.store(false, Ordering::SeqCst);
+            state.shutdown_failed.store(true, Ordering::SeqCst);
+            return Err("Core is unavailable; shutdown acknowledgement is unconfirmed".into());
         }
         Err(error) => {
             state.closing.store(false, Ordering::SeqCst);
