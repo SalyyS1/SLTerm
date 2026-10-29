@@ -4,6 +4,7 @@ const c = win.c;
 const rpc = @import("protocol.zig");
 const Process = @import("conpty.zig").Process;
 const InputPump = @import("input-pump.zig").InputPump;
+const TranscriptStore = @import("transcript-store.zig").Store;
 
 pub const Session = struct {
     id: u64,
@@ -20,11 +21,19 @@ pub const Session = struct {
     acknowledged: u64 = 0,
     exit_code: c.DWORD = 0,
     exited: bool = false,
+    archive: ?*TranscriptStore = null,
+    run_id: ?[]u8 = null,
+    /// Set before startup cleanup wakes the reader. An archive with this
+    /// marker is deliberately incomplete even if the process handle reports
+    /// its default exit code.
+    startup_error: ?[]const u8 = null,
 
-    pub fn create(request: rpc.Request, emitter: *rpc.Emitter) !*Session {
+    pub fn create(request: rpc.Request, emitter: *rpc.Emitter, archive: ?*TranscriptStore) !*Session {
         if (request.session_id == 0) return error.InvalidSessionId;
         const self = try rpc.allocator.create(Session);
         errdefer rpc.allocator.destroy(self);
+        const run_id = if (request.run_id) |id| try rpc.allocator.dupe(u8, id) else null;
+        errdefer if (run_id) |id| rpc.allocator.free(id);
         const ack = c.CreateEventW(null, c.FALSE, c.FALSE, null) orelse return error.CreateEvent;
         errdefer win.close(ack);
         const stop_event = c.CreateEventW(null, c.TRUE, c.FALSE, null) orelse return error.CreateEvent;
@@ -40,6 +49,8 @@ pub const Session = struct {
             .stop_event = stop_event,
             .done_event = done,
             .input_pump = undefined,
+            .archive = archive,
+            .run_id = run_id,
         };
         errdefer {
             self.process.terminate();
@@ -52,10 +63,24 @@ pub const Session = struct {
             }
             self.process.deinit();
         }
+        if (archive) |store| {
+            const identity = try std.json.Stringify.valueAlloc(rpc.allocator, .{
+                .version = 1, .protocol_version = rpc.version,
+                .execution_host = "windows-local", .provider = "shell",
+                .cwd = request.cwd, .attempt_id = run_id.?,
+                .workspace_id = request.workspace_id,
+                .task_id = @as(?[]const u8, null), .worktree = @as(?[]const u8, null),
+                .credential_reference = @as(?[]const u8, null),
+                .initial_cols = request.cols, .initial_rows = request.rows,
+            }, .{});
+            defer rpc.allocator.free(identity);
+            try store.create(run_id.?, identity);
+        }
         self.input_pump = try InputPump.init(process.input, emitter, request.session_id);
         errdefer self.input_pump.deinit();
         self.reader = try std.Thread.spawn(.{}, readLoop, .{self});
         errdefer {
+            self.startup_error = "SessionStartFailed";
             self.process.terminate();
             _ = c.SetEvent(stop_event);
             if (self.process.console != null) c.ClosePseudoConsole(self.process.console);
@@ -65,6 +90,7 @@ pub const Session = struct {
         }
         try self.input_pump.start();
         errdefer {
+            self.startup_error = "InputPumpStartFailed";
             self.input_pump.stop();
             self.process.terminate();
             _ = c.SetEvent(stop_event);
@@ -72,7 +98,11 @@ pub const Session = struct {
             self.process.console = null;
             self.input_pump.join();
         }
-        if (c.ResumeThread(process.thread) == c.INFINITE) return error.ResumeProcess;
+        if (c.ResumeThread(process.thread) == c.INFINITE) {
+            self.startup_error = "ResumeProcessFailed";
+            return error.ResumeProcess;
+        }
+        errdefer self.startup_error = "WaiterStartFailed";
         self.waiter = try std.Thread.spawn(.{}, waitLoop, .{self});
         return self;
     }
@@ -119,6 +149,7 @@ pub const Session = struct {
         win.close(self.ack_event);
         win.close(self.stop_event);
         win.close(self.done_event);
+        if (self.run_id) |id| rpc.allocator.free(id);
         rpc.allocator.destroy(self);
     }
 
@@ -144,9 +175,35 @@ pub const Session = struct {
         var buffer: [rpc.max_output_chunk]u8 = undefined;
         var stopped = false;
         var discarded: u64 = 0;
+        var capture_sequence: u64 = 0;
+        var capture_error: ?[]const u8 = null;
+        var pipe_error: ?[]const u8 = null;
+        var truncation_reported = false;
         while (true) {
             var count: c.DWORD = 0;
-            if (c.ReadFile(self.process.output, &buffer, buffer.len, &count, null) == 0 or count == 0) break;
+            if (c.ReadFile(self.process.output, &buffer, buffer.len, &count, null) == 0) {
+                const code = c.GetLastError();
+                if (code != c.ERROR_BROKEN_PIPE and code != c.ERROR_HANDLE_EOF) {
+                    pipe_error = "TerminalReadFailed";
+                    self.warning("stream-error", "TerminalReadFailed", "Không đọc được toàn bộ output; phiên có thể thiếu dữ liệu.");
+                }
+                break;
+            }
+            if (count == 0) break;
+            capture_sequence += 1;
+            if (self.archive) |store| {
+                if (capture_error == null) {
+                    if (store.append(self.run_id.?, capture_sequence, buffer[0..count])) |result| {
+                        if (result.truncated and !truncation_reported) {
+                            truncation_reported = true;
+                            self.warning("archive-warning", "TranscriptTruncated", "Kho lịch sử đạt giới hạn byte. Terminal vẫn chạy; output tiếp theo không được lưu đầy đủ.");
+                        }
+                    } else |err| {
+                        capture_error = @errorName(err);
+                        self.warning("archive-warning", @errorName(err), "Không lưu được đầy đủ lịch sử terminal. Không bảo đảm khôi phục output mới.");
+                    }
+                }
+            }
             if (stopped) {
                 discarded += count;
                 continue;
@@ -163,9 +220,19 @@ pub const Session = struct {
         }
         _ = c.WaitForSingleObject(self.done_event, c.INFINITE);
         if (discarded != 0) self.emitter.send(.{ .version = rpc.version, .event = "gap", .session_id = self.id, .discarded_bytes = discarded });
+        if (self.archive) |store| {
+            store.finish(self.run_id.?, self.exit_code, capture_sequence, discarded,
+                capture_error orelse pipe_error orelse self.startup_error) catch |err| {
+                self.warning("archive-warning", @errorName(err), "Chưa xác nhận lưu output cuối. Lịch sử phiên sẽ được đánh dấu chưa hoàn tất.");
+            };
+        }
         self.emitter.send(.{ .version = rpc.version, .event = "exit", .session_id = self.id, .exit_code = self.exit_code, .last_sequence = self.sent });
         c.AcquireSRWLockExclusive(&self.lock);
         self.exited = true;
         c.ReleaseSRWLockExclusive(&self.lock);
+    }
+
+    fn warning(self: *Session, event: []const u8, code: []const u8, message: []const u8) void {
+        self.emitter.send(.{ .version = rpc.version, .event = event, .session_id = self.id, .error_code = code, .message = message });
     }
 };

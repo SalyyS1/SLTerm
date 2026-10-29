@@ -6,9 +6,10 @@ import { Terminal, type ITerminalOptions, type ITheme } from "@xterm/xterm";
 import { Frame, OutputOrder, ProofTransport } from "./proof-protocol";
 import { installTerminalClipboard } from "./terminal-clipboard";
 import { TerminalInput } from "./terminal-input";
+import { replayTranscript, type TranscriptRequest } from "./terminal-transcript";
 
 export type SessionStatus = "starting" | "running" | "closing" | "exited" | "error";
-export type SessionInfo = { status: SessionStatus; exitCode?: number; message?: string };
+export type SessionInfo = { status: SessionStatus; exitCode?: number; message?: string; restored?: boolean; warning?: string };
 export type ShellEnvironment = { executable: string; cwd: string; pid: number; args: string[] };
 
 export class TerminalSession {
@@ -28,6 +29,7 @@ export class TerminalSession {
     private disconnectedMessage?: string;
     private exitReceived = false;
     private disposed = false;
+    private replayCancellation = new AbortController();
     private cols = 0;
     private rows = 0;
     private resizing = false;
@@ -37,13 +39,20 @@ export class TerminalSession {
         readonly id: number,
         readonly cwd: string,
         private transport: ProofTransport,
-        private environment: ShellEnvironment,
+        private environment: ShellEnvironment | undefined,
         private changed: (id: number, info: SessionInfo) => void,
         private fail: (error: unknown) => void,
         fontSize: number,
         theme: ITheme,
-        options: Partial<ITerminalOptions> = {}
+        options: Partial<ITerminalOptions> = {},
+        readonly runId: string = crypto.randomUUID(),
+        private replay?: { request: TranscriptRequest; runId?: string },
+        readonly workspaceId?: string
     ) {
+        if (replay) {
+            this.info = { status: "exited", restored: true, message: replay.runId ? "Bản phát lại transcript; không có tiến trình đang chạy." : "Không có transcript đã lưu cho phiên terminal này." };
+            this.finished = true;
+        }
         this.surface.className = "terminal-surface";
         this.terminal = new Terminal({
             fontFamily: '"Cascadia Mono", Consolas, monospace',
@@ -61,7 +70,7 @@ export class TerminalSession {
         this.terminal.loadAddon(this.fit);
         this.terminal.loadAddon(this.search);
         this.input = new TerminalInput(
-            (data) => this.transport.request("input", { session_id: id, data }),
+            (data) => this.transport.request("input", { session_id: id, data, run_id: this.runId }),
             (error, uncertain) => {
                 if (uncertain && !this.finished && !this.closeRequested) {
                     this.update({
@@ -74,13 +83,13 @@ export class TerminalSession {
             }
         );
         this.terminal.onData((data) => {
-            if (!this.closeRequested && (this.info.status === "starting" || this.info.status === "running"))
+            if (!this.replay && !this.closeRequested && (this.info.status === "starting" || this.info.status === "running"))
                 this.input.enqueue(data);
         });
     }
 
     attach(element: HTMLElement) {
-        if (this.disposed || (!this.opened && (this.finished || this.closeRequested))) return;
+        if (this.disposed || (!this.opened && (this.closeRequested || this.finished && !this.replay))) return;
         element.append(this.surface);
         if (!this.opened) {
             this.opened = true;
@@ -101,7 +110,7 @@ export class TerminalSession {
             this.fit.fit();
             this.cols = this.terminal.cols;
             this.rows = this.terminal.rows;
-            this.spawned = this.spawn();
+            this.spawned = this.replay ? this.restoreTranscript() : this.spawn();
         }
         this.resize();
     }
@@ -112,12 +121,16 @@ export class TerminalSession {
     }
 
     private async spawn() {
+        const environment = this.environment;
+        if (!environment) throw new Error("Missing shell environment.");
         try {
             await this.transport.request("spawn", {
                 session_id: this.id,
-                executable: this.environment.executable,
+                executable: environment.executable,
                 cwd: this.cwd,
-                args: this.environment.args,
+                args: environment.args,
+                run_id: this.runId,
+                workspace_id: this.workspaceId,
                 cols: this.cols,
                 rows: this.rows,
             });
@@ -134,6 +147,35 @@ export class TerminalSession {
             this.terminal.writeln("\r\n[Không xác nhận được khởi chạy: " + String(error) + "]");
             this.fail(error);
         }
+    }
+
+    private async restoreTranscript() {
+        if (!this.replay) return;
+        try {
+            if (!this.replay.runId) {
+                await this.writeReplay(new TextEncoder().encode("\r\n[Phiên cũ không có lịch sử đã lưu · không có process đang chạy]\r\n"));
+                return;
+            }
+            const metadata = await replayTranscript(this.replay.request, this.replay.runId, (bytes) => this.writeReplay(bytes), () => this.disposed);
+            const warning = metadata.truncated ? `Lịch sử bị cắt: ${metadata.omitted_bytes} byte không được lưu.`
+                : metadata.stream_error ? `Lịch sử thiếu dữ liệu: ${metadata.stream_error}`
+                : !metadata.capture_complete ? "Lịch sử chưa hoàn tất; process không còn chạy." : undefined;
+            const marker = warning ?? `Lịch sử đã lưu · process đã dừng: ${metadata.exit_code}`;
+            await this.writeReplay(new TextEncoder().encode(`\x18\x1b[0m\r\n[${marker}]\r\n`));
+            if (!this.disposed) this.update({ ...this.info, status: "exited", exitCode: metadata.exit_code ?? undefined, warning });
+        } catch (error) {
+            if (!this.disposed) { this.update({ ...this.info, status: "exited", warning: String(error), message: String(error) }); this.fail(error); }
+        }
+    }
+
+    private writeReplay(bytes: Uint8Array): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const signal = this.replayCancellation.signal;
+            if (signal.aborted) { reject(new Error("Transcript replay cancelled.")); return; }
+            const cancel = () => reject(new Error("Transcript replay cancelled."));
+            signal.addEventListener("abort", cancel, { once: true });
+            this.terminal.write(bytes, () => { signal.removeEventListener("abort", cancel); resolve(); });
+        });
     }
 
     resize() {
@@ -191,13 +233,16 @@ export class TerminalSession {
             this.update({ status: "error", message: "Không chắc trạng thái nhập; không tự gửi lại." });
             this.terminal.writeln("\r\n[input delivery uncertain: " + frame.affected_bytes + " bytes]");
             this.fail(frame.error_code ?? "Input delivery is uncertain");
+        } else if (frame.event === "archive-warning" || frame.event === "stream-error") {
+            const warning = frame.message ?? frame.error_code ?? "Transcript capture warning";
+            this.update({ ...this.info, warning, message: warning });
         }
     }
 
     private confirmExit(exitCode?: number) {
         if (this.finished) return;
         this.finished = true;
-        this.update({ status: "exited", exitCode });
+        this.update({ ...this.info, status: "exited", exitCode });
         for (const waiter of this.waiters) waiter.resolve();
         this.waiters.clear();
     }
@@ -277,6 +322,7 @@ export class TerminalSession {
         if (!this.finished) throw new Error("Cannot dispose an unconfirmed process");
         if (this.disposed) return;
         this.disposed = true;
+        this.replayCancellation.abort();
         this.clipboard?.dispose();
         this.terminal.dispose();
         this.surface.remove();

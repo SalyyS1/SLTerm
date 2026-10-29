@@ -17,4 +17,6 @@ pub const METHODS: &[&str] = &[
     "files.save.chunk",
     "files.save.commit",
     "files.save.cancel",
+    "transcripts.metadata",
+    "transcripts.read",
 ];

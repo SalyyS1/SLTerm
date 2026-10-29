@@ -31,6 +31,12 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
         return () => document.removeEventListener("focusin", onFocus);
     }, []);
     const serial = useRef({ pane: 0, workspace: 0, split: 0 });
+    const nextSerial = (key: keyof typeof serial.current) => {
+        const value = serial.current[key] + 1;
+        if (!Number.isSafeInteger(value)) throw new Error("Hết miền định danh an toàn; không khởi chạy thêm process.");
+        serial.current[key] = value;
+        return value;
+    };
     const editors = useRef(new Map<string, EditorState>());
     const [editorDirty, setEditorDirty] = useState<Record<string, boolean>>({});
     const editorController = (id: string, controller: EditorState | null) => {
@@ -45,16 +51,18 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
     };
     const workspace = model.activeWorkspace(state);
     const connected = snapshot.phase === "connected" && hydrated;
-    const splitId = () => `split-${++serial.current.split}`;
+    const splitId = () => `split-${nextSerial("split")}`;
     const addPane = (owner: model.Workspace, axis?: model.Axis, target = owner.activePaneId) => {
         if (!connected) return;
-        const paneId = ++serial.current.pane;
-        runtime.prepare(paneId, owner.cwd, terminalAppearance(appearanceFor(preferences.value, owner.id)));
-        const id = splitId();
-        setState((current) =>
-            axis ? model.splitPane(current, owner.id, target, { paneId, title: `Terminal ${paneId}` }, id, axis)
-                : model.addTerminal(current, owner.id, { paneId, title: `Terminal ${paneId}` })
-        );
+        try {
+            const paneId = nextSerial("pane");
+            const id = splitId();
+            const runId = runtime.prepare(paneId, owner.cwd, terminalAppearance(appearanceFor(preferences.value, owner.id)), owner.id);
+            setState((current) =>
+                axis ? model.splitPane(current, owner.id, target, { paneId, title: `Terminal ${paneId}`, runId }, id, axis)
+                    : model.addTerminal(current, owner.id, { paneId, title: `Terminal ${paneId}`, runId })
+            );
+        } catch (error) { runtime.report(error); }
     };
     useEffect(() => {
         let mounted = true;
@@ -63,17 +71,23 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
                 if (!mounted) return;
                 setDefaultCwd(environment.cwd);
                 if (saved && preferences.existed.current) {
-                    setState(restoreDescriptors(saved)); setHydrated(true); return;
+                    const restored = restoreDescriptors(saved);
+                    serial.current = model.workspaceIdentitySeed(restored);
+                    for (const owner of restored.workspaces) for (const id of model.paneIds(owner.layout)) {
+                        runtime.restore(id, owner.cwd, model.findPane(owner.layout, id)?.runId,
+                            terminalAppearance(appearanceFor(saved, owner.id)), owner.id);
+                    }
+                    setState(restored); setHydrated(true); return;
                 }
                 const owner = model.createWorkspace(
                     crypto.randomUUID(),
                     "Workspace",
                     environment.cwd
                 );
-                const paneId = ++serial.current.pane;
-                ++serial.current.workspace;
-                runtime.prepare(paneId, owner.cwd, terminalAppearance(appearanceFor(saved ?? preferences.value)));
-                setState(model.addTerminal(model.addWorkspace({ workspaces: [], activeWorkspaceId: null }, owner), owner.id, { paneId, title: `Terminal ${paneId}` }));
+                const paneId = nextSerial("pane");
+                nextSerial("workspace");
+                const runId = runtime.prepare(paneId, owner.cwd, terminalAppearance(appearanceFor(saved ?? preferences.value)), owner.id);
+                setState(model.addTerminal(model.addWorkspace({ workspaces: [], activeWorkspaceId: null }, owner), owner.id, { paneId, title: `Terminal ${paneId}`, runId }));
                 setHydrated(true);
             })
             .catch(runtime.report);
@@ -81,10 +95,12 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             mounted = false;
         };
     }, [runtime]);
-    const descriptors = JSON.stringify({ workspaces: state.workspaces.map(({ id, name, cwd, layoutMode }) => ({ id, name, cwd, layoutMode })), activeWorkspaceId: state.activeWorkspaceId });
+    const descriptors = JSON.stringify(state);
     useEffect(() => {
-        if (hydrated && preferences.writable) void preferences.commit((value) => withDescriptors(value, state)).catch(() => {});
-    }, [descriptors, hydrated]);
+        if (!hydrated || !preferences.writable) return;
+        const timer = setTimeout(() => { void preferences.commit((value) => withDescriptors(value, state)).catch(() => {}); }, 200);
+        return () => clearTimeout(timer);
+    }, [descriptors, hydrated, preferences.writable]);
     useEffect(() => {
         for (const owner of state.workspaces)
             runtime.applyAppearance(model.paneIds(owner.layout), terminalAppearance(appearanceFor(preferences.value, owner.id)));
@@ -110,11 +126,11 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             ],
             submit: ({ name, cwd }) => {
                 const directory = workspacePath(cwd);
-                ++serial.current.workspace;
+                nextSerial("workspace");
                 const owner = model.createWorkspace(crypto.randomUUID(), name, directory);
-                const paneId = ++serial.current.pane;
-                runtime.prepare(paneId, owner.cwd, terminalAppearance(appearanceFor(preferences.value, owner.id)));
-                setState((current) => model.addTerminal(model.addWorkspace(current, owner), owner.id, { paneId, title: `Terminal ${paneId}` }));
+                const paneId = nextSerial("pane");
+                const runId = runtime.prepare(paneId, owner.cwd, terminalAppearance(appearanceFor(preferences.value, owner.id)), owner.id);
+                setState((current) => model.addTerminal(model.addWorkspace(current, owner), owner.id, { paneId, title: `Terminal ${paneId}`, runId }));
             },
         });
     };
@@ -229,7 +245,7 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             setDialog({
                 kind: "quit",
                 title: force ? "Buộc dừng và thoát SLTerm?" : "Dừng và thoát SLTerm?",
-                body: <><p>Tất cả terminal sẽ dừng. Tùy chỉnh và danh sách workspace được lưu; process và transcript không khôi phục sau khi thoát.</p>
+                body: <><p>Tất cả terminal sẽ dừng. Bố cục và phần lịch sử đã ghi được giữ để mở lại; các process không tự khởi chạy lại.</p>
                     {hasUnsaved && <p role="alert">Có file chưa lưu trong editor. Đóng sẽ bỏ phần nội dung chưa lưu.</p>}
                     {force && <><p role="alert">{snapshot.shutdownIssue}</p><p>Buộc thoát có thể làm mất output cuối chưa nhận được.</p></>}
                     {preferences.error && <p role="alert">Chưa lưu được tùy chỉnh: {preferences.error}</p>}</>,

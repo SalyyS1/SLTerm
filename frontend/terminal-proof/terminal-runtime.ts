@@ -73,9 +73,10 @@ export class TerminalRuntime {
         };
     }
 
-    prepare(id: number, cwd: string, options: Partial<ITerminalOptions> = {}) {
+    prepare(id: number, cwd: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string) {
         if (!this.environment || this.snapshot.phase !== "connected") throw new Error("Terminal chưa kết nối.");
         if (this.sessions.has(id)) throw new Error("Duplicate terminal identity");
+        const runId = crypto.randomUUID();
         const session = new TerminalSession(
             id,
             cwd,
@@ -87,10 +88,23 @@ export class TerminalRuntime {
             this.report,
             this.snapshot.fontSize,
             this.palette(),
-            options
+            options, runId, undefined, workspaceId
         );
         this.sessions.set(id, session);
         this.update({ sessions: { ...this.snapshot.sessions, [id]: session.info } });
+        return runId;
+    }
+
+    restore(id: number, cwd: string, runId?: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string) {
+        if (this.snapshot.phase !== "connected") throw new Error("Terminal chưa kết nối.");
+        if (this.sessions.has(id)) throw new Error("Duplicate terminal identity");
+        const runIdentity = runId ?? crypto.randomUUID();
+        const session = new TerminalSession(id, cwd, this.transport, this.environment, (paneId, info) => {
+            this.update({ sessions: { ...this.snapshot.sessions, [paneId]: info } });
+        }, this.report, this.snapshot.fontSize, this.palette(), options, runIdentity, { request: this.request, runId }, workspaceId);
+        this.sessions.set(id, session);
+        this.update({ sessions: { ...this.snapshot.sessions, [id]: session.info } });
+        return runId;
     }
 
     attach(id: number, element: HTMLElement) {

@@ -4,6 +4,8 @@ pub const Request = struct {
     id: u64,
     method: []const u8,
     session_id: u64 = 0,
+    run_id: ?[]const u8 = null,
+    workspace_id: ?[]const u8 = null,
     executable: ?[]const u8 = null,
     args: []const []const u8 = &.{},
     cwd: ?[]const u8 = null,

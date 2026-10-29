@@ -3,8 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITerminalOptions } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Frame, ProofTransport } from "./proof-protocol";
+import { installTerminalClipboard } from "./terminal-clipboard";
 import { TerminalSession } from "./terminal-session";
 import { TerminalRuntime } from "./terminal-runtime";
+import type { TranscriptRequest } from "./terminal-transcript";
 
 vi.mock("@xterm/xterm", () => ({
     Terminal: vi.fn(function (options: ITerminalOptions) {
@@ -59,10 +61,10 @@ type MockTerminal = {
     emitData(data: string): void;
     flush(): void;
 };
-function deferred() {
-    let resolve!: () => void;
+function deferred<T = void>() {
+    let resolve!: (value: T) => void;
     let reject!: (error: Error) => void;
-    const promise = new Promise<void>((success, failure) => {
+    const promise = new Promise<T>((success, failure) => {
         resolve = success;
         reject = failure;
     });
@@ -71,7 +73,7 @@ function deferred() {
 const tick = async () => {
     for (let index = 0; index < 8; index++) await Promise.resolve();
 };
-function setup(options: Partial<ITerminalOptions> = {}) {
+function setup(options: Partial<ITerminalOptions> = {}, replay?: { request: TranscriptRequest; runId?: string }, workspaceId?: string) {
     const spawn = deferred();
     const request = vi.fn(
         (method: string, _args?: Record<string, unknown>): Promise<void> =>
@@ -88,7 +90,10 @@ function setup(options: Partial<ITerminalOptions> = {}) {
         fail,
         14,
         {},
-        options
+        options,
+        undefined,
+        replay,
+        workspaceId
     );
     const terminal = vi.mocked(Terminal).mock.results.at(-1)!.value as MockTerminal;
     const host = { append: vi.fn() } as unknown as HTMLElement;
@@ -96,6 +101,38 @@ function setup(options: Partial<ITerminalOptions> = {}) {
 }
 function exit(session: TerminalSession, lastSequence = 0) {
     session.receive({ event: "exit", session_id: 7, last_sequence: lastSequence, exit_code: 23 });
+}
+
+const restoredRunId = "123e4567-e89b-42d3-a456-426614174000";
+const savedOutput = new TextEncoder().encode("saved λ output");
+function transcriptMetadata() {
+    return {
+        identity_json: JSON.stringify({ version: 1, protocol_version: 1, execution_host: "windows-local", cwd: "C:/work", provider: "shell", attempt_id: restoredRunId }),
+        stream_error: null, created_unix_ms: 1, finished: true, process_eof: true, capture_complete: true,
+        truncated: false, recorded_bytes: savedOutput.length, omitted_bytes: 0, discarded_bytes: 0,
+        last_sequence: 1, recorded_sequence: 1, exit_code: 23,
+    };
+}
+function transcriptChunk() {
+    return { data: btoa(String.fromCharCode(...savedOutput)), offset: 0, next_offset: savedOutput.length, sequence: 1, chunk_offset: 0, eof: true };
+}
+async function startRuntime() {
+    vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); });
+    vi.stubGlobal("getComputedStyle", () => ({ getPropertyValue: () => "" }));
+    Object.assign(document, { body: { dataset: {} } });
+    let receive!: (frame: Frame) => void;
+    vi.mocked(listen).mockImplementation(async (_event, callback) => {
+        receive = (payload) => callback({ event: "proof-event", id: 0, payload } as Parameters<typeof callback>[0]);
+        return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+        if (command === "proof_start") return { executable: "pwsh.exe", cwd: "C:/work", pid: 1, args: [] } as never;
+        if (command === "proof_request") receive({ id: (args as { request: { id: number } }).request.id, ok: true });
+        return undefined as never;
+    });
+    const runtime = new TerminalRuntime();
+    await runtime.start();
+    return { runtime, receive };
 }
 
 beforeEach(() => {
@@ -117,6 +154,18 @@ afterEach(() => {
 });
 
 describe("terminal session lifetime", () => {
+    it("binds a live spawn to its generated run UUID and owning workspace", async () => {
+        const { session, host, spawn, request } = setup({}, undefined, "workspace-one");
+        expect(session.runId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+        session.attach(host);
+        expect(request).toHaveBeenCalledWith("spawn", {
+            session_id: 7, executable: "pwsh.exe", cwd: "C:/work", args: ["-NoLogo"],
+            run_id: session.runId, workspace_id: "workspace-one", cols: 80, rows: 24,
+        });
+        spawn.resolve();
+        await tick();
+        expect(session.info.status).toBe("running");
+    });
     it("constructs with workspace appearance and transparency before opening the renderer", () => {
         const { terminal } = setup({ fontSize: 19, lineHeight: 1.4, cursorStyle: "bar", theme: { background: "#12345600" }, allowTransparency: false });
         expect(terminal.options).toMatchObject({ fontSize: 19, lineHeight: 1.4, cursorStyle: "bar", allowTransparency: true, theme: { background: "#12345600" } });
@@ -351,6 +400,123 @@ describe("terminal session lifetime", () => {
     });
 });
 
+describe("restored terminal session lifetime", () => {
+    it("renders saved bytes and the stopped marker without live process traffic or typing", async () => {
+        const replay = vi.fn(async (method: string) => method === "transcripts.metadata" ? transcriptMetadata() : transcriptChunk());
+        const { session, terminal, host, request, changed, fail } = setup({}, { request: replay, runId: restoredRunId });
+        terminal.emitData("before attach\r");
+        session.attach(host);
+        await tick();
+        expect(session.finished).toBe(true);
+        expect(session.info).toMatchObject({ status: "exited", restored: true });
+        expect(terminal.writes).toHaveLength(1);
+        expect(terminal.writes[0].data).toEqual(savedOutput);
+        expect(changed).not.toHaveBeenCalled();
+        terminal.emitData("during replay\r");
+        terminal.cols = 120;
+        terminal.rows = 40;
+        session.resize();
+        expect(vi.mocked(installTerminalClipboard).mock.calls.at(-1)![2].canPaste()).toBe(false);
+
+        terminal.flush();
+        await tick();
+        expect(terminal.writes).toHaveLength(1);
+        expect(new TextDecoder().decode(terminal.writes[0].data as Uint8Array)).toContain("process đã dừng: 23");
+        expect(changed).not.toHaveBeenCalled();
+        terminal.flush();
+        await tick();
+        expect(session.info).toMatchObject({ status: "exited", restored: true, exitCode: 23 });
+        session.attach(host);
+        terminal.emitData("after replay\r");
+        await session.close();
+        session.dispose();
+        expect(terminal.open).toHaveBeenCalledOnce();
+        expect(terminal.dispose).toHaveBeenCalledOnce();
+        expect(replay.mock.calls).toEqual([
+            ["transcripts.metadata", { run_id: restoredRunId }],
+            ["transcripts.read", { run_id: restoredRunId, offset: 0 }],
+        ]);
+        expect(request).not.toHaveBeenCalled();
+        expect(fail).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("shows a stopped legacy pane without requesting transcript data when no run ID was saved", async () => {
+        const replay = vi.fn(async () => transcriptMetadata());
+        const { session, terminal, host, request, fail } = setup({}, { request: replay });
+        session.attach(host);
+        expect(session.info).toMatchObject({ status: "exited", restored: true, message: expect.stringContaining("Không có transcript") });
+        expect(new TextDecoder().decode(terminal.writes[0].data as Uint8Array)).toContain("không có process đang chạy");
+        terminal.emitData("must not spawn\r");
+        terminal.flush();
+        await tick();
+        await session.close();
+        session.dispose();
+        expect(session.finished).toBe(true);
+        expect(replay).not.toHaveBeenCalled();
+        expect(request).not.toHaveBeenCalled();
+        expect(fail).not.toHaveBeenCalled();
+    });
+
+    it("closes and releases a restored pane before xterm finishes rendering", async () => {
+        const { runtime } = await startRuntime();
+        const replay = vi.spyOn(runtime, "request").mockImplementation(async (method) => method === "transcripts.metadata" ? transcriptMetadata() : transcriptChunk());
+        vi.mocked(invoke).mockClear();
+        runtime.restore(7, "C:/work", restoredRunId);
+        const terminal = vi.mocked(Terminal).mock.results.at(-1)!.value as MockTerminal;
+        const detach = runtime.attach(7, { append: vi.fn() } as unknown as HTMLElement);
+        await tick();
+        expect(terminal.writes).toHaveLength(1);
+        let closed = false;
+        const closing = runtime.close(7).then(() => { closed = true; });
+        await tick();
+        expect(closed).toBe(true);
+        await closing;
+        runtime.release(7);
+        detach();
+        await tick();
+        expect(terminal.dispose).toHaveBeenCalledOnce();
+        terminal.flush();
+        await tick();
+        await vi.advanceTimersByTimeAsync(60);
+        expect(terminal.writes).toHaveLength(0);
+        expect(replay).toHaveBeenCalledTimes(2);
+        expect(runtime.getSnapshot()).toMatchObject({ sessions: {}, error: null });
+        expect(invoke).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each(["transcripts.metadata", "transcripts.read"])("releases during a pending %s RPC and ignores its late response", async (pendingMethod) => {
+        const { runtime } = await startRuntime();
+        const pending = deferred<Record<string, unknown>>();
+        const replay = vi.spyOn(runtime, "request").mockImplementation(async (method) => method === pendingMethod ? pending.promise : transcriptMetadata());
+        vi.mocked(invoke).mockClear();
+        runtime.restore(7, "C:/work", restoredRunId);
+        const terminal = vi.mocked(Terminal).mock.results.at(-1)!.value as MockTerminal;
+        const detach = runtime.attach(7, { append: vi.fn() } as unknown as HTMLElement);
+        await tick();
+        expect(replay.mock.calls.at(-1)?.[0]).toBe(pendingMethod);
+        expect(terminal.writes).toHaveLength(0);
+        let closed = false;
+        const closing = runtime.close(7).then(() => { closed = true; });
+        await tick();
+        expect(closed).toBe(true);
+        await closing;
+        runtime.release(7);
+        detach();
+        const callsBeforeResponse = replay.mock.calls.length;
+        pending.resolve(pendingMethod === "transcripts.metadata" ? transcriptMetadata() : transcriptChunk());
+        await tick();
+        await vi.advanceTimersByTimeAsync(60);
+        expect(terminal.dispose).toHaveBeenCalledOnce();
+        expect(terminal.writes).toHaveLength(0);
+        expect(replay).toHaveBeenCalledTimes(callsBeforeResponse);
+        expect(runtime.getSnapshot()).toMatchObject({ sessions: {}, error: null });
+        expect(invoke).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
 describe("terminal runtime appearance", () => {
     it("updates only selected live identities in place and retains legacy font and theme controls", async () => {
         vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); });
@@ -393,23 +559,6 @@ describe("terminal runtime appearance", () => {
 });
 
 describe("terminal runtime shutdown recovery", () => {
-    async function startRuntime() {
-        vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); });
-        let receive!: (frame: Frame) => void;
-        vi.mocked(listen).mockImplementation(async (_event, callback) => {
-            receive = (payload) => callback({ event: "proof-event", id: 0, payload } as Parameters<typeof callback>[0]);
-            return () => {};
-        });
-        vi.mocked(invoke).mockImplementation(async (command, args) => {
-            if (command === "proof_start") return { executable: "pwsh.exe", cwd: "C:/work", pid: 1, args: [] } as never;
-            if (command === "proof_request") receive({ id: (args as { request: { id: number } }).request.id, ok: true });
-            return undefined as never;
-        });
-        const runtime = new TerminalRuntime();
-        await runtime.start();
-        return { runtime, receive };
-    }
-
     it("requires a failed shutdown before force quit and preserves a live retry after native failure", async () => {
         const { runtime, receive } = await startRuntime();
         await expect(runtime.forceQuit()).rejects.toThrow("Chưa có shutdown lỗi");

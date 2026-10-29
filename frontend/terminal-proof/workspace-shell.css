@@ -16,6 +16,7 @@
 .sidebar-visibility .button { padding-inline: var(--space-4); font-size: var(--text-xs); background: transparent; border-color: var(--line); }
 .sidebar-visibility .field-hint { min-width: 0; }
 .session-list { gap: var(--space-3); padding-inline: var(--space-4); }
+.terminal-persistence-warning { flex-shrink: 0; padding: var(--space-3) var(--space-5); color: var(--warning); background: var(--surface); border-bottom: var(--hairline) solid var(--line); font-size: var(--text-xs); overflow-wrap: anywhere; }
 .session-row { border-color: transparent; background: transparent; }
 .session-row:hover { background: var(--surface-raised); }
 .session-row[data-active="true"] { border-color: var(--accent-border); background: var(--accent-soft); }

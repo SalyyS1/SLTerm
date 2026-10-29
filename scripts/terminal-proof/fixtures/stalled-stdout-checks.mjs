@@ -36,7 +36,9 @@ export async function verifyStalledStdoutShutdown(t) {
     try { await waitForGone(children.map((child) => child.pid), 3000); }
     catch (error) { stopError = error; }
     assert.ok(isAlive(client.child.pid), "core must retain undelivered ordered frames");
-    await delay(1100);
+    // Process exit precedes the reader/waiter joins. Synchronize on the
+    // writer's drain receipt instead of assuming those joins finish in 100ms.
+    await client.waitUntil(() => /TransportDrainPending.*unconfirmed/.test(client.stderr), "unconfirmed output drain receipt", 5000);
     assert.match(client.stderr, /TransportDrainPending.*unconfirmed/);
     client.child.stdout.resume();
     assert.equal((await shutdown).ok, true);

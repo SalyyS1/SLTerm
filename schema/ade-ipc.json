@@ -4,7 +4,7 @@
   "title": "SLTerm private ADE IPC",
   "protocolVersion": 1,
   "maxFrameBytes": 65536,
-  "methods": ["hello", "spawn", "input", "resize", "ack", "stop", "shutdown", "preferences.load", "preferences.save.begin", "preferences.save.chunk", "preferences.save.commit", "preferences.save.cancel", "files.list", "files.read", "files.save.begin", "files.save.chunk", "files.save.commit", "files.save.cancel"],
+  "methods": ["hello", "spawn", "input", "resize", "ack", "stop", "shutdown", "preferences.load", "preferences.save.begin", "preferences.save.chunk", "preferences.save.commit", "preferences.save.cancel", "files.list", "files.read", "files.save.begin", "files.save.chunk", "files.save.commit", "files.save.cancel", "transcripts.metadata", "transcripts.read"],
   "hostReservedMethods": ["shutdown"],
   "$defs": {
     "request": {
@@ -16,6 +16,8 @@
         "id": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "zig": "u64"},
         "method": {"type": "string", "zig": "[]const u8"},
         "session_id": {"type": "integer", "default": 0, "zig": "u64"},
+        "run_id": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
+        "workspace_id": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
         "executable": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
         "args": {"type": "array", "items": {"type": "string"}, "default": [], "zig": "[]const []const u8"},
         "cwd": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
@@ -48,7 +50,7 @@
       "required": ["version", "event"],
       "properties": {
         "version": {"const": 1},
-        "event": {"enum": ["ready", "output", "gap", "input-error", "exit", "transport_error", "transport_closed", "close_requested", "shutdown_started", "shutdown_stalled"]},
+        "event": {"enum": ["ready", "output", "gap", "input-error", "archive-warning", "stream-error", "exit", "transport_error", "transport_closed", "close_requested", "shutdown_started", "shutdown_stalled"]},
         "session_id": {"type": "integer"}, "data": {"type": "string"}, "sequence": {"type": "integer"},
         "last_sequence": {"type": "integer"}, "exit_code": {"type": "integer"},
         "discarded_bytes": {"type": "integer"}, "affected_bytes": {"type": "integer"},

@@ -48,7 +48,10 @@ export class CoreClient {
         this.child.on("error", (error) => this.fail(error));
         this.child.stdin.on("error", (error) => { if (!this.closing) this.fail(error); });
         this.child.stdout.setEncoding("utf8").on("data", (data) => this.receive(data));
-        this.child.stderr.setEncoding("utf8").on("data", (data) => { this.stderr = (this.stderr + data).slice(-16000); });
+        this.child.stderr.setEncoding("utf8").on("data", (data) => {
+            this.stderr = (this.stderr + data).slice(-16000);
+            this.events.emit("change");
+        });
     }
 
     fail(error) {

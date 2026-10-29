@@ -38,7 +38,7 @@ export function WorkspaceSessionList({ app }: { app: ReturnType<typeof useWorksp
                                 <Icon name="terminal" />
                                 <span className="session-copy">
                                     <span className="session-name">{title}</span>
-                                    <span className="session-meta">{statusLabel(info?.status)}{hidden ? " · Đang ẩn" : ""}</span>
+                                    <span className="session-meta">{info?.restored ? "Lịch sử · đã dừng" : statusLabel(info?.status)}{hidden ? " · Đang ẩn" : ""}</span>
                                 </span>
                                 <span className="status-dot" data-state={info?.status} />
                             </button>

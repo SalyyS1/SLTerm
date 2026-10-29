@@ -100,10 +100,14 @@ legacy Electron profile or its secrets.
 For disposable tests, `SLTERM_PROOF_PROFILE_DIR` accepts an absolute directory.
 Shell/history scratch stays in per-run ignored `proof-results/host-*` paths.
 
-Restart restores empty workspace descriptors. It does not restore running
-processes, terminal transcripts or pane geometry/visibility. Failed writes remain
-visible; unsupported/corrupt schemas preserve data and disable writes. Quit
-flushes preference writes; exiting without saving requires a separate choice.
+Restart restores the complete workspace tree, pane geometry/visibility and saved
+terminal transcript bytes as stopped panes. It never recreates a shell, sends
+input, or treats a restored transcript as a running process. A pane without a
+legacy run ID is shown as stopped without attempting an archive lookup. A
+truncated, interrupted or stream-error archive is replayed with a visible
+warning and remains stopped. Failed writes remain visible; unsupported/corrupt
+schemas preserve data and disable writes. Quit flushes preference and workspace
+writes; exiting without saving requires a separate choice.
 
 Normal quit stops admission, requests shutdown, then requires the exact
 versioned shutdown acknowledgement, successful core exit, output EOF and no

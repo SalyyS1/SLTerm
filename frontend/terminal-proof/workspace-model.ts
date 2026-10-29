@@ -3,7 +3,7 @@ import { clampPaneRect, layoutGeometry } from "./workspace-geometry";
 export type Axis = "horizontal" | "vertical";
 export type DockSide = "left" | "right" | "up" | "down";
 export type PaneRect = { x: number; y: number; width: number; height: number };
-export type PaneNode = { kind: "pane"; paneId: number; title: string };
+export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string };
 export type SplitNode = {
     kind: "split";
     splitId: string;
@@ -30,6 +30,92 @@ export type WorkspaceState = { workspaces: Workspace[]; activeWorkspaceId: strin
 const label = (value: string, fallback: string) => value.trim().slice(0, 128) || fallback;
 const validPaneId = (id: number) => Number.isSafeInteger(id) && id > 0;
 const validAxis = (axis: Axis) => axis === "horizontal" || axis === "vertical";
+export const isCanonicalRunId = (value: unknown): value is string =>
+    typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+export const maxWorkspaceLayoutDepth = 128;
+const objectRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+const onlyKeys = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every((key) => keys.includes(key));
+
+/** Validate the complete document before admitting any persisted workspace. */
+export function assertWorkspaceState(value: unknown): asserts value is WorkspaceState {
+    const invalid = (): never => { throw new Error("Workspace đã lưu không hợp lệ. Dữ liệu cũ được giữ nguyên."); };
+    if (!objectRecord(value) || !Array.isArray(value.workspaces)) invalid();
+    const state = value as Record<string, unknown> & { workspaces: unknown[] };
+    const workspaceIds = new Set<string>(), panes = new Set<number>(), splits = new Set<string>(), runs = new Set<string>();
+    const nodes = new Set<object>();
+    for (const item of state.workspaces) {
+        if (!objectRecord(item) || !onlyKeys(item, ["id", "name", "cwd", "layout", "activePaneId", "zoomedPaneId", "layoutMode", "arrangement", "hiddenPaneIds", "floating"]) ||
+            typeof item.id !== "string" || !item.id.trim() || workspaceIds.has(item.id) ||
+            typeof item.name !== "string" || typeof item.cwd !== "string" ||
+            (item.layoutMode !== "tiled" && item.layoutMode !== "free") || (item.arrangement !== "auto" && item.arrangement !== "manual") ||
+            !Array.isArray(item.hiddenPaneIds) || !objectRecord(item.floating)) invalid();
+        const workspace = item as Record<string, unknown> & { id: string; hiddenPaneIds: unknown[]; floating: Record<string, unknown> };
+        workspaceIds.add(workspace.id);
+        const localPanes = new Set<number>();
+        const visit = (node: unknown, depth: number): void => {
+            if (depth > maxWorkspaceLayoutDepth || !objectRecord(node) || nodes.has(node)) invalid();
+            const current = node as Record<string, unknown>;
+            nodes.add(current);
+            if (current.kind === "pane") {
+                if (!onlyKeys(current, ["kind", "paneId", "title", "runId"]) || typeof current.paneId !== "number" ||
+                    !validPaneId(current.paneId) || panes.has(current.paneId) || typeof current.title !== "string" ||
+                    (Object.hasOwn(current, "runId") && (!isCanonicalRunId(current.runId) || runs.has(current.runId)))) invalid();
+                const pane = current as PaneNode;
+                panes.add(pane.paneId); localPanes.add(pane.paneId);
+                if (pane.runId !== undefined) runs.add(pane.runId);
+            } else if (current.kind === "split") {
+                if (!onlyKeys(current, ["kind", "splitId", "axis", "ratio", "first", "second"]) ||
+                    typeof current.splitId !== "string" || !current.splitId.trim() || splits.has(current.splitId) ||
+                    (current.axis !== "horizontal" && current.axis !== "vertical") || typeof current.ratio !== "number" ||
+                    !Number.isFinite(current.ratio) || current.ratio < 0.1 || current.ratio > 0.9) invalid();
+                splits.add(current.splitId as string);
+                visit(current.first, depth + 1); visit(current.second, depth + 1);
+            } else invalid();
+        };
+        if (workspace.layout !== null) visit(workspace.layout, 0);
+        for (const selected of [workspace.activePaneId, workspace.zoomedPaneId])
+            if (selected !== null && (typeof selected !== "number" || !validPaneId(selected) || !localPanes.has(selected))) invalid();
+        if (workspace.hiddenPaneIds.some((id) => typeof id !== "number" || !validPaneId(id) || !localPanes.has(id)) ||
+            new Set(workspace.hiddenPaneIds).size !== workspace.hiddenPaneIds.length) invalid();
+        for (const [id, rect] of Object.entries(workspace.floating)) {
+            if (!validPaneId(Number(id)) || String(Number(id)) !== id || !localPanes.has(Number(id)) || !objectRecord(rect) ||
+                !onlyKeys(rect, ["x", "y", "width", "height"]) ||
+                ![rect.x, rect.y, rect.width, rect.height].every((number) => typeof number === "number" && Number.isFinite(number))) invalid();
+            const bounds = rect as PaneRect;
+            if (bounds.x < 0 || bounds.y < 0 || bounds.width <= 0 || bounds.height <= 0 ||
+                bounds.x + bounds.width > 1.00000001 || bounds.y + bounds.height > 1.00000001) invalid();
+        }
+    }
+    if (state.activeWorkspaceId !== null && (typeof state.activeWorkspaceId !== "string" || !workspaceIds.has(state.activeWorkspaceId))) invalid();
+}
+
+/** Detach persisted snapshots from live mutable view metadata. */
+export function snapshotWorkspaceState(value: unknown): WorkspaceState {
+    assertWorkspaceState(value);
+    const cloneLayout = (node: LayoutNode | null): LayoutNode | null => !node ? null : node.kind === "pane"
+        ? { ...node } : { ...node, first: cloneLayout(node.first)!, second: cloneLayout(node.second)! };
+    return { activeWorkspaceId: value.activeWorkspaceId, workspaces: value.workspaces.map((workspace) => ({
+        ...workspace, layout: cloneLayout(workspace.layout), hiddenPaneIds: [...workspace.hiddenPaneIds],
+        floating: Object.fromEntries(Object.entries(workspace.floating).map(([id, rect]) => [id, { ...rect }])),
+    })) };
+}
+
+/** Seed generated identities after restoring without reusing an existing ID. */
+export function workspaceIdentitySeed(state: WorkspaceState): { pane: number; workspace: number; split: number } {
+    let pane = 0, split = 0;
+    const visit = (node: LayoutNode | null): void => {
+        if (!node) return;
+        if (node.kind === "pane") pane = Math.max(pane, node.paneId);
+        else {
+            const suffix = /^split-([1-9][0-9]*)$/.exec(node.splitId);
+            if (suffix && Number.isSafeInteger(Number(suffix[1]))) split = Math.max(split, Number(suffix[1]));
+            visit(node.first); visit(node.second);
+        }
+    };
+    for (const workspace of state.workspaces) visit(workspace.layout);
+    return { pane, workspace: state.workspaces.length, split };
+}
 
 export function createWorkspace(id: string, name: string, cwd: string): Workspace {
     if (!id.trim()) throw new Error("Workspace ID must not be blank");
@@ -84,17 +170,14 @@ function splitIds(layout: LayoutNode | null): string[] {
         : [layout.splitId, ...splitIds(layout.first), ...splitIds(layout.second)];
 }
 
-function validGeometry(layout: LayoutNode | null): boolean {
-    return (
-        !layout ||
-        layout.kind === "pane" ||
-        (validAxis(layout.axis) &&
-            Number.isFinite(layout.ratio) &&
-            layout.ratio >= 0.1 &&
-            layout.ratio <= 0.9 &&
-            validGeometry(layout.first) &&
-            validGeometry(layout.second))
-    );
+function runIds(layout: LayoutNode | null): string[] {
+    return !layout ? [] : layout.kind === "pane"
+        ? layout.runId === undefined ? [] : [layout.runId]
+        : [...runIds(layout.first), ...runIds(layout.second)];
+}
+
+function availableRun(state: WorkspaceState, id?: string): boolean {
+    return id === undefined || isCanonicalRunId(id) && !state.workspaces.some((workspace) => runIds(workspace.layout).includes(id));
 }
 
 // Retain unaffected branches and state references, including rejected operations.
@@ -129,43 +212,11 @@ function availableSplit(state: WorkspaceState, id: string): boolean {
 
 // Invalid IDs and duplicate identities are rejected as no-ops.
 export function addWorkspace(state: WorkspaceState, workspace: Workspace): WorkspaceState {
-    const ids = paneIds(workspace.layout);
-    const splits = splitIds(workspace.layout);
-    const existingIds = state.workspaces.flatMap((item) => paneIds(item.layout));
-    const existingSplits = state.workspaces.flatMap((item) => splitIds(item.layout));
-    if (
-        !workspace.id.trim() ||
-        !validGeometry(workspace.layout) ||
-        state.workspaces.some((item) => item.id === workspace.id) ||
-        ids.some((id) => !validPaneId(id) || existingIds.includes(id)) ||
-        new Set(ids).size !== ids.length ||
-        splits.some((id) => !id.trim() || existingSplits.includes(id)) ||
-        new Set(splits).size !== splits.length ||
-        !["tiled", "free"].includes(workspace.layoutMode) ||
-        !["auto", "manual"].includes(workspace.arrangement) ||
-        !Array.isArray(workspace.hiddenPaneIds) ||
-        workspace.hiddenPaneIds.some((id) => !ids.includes(id)) ||
-        new Set(workspace.hiddenPaneIds).size !== workspace.hiddenPaneIds.length ||
-        !workspace.floating ||
-        Object.entries(workspace.floating).some(
-            ([id, rect]) =>
-                !ids.includes(Number(id)) ||
-                !rect ||
-                ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
-                rect.x < 0 ||
-                rect.y < 0 ||
-                rect.width <= 0 ||
-                rect.height <= 0 ||
-                rect.x + rect.width > 1.00000001 ||
-                rect.y + rect.height > 1.00000001
-        )
-    )
+    try {
+        assertWorkspaceState({ workspaces: [...state.workspaces, workspace], activeWorkspaceId: workspace.id });
+    } catch {
         return state;
-    if (
-        (workspace.activePaneId !== null && !ids.includes(workspace.activePaneId)) ||
-        (workspace.zoomedPaneId !== null && !ids.includes(workspace.zoomedPaneId))
-    )
-        return state;
+    }
     const layout =
         workspace.layout &&
         mapTree(workspace.layout, (node) =>
@@ -200,18 +251,20 @@ export function splitPane(
     state: WorkspaceState,
     workspaceId: string,
     targetPaneId: number | null,
-    newPane: { paneId: number; title: string },
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId">,
     splitId: string,
     axis: Axis
 ): WorkspaceState {
     if (
         !validPaneId(newPane.paneId) ||
+        !availableRun(state, newPane.runId) ||
         !validAxis(axis) ||
         state.workspaces.some((workspace) => findPane(workspace.layout, newPane.paneId))
     )
         return state;
     return edit(state, workspaceId, (workspace) => {
-        const pane: PaneNode = { kind: "pane", ...newPane, title: label(newPane.title, "Terminal") };
+        const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
+            ...(newPane.runId === undefined ? {} : { runId: newPane.runId }) };
         if (!workspace.layout)
             return targetPaneId === null
                 ? { ...workspace, layout: pane, activePaneId: pane.paneId, zoomedPaneId: null, arrangement: "manual" }
@@ -422,15 +475,17 @@ export function arrangePanes(state: WorkspaceState, workspaceId: string): Worksp
 export function addTerminal(
     state: WorkspaceState,
     workspaceId: string,
-    newPane: { paneId: number; title: string }
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId">
 ): WorkspaceState {
     if (
         !validPaneId(newPane.paneId) ||
+        !availableRun(state, newPane.runId) ||
         state.workspaces.some((workspace) => findPane(workspace.layout, newPane.paneId))
     )
         return state;
     return edit(state, workspaceId, (workspace) => {
-        const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal") };
+        const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
+            ...(newPane.runId === undefined ? {} : { runId: newPane.runId }) };
         const panes = [...paneIds(workspace.layout).map((id) => findPane(workspace.layout, id)!), pane];
         // Manual docking remains intact; the explicit Arrange command restores the default grid.
         if (workspace.arrangement === "manual" && workspace.layout) {

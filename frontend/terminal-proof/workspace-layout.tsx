@@ -76,7 +76,7 @@ export function TerminalPane({ pane, workspace, runtime, snapshot, actions, disa
                 </button>
                 <div className="pane-actions">
                     <span className="pane-state" title={info?.message}>
-                        {statusLabel(info?.status)}
+                        {info?.restored ? "Lịch sử · đã dừng" : statusLabel(info?.status)}
                     </span>
                     <IconButton
                         icon="split-horizontal"
@@ -98,6 +98,7 @@ export function TerminalPane({ pane, workspace, runtime, snapshot, actions, disa
                     />
                 </div>
             </header>
+            {info?.warning && <div className="terminal-persistence-warning" role="status">{info.warning}</div>}
             <div className="terminal-mount" ref={mount} />
         </section>
     );
