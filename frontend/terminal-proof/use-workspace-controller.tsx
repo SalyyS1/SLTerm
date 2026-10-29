@@ -261,7 +261,17 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
                 ],
                 danger: true,
                 accept: hasUnsaved ? "Bỏ thay đổi, dừng và thoát" : force ? "Buộc dừng và thoát" : "Dừng và thoát",
-                submit: () => saveAndExit(),
+                submit: async () => {
+                    try {
+                        await saveAndExit();
+                    } catch (error) {
+                        // A failed native shutdown must leave the confirmation
+                        // surface so the runtime error banner and the next
+                        // explicit force-quit confirmation remain reachable.
+                        setDialog(null);
+                        throw error;
+                    }
+                },
             });
     };
     useEffect(() => {
