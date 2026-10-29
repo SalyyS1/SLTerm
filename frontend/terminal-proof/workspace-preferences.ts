@@ -1,6 +1,7 @@
 import { defaultAppearance, normalizeAppearance, type AppearanceSettings } from "./appearance-settings";
 import { defaultShortcuts, normalizeShortcuts, type ShortcutBindings } from "./workspace-shortcuts";
 import { createWorkspace, snapshotWorkspaceState, type Workspace, type WorkspaceState } from "./workspace-model";
+import { normalizeTasks, type WorkspaceTask } from "./workspace-tasks";
 
 // Retained for the explicit version 1 migration; version 2 stores complete workspaces.
 export type WorkspaceDescriptor = Pick<Workspace, "id" | "name" | "cwd" | "layoutMode">;
@@ -12,10 +13,11 @@ export type WorkspacePreferences = {
     overrides: Record<string, WorkspaceOverride>;
     workspaces: Workspace[];
     activeWorkspaceId: string | null;
+    tasks: WorkspaceTask[];
 };
 export const maxPreferencesBytes = 1024 * 1024;
 export const newPreferences = (): WorkspacePreferences => ({ version: 2, appearance: { ...defaultAppearance },
-    shortcuts: { ...defaultShortcuts }, overrides: {}, workspaces: [], activeWorkspaceId: null });
+    shortcuts: { ...defaultShortcuts }, overrides: {}, workspaces: [], activeWorkspaceId: null, tasks: [] });
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 
 function migrateDescriptors(raw: Record<string, unknown>): WorkspaceState {
@@ -37,7 +39,7 @@ export function parsePreferences(value: unknown): WorkspacePreferences {
     if (!record(value) || (value.version !== 1 && value.version !== 2))
         throw new Error("Phiên bản tùy chỉnh không được hỗ trợ. Dữ liệu cũ được giữ nguyên.");
     const raw = value as Record<string, unknown>;
-    if (Object.keys(raw).some((key) => !["version", "appearance", "shortcuts", "overrides", "workspaces", "activeWorkspaceId"].includes(key)) ||
+    if (Object.keys(raw).some((key) => !["version", "appearance", "shortcuts", "overrides", "workspaces", "activeWorkspaceId", "tasks"].includes(key)) ||
         !Object.prototype.hasOwnProperty.call(raw, "appearance") || !Object.prototype.hasOwnProperty.call(raw, "shortcuts") ||
         !Array.isArray(raw.workspaces) || !record(raw.overrides))
         throw new Error("Dữ liệu tùy chỉnh không hợp lệ. Dữ liệu cũ được giữ nguyên.");
@@ -53,7 +55,7 @@ export function parsePreferences(value: unknown): WorkspacePreferences {
         overrides[id] = { appearance: override.appearance ? normalizeAppearance(override.appearance) : undefined,
             shortcuts: override.shortcuts ? normalizeShortcuts(override.shortcuts) : undefined };
     }
-    return { version: 2, appearance: normalizeAppearance(raw.appearance), shortcuts: normalizeShortcuts(raw.shortcuts), overrides, ...state };
+    return { version: 2, appearance: normalizeAppearance(raw.appearance), shortcuts: normalizeShortcuts(raw.shortcuts), overrides, tasks: normalizeTasks(raw.tasks), ...state };
 }
 // A workspace overrides the whole appearance group; removing it restores global inheritance.
 export const appearanceFor = (preferences: WorkspacePreferences, id?: string) =>

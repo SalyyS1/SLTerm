@@ -95,6 +95,12 @@ when testing a replacement. These commands do not create an installer.
   for the new pane to reach its running state, then delivers the prompt to it.
   Provider output remains in the terminal pane so ANSI redraws, approvals and
   login prompts are preserved; SLTerm does not emulate or proxy provider auth.
+- **Tasks** stores a bounded task board in the versioned local profile. Creating
+  a task does not run anything; each **Chạy (duyệt)** click consumes one
+  approved attempt and sends the goal to the selected official CLI. The board
+  tracks attempts and explicit completed/blocked decisions. It does not invent
+  subscription cost, queue work automatically, merge branches or claim
+  worktree isolation yet.
 - **AI tools** reads the current workspace's `.claude/skills`, agents,
   commands and `.mcp.json` as a read-only inventory. It shows descriptions and
   safe MCP field/transport summaries, redacts secret-valued fields, never
