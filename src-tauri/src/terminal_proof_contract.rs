@@ -19,4 +19,6 @@ pub const METHODS: &[&str] = &[
     "files.save.cancel",
     "transcripts.metadata",
     "transcripts.read",
+    "worktrees.inspect",
+    "worktrees.prepare",
 ];

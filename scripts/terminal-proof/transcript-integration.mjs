@@ -105,3 +105,20 @@ test("run identity cannot be reused and malformed archive requests do not poison
     assert.equal((await client.request("hello")).ok, true);
     await shutdown(client);
 });
+
+test("provider task metadata survives replay and invalid identities launch nothing", { timeout: 40000 }, async (t) => {
+    const options = await fixture(), run_id = randomUUID(), task_id = randomUUID();
+    const client = await startClient(t, options);
+    for (const fields of [{ provider: "unknown" }, { provider: "codex", task_id: "bad" }, { provider: "shell", task_id }]) {
+        const response = await client.request("spawn", { session_id: 10, run_id: randomUUID(), executable: process.execPath, args: [fixturePath, "metadata"], cwd: repoRoot, ...fields });
+        assert.equal(response.ok, false);
+        assert.match(response.error_code, /^Invalid(?:Provider|TaskId|TaskIdentity)$/);
+    }
+    await spawnFixture(client, 1, "metadata", [], { run_id, task_id, provider: "codex", workspace_id: "workspace-test" });
+    await client.waitFor((frame) => frame.event === "exit" && frame.session_id === 1);
+    const saved = await replay(client, run_id), identity = JSON.parse(saved.metadata.identity_json);
+    assert.equal(identity.provider, "codex"); assert.equal(identity.task_id, task_id);
+    assert.equal(identity.worktree, identity.cwd); assert.equal(identity.workspace_id, "workspace-test");
+    assert.equal(identity.attempt_id, run_id);
+    await shutdown(client);
+});

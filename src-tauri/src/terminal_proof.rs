@@ -147,6 +147,20 @@ fn proof_start(window: WebviewWindow, state: State<ProofState>) -> Result<Value,
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
+    // Pass an absolute installed executable to Zig, which pins and validates it.
+    // Never search the workspace's current directory for Git.
+    let machine_programs = std::env::var_os("ProgramW6432")
+        .or_else(|| std::env::var_os("ProgramFiles"))
+        .unwrap_or_else(|| r"C:\Program Files".into());
+    let default_git = std::path::PathBuf::from(machine_programs).join("Git/cmd/git.exe");
+    let git_executable = if default_git.is_file() { Some(default_git) } else {
+        std::env::var_os("PATH").and_then(|path| std::env::split_paths(&path)
+            .filter(|entry| entry.is_absolute()).map(|entry| entry.join("git.exe"))
+            .find(|entry| entry.is_file() && !entry.starts_with(root)))
+    };
+    if let Some(git_executable) = git_executable {
+        command.env("SLTERM_GIT_EXECUTABLE", git_executable);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

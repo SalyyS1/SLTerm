@@ -21,4 +21,7 @@ pub const Request = struct {
     expected_revision: u64 = 0,
     if_match: ?[]const u8 = null,
     upload_id: ?[]const u8 = null,
+    task_id: ?[]const u8 = null,
+    base_revision: ?[]const u8 = null,
+    provider: ?[]const u8 = null,
 };

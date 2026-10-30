@@ -4,7 +4,7 @@
   "title": "SLTerm private ADE IPC",
   "protocolVersion": 1,
   "maxFrameBytes": 65536,
-  "methods": ["hello", "spawn", "input", "resize", "ack", "stop", "shutdown", "preferences.load", "preferences.save.begin", "preferences.save.chunk", "preferences.save.commit", "preferences.save.cancel", "files.list", "files.read", "files.save.begin", "files.save.chunk", "files.save.commit", "files.save.cancel", "transcripts.metadata", "transcripts.read"],
+  "methods": ["hello", "spawn", "input", "resize", "ack", "stop", "shutdown", "preferences.load", "preferences.save.begin", "preferences.save.chunk", "preferences.save.commit", "preferences.save.cancel", "files.list", "files.read", "files.save.begin", "files.save.chunk", "files.save.commit", "files.save.cancel", "transcripts.metadata", "transcripts.read", "worktrees.inspect", "worktrees.prepare"],
   "hostReservedMethods": ["shutdown"],
   "$defs": {
     "request": {
@@ -32,7 +32,10 @@
         "total_bytes": {"type": "integer", "default": 0, "zig": "u64"},
         "expected_revision": {"type": "integer", "default": 0, "zig": "u64"},
         "if_match": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
-        "upload_id": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"}
+        "upload_id": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
+        "task_id": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
+        "base_revision": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
+        "provider": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"}
       }
     },
     "response": {

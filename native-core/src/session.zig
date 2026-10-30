@@ -30,6 +30,13 @@ pub const Session = struct {
 
     pub fn create(request: rpc.Request, emitter: *rpc.Emitter, archive: ?*TranscriptStore) !*Session {
         if (request.session_id == 0) return error.InvalidSessionId;
+        const provider = request.provider orelse "shell";
+        if (!std.mem.eql(u8, provider, "shell") and !std.mem.eql(u8, provider, "claude") and !std.mem.eql(u8, provider, "codex")) return error.InvalidProvider;
+        if (request.run_id) |id| try @import("transcript-types.zig").validateRunId(id);
+        if (request.task_id) |id| {
+            @import("transcript-types.zig").validateRunId(id) catch return error.InvalidTaskId;
+            if (request.run_id == null or request.cwd == null or std.mem.eql(u8, provider, "shell")) return error.InvalidTaskIdentity;
+        }
         const self = try rpc.allocator.create(Session);
         errdefer rpc.allocator.destroy(self);
         const run_id = if (request.run_id) |id| try rpc.allocator.dupe(u8, id) else null;
@@ -66,10 +73,10 @@ pub const Session = struct {
         if (archive) |store| {
             const identity = try std.json.Stringify.valueAlloc(rpc.allocator, .{
                 .version = 1, .protocol_version = rpc.version,
-                .execution_host = "windows-local", .provider = "shell",
+                .execution_host = "windows-local", .provider = provider,
                 .cwd = request.cwd, .attempt_id = run_id.?,
                 .workspace_id = request.workspace_id,
-                .task_id = @as(?[]const u8, null), .worktree = @as(?[]const u8, null),
+                .task_id = request.task_id, .worktree = if (request.task_id != null) request.cwd else null,
                 .credential_reference = @as(?[]const u8, null),
                 .initial_cols = request.cols, .initial_rows = request.rows,
             }, .{});

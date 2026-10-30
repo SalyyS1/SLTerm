@@ -32,7 +32,7 @@
         "dev:tauri": "node scripts/build-tauri-sidecar.mjs && tauri dev",
         "build:proof-ui": "vite build --config vite.proof.config.ts",
         "build:proof-core": "pwsh -NoProfile -File scripts/terminal-proof/build-core.ps1",
-        "test:proof-core": "node --test --test-concurrency=1 scripts/terminal-proof/core-integration.mjs scripts/terminal-proof/preferences-integration.mjs scripts/terminal-proof/workspace-files-integration.mjs scripts/terminal-proof/transcript-integration.mjs",
+        "test:proof-core": "node --test --test-concurrency=1 scripts/terminal-proof/core-integration.mjs scripts/terminal-proof/preferences-integration.mjs scripts/terminal-proof/workspace-files-integration.mjs scripts/terminal-proof/transcript-integration.mjs scripts/terminal-proof/worktree-integration.mjs",
         "test:proof-tools": "node --test scripts/terminal-proof/baseline-output.test.mjs",
         "test:provider-proof": "node --experimental-transform-types --test --test-concurrency=1 scripts/provider-proof/*.test.mjs",
         "build:proof-host": "tauri build --config src-tauri/tauri.proof.conf.json --features terminal-proof --no-bundle",
