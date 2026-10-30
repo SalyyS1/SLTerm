@@ -113,7 +113,16 @@ async function scenario() {
     await first.wait("document.querySelector('.connection-state')?.textContent.includes('Đã ngắt kết nối')");
     await confirm(first, "Dừng và thoát SLTerm?");
     await first.evaluate("document.querySelector('dialog form').requestSubmit()");
+    // Preferences now share the Zig core transport. Losing it must first leave
+    // saving visibly failed; skipping that write needs its own explicit choice.
+    await first.wait("!document.querySelector('dialog') && [...document.querySelectorAll('.error-banner button')].some(x => x.textContent === 'Đọc lại tùy chỉnh đã lưu') && document.querySelector('.error-banner').getBoundingClientRect().height > 0");
+    await alive(first);
+    await confirm(first, "Dừng và thoát SLTerm?");
+    assert(await first.evaluate("document.querySelector('dialog').textContent.includes('Chưa lưu được tùy chỉnh')"));
+    results.push("Disconnected settings store stays visibly failed and requires explicit exit without saving");
+    await first.click("Thoát không lưu tùy chỉnh");
     await first.wait("!document.querySelector('dialog') && document.querySelector('.error-banner[role=alert]')?.textContent.includes('chưa xác nhận đủ output') && document.querySelector('.error-banner').getBoundingClientRect().height > 0");
+    assert(await first.evaluate("document.querySelector('.connection-state')?.textContent.includes('Đã ngắt kết nối')"), "Shutdown cannot reconnect a lost core");
     await alive(first); results.push("Missing shutdown ACK keeps app open with visible error");
     await confirm(first, "Buộc dừng và thoát SLTerm?");
     assert(await first.evaluate("document.querySelector('dialog').textContent.includes('mất output cuối')"));
@@ -123,7 +132,7 @@ async function scenario() {
     await confirm(first, "Buộc dừng và thoát SLTerm?");
     await capture(first);
     // The confirmed native exit may close CDP before Runtime.evaluate replies.
-    await first.evaluate("document.querySelector('dialog form').requestSubmit()").catch(() => {});
+    await first.click("Buộc thoát không lưu tùy chỉnh").catch(() => {});
     await exited(first, 1); results.push("Explicit force confirmation exits with OS status 1 and no owned survivors");
     const reopened = await launch();
     await reopened.wait("document.querySelector('.font-controls')?.textContent.includes('14 px')");
@@ -176,7 +185,14 @@ async function main() {
         const artifacts = [host, core, import.meta.filename, path.join(root, "scripts/terminal-proof/cdp-client.mjs"), path.join(root, "scripts/terminal-proof/fixtures/windows-process-tree.mjs")];
         save("artifacts.json", artifacts.map((file) => ({ file: path.relative(root, file), sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex") })));
         await scenario();
-    } catch (error) { failure = error; }
+    } catch (error) {
+        failure = error;
+        for (const app of apps.filter((item) => !item.exit && item.client)) {
+            try {
+                save(`failure-ui-${app.proc.pid}.json`, await app.evaluate("({ dialog: document.querySelector('dialog')?.textContent, alerts: [...document.querySelectorAll('[role=alert]')].map(x => ({ text: x.textContent, height: x.getBoundingClientRect().height })), connection: document.querySelector('.connection-state')?.textContent, buttons: [...document.querySelectorAll('button')].map(x => ({ label: x.getAttribute('aria-label') || x.textContent.trim(), disabled: x.disabled })) })"));
+            } catch { /* Preserve the original failure when CDP is already closed. */ }
+        }
+    }
     finally {
         for (const app of apps) {
             await cleanup(app);

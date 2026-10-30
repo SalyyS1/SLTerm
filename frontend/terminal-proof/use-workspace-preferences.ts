@@ -47,11 +47,12 @@ export function useWorkspacePreferences(runtime: TerminalRuntime) {
         const operation = queue.current.catch(() => {}).then(async () => {
             if (!writable.current) throw new Error("Tùy chỉnh chưa đọc được; chưa ghi đè dữ liệu đã lưu.");
             const next = update(current.current);
-            await store.current!.save(next);
+            try { await store.current!.save(next); }
+            catch (failure) { writable.current = false; setError(String(failure)); throw failure; }
             current.current = next; setValue(next); setError(null);
         });
         queue.current = operation;
-        operation.catch((failure) => { writable.current = false; setError(String(failure)); });
+        operation.catch((failure) => { setError(String(failure)); });
         return operation;
     }, []);
     const resync = () => {
@@ -75,5 +76,5 @@ export function useWorkspacePreferences(runtime: TerminalRuntime) {
         return asset;
     };
     const flush = () => queue.current;
-    return { value, assets, ready, error, load, commit, importAsset, flush, resync, existed, writable: writable.current };
+    return { value, assets, ready, error, load, commit, importAsset, flush, resync, existed, getValue: () => current.current, writable: writable.current };
 }

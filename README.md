@@ -26,16 +26,19 @@ The `feat/ade-zig-core` branch also includes an isolated **Tauri + Zig + ConPTY*
 workspace preview. It supports tiled/free terminal panes, session actions, custom
 shortcuts, themes, local backgrounds/fonts, Zig-owned SQLite preferences,
 an on-demand Windows process resource panel, a local Monaco editor/diff,
-durable raw terminal transcripts and explicit background operation through the
-Windows tray. Reopened panes show saved output as stopped history; processes
-are never restarted automatically.
+durable raw terminal transcripts, a selective legacy-settings import, official
+Claude/Codex CLI launch, approved tasks with separate Git worktrees, and explicit
+background operation through the Windows tray. Reopened panes show saved output
+as stopped history; processes are never restarted automatically.
 See the [preview build and test guide](docs/terminal-preview.md).
 
 This source-only, unsigned preview is not the completed ADE or a replacement for
 the Electron release. SSH/SFTP interactive panes use the installed Windows
 OpenSSH client with host-key verification in the terminal; durable remote file
-sessions, AI chat, legacy-profile import and daemon/resume sessions are not
-connected to this entrypoint. The numerical
+sessions, SDK/app-server integrated chat, automated pipeline/lead workflows and
+daemon/resume sessions are not connected to this entrypoint. The current Chat
+surface launches an official CLI with an initial prompt. Worktrees separate Git
+files and are not operating-system sandboxes. The numerical
 performance gate was explicitly deferred for implementation; comparable
 measurements, compatibility checks and approved budgets remain release work.
 

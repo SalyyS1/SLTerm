@@ -6,7 +6,7 @@ import "./ai-chat-panel.css";
 
 export function AiChatPanel({ runtime, openProvider, close }: {
     runtime: TerminalRuntime;
-    openProvider: (provider: AiProvider) => number | undefined;
+    openProvider: (provider: AiProvider, options?: { cwd?: string; prompt?: string }) => number | undefined;
     close: () => void;
 }) {
     const [provider, setProvider] = useState<AiProvider>("claude");
@@ -18,11 +18,11 @@ export function AiChatPanel({ runtime, openProvider, close }: {
         if (!value || busy) return;
         setBusy(true); setNotice(null);
         try {
-            const paneId = openProvider(provider);
+            const paneId = openProvider(provider, { prompt: value });
             if (!paneId) throw new Error("Chưa có workspace hoặc terminal chưa kết nối.");
-            await runtime.sendInput(paneId, `${value}\r`);
+            await runtime.waitForStarted(paneId);
             setPrompt("");
-            setNotice(`Đã gửi prompt vào ${provider === "claude" ? "Claude" : "Codex"} CLI · Terminal ${paneId}. Output chạy trong ô terminal mới.`);
+            setNotice(`Đã mở ${provider === "claude" ? "Claude" : "Codex"} CLI với prompt ban đầu · Terminal ${paneId}. Output và trạng thái CLI hiển thị trong terminal mới.`);
         } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
         finally { setBusy(false); }
     };
@@ -32,7 +32,7 @@ export function AiChatPanel({ runtime, openProvider, close }: {
             <button className="button" aria-pressed={provider === "claude"} onClick={() => setProvider("claude")}>Claude</button>
             <button className="button" aria-pressed={provider === "codex"} onClick={() => setProvider("codex")}>Codex</button>
         </div>
-        <p className="field-hint">Prompt được gửi vào CLI nguyên bản trong terminal riêng. Đăng nhập, quota và quyền vẫn do provider quản lý; SLTerm không đọc token.</p>
+        <p className="field-hint">Prompt được truyền làm tham số khi mở CLI chính thức trong terminal riêng. Đăng nhập, quota và quyền vẫn do provider quản lý; SLTerm không đọc token.</p>
         <textarea aria-label="Prompt cho AI" placeholder="Mô tả việc cần làm…" value={prompt} disabled={busy} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(); } }} />
         {notice && <p className="ai-chat-notice" role="status">{notice}</p>}
         <div className="ai-chat-actions"><span className="field-hint">Ctrl Enter để gửi</span><button className="button button-primary" disabled={busy || !prompt.trim()} onClick={() => void send()}>{busy ? "Đang mở CLI…" : "Gửi prompt"}</button></div>

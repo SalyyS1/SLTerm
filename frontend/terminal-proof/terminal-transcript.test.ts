@@ -6,6 +6,13 @@ const b64 = (value: Uint8Array | string) => btoa(typeof value === "string" ? val
 const metadata = (patch: Record<string, unknown> = {}) => ({ identity_json: JSON.stringify({ version: 1, protocol_version: 1, execution_host: "windows-local", cwd: "C:/work", provider: "shell", attempt_id: id }), stream_error: null, created_unix_ms: 1, finished: true, process_eof: true, capture_complete: true, truncated: false, recorded_bytes: 7, omitted_bytes: 0, discarded_bytes: 0, last_sequence: 2, recorded_sequence: 2, exit_code: 0, ...patch });
 
 describe("transcript replay", () => {
+    it("accepts known provider/task identities and rejects mismatched worktree metadata", () => {
+        const identity = { version: 1, protocol_version: 1, execution_host: "windows-local", cwd: "C:/work", provider: "codex", attempt_id: id,
+            task_id: "123e4567-e89b-42d3-b456-426614174000", worktree: "C:/work" };
+        expect(validateTranscriptMetadata(metadata({ identity_json: JSON.stringify(identity) }), id).identity_json).toBe(JSON.stringify(identity));
+        for (const patch of [{ provider: "other" }, { provider: "shell" }, { task_id: "bad" }, { worktree: "C:/elsewhere" }])
+            expect(() => validateTranscriptMetadata(metadata({ identity_json: JSON.stringify({ ...identity, ...patch }) }), id)).toThrow("identity");
+    });
     it("writes split UTF-8 chunks in exact callback order", async () => {
         const bytes = new TextEncoder().encode("hé🙂"), writes: Uint8Array[] = [];
         let resume!: () => void, started!: () => void;

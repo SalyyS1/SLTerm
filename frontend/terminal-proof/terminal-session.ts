@@ -11,7 +11,7 @@ import { replayTranscript, type TranscriptRequest } from "./terminal-transcript"
 export type SessionStatus = "starting" | "running" | "closing" | "exited" | "error";
 export type SessionInfo = { status: SessionStatus; exitCode?: number; message?: string; restored?: boolean; warning?: string };
 export type ShellEnvironment = { executable: string; cwd: string; pid: number; args: string[] };
-export type SpawnCommand = { executable: string; args: string[] };
+export type SpawnCommand = { executable: string; args: string[]; provider?: "claude" | "codex" };
 
 export class TerminalSession {
     readonly surface = document.createElement("div");
@@ -52,7 +52,8 @@ export class TerminalSession {
         readonly runId: string = crypto.randomUUID(),
         private replay?: { request: TranscriptRequest; runId?: string },
         readonly workspaceId?: string,
-        private command?: SpawnCommand
+        private command?: SpawnCommand,
+        readonly taskId?: string
     ) {
         if (replay) {
             this.info = { status: "exited", restored: true, message: replay.runId ? "Bản phát lại transcript; không có tiến trình đang chạy." : "Không có transcript đã lưu cho phiên terminal này." };
@@ -137,6 +138,8 @@ export class TerminalSession {
                 args: this.command?.args ?? environment.args,
                 run_id: this.runId,
                 workspace_id: this.workspaceId,
+                provider: this.command?.provider ?? "shell",
+                task_id: this.taskId,
                 cols: this.cols,
                 rows: this.rows,
             });
@@ -253,7 +256,21 @@ export class TerminalSession {
         this.waiters.clear();
     }
 
-    /** Send a one-shot prompt from the integrated chat after the CLI is ready. */
+    async waitForStarted(): Promise<void> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            await Promise.race([
+                (async () => {
+                    await this.attachReady; await this.spawned;
+                    if (this.finished || this.closeRequested || this.info.status !== "running")
+                        throw new Error(this.info.message ?? "Terminal chưa xác nhận khởi chạy.");
+                })(),
+                new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Chưa xác nhận khởi chạy sau 15 giây; không tự thử lại.")), 15000); }),
+            ]);
+        } finally { clearTimeout(timer); }
+    }
+
+    /** Send terminal input only after the process is attached and running. */
     async sendInput(data: string): Promise<void> {
         if (this.finished || this.closeRequested) throw new Error("Terminal đã dừng.");
         await this.attachReady;

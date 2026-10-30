@@ -2,9 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal, type ITerminalOptions } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Frame, ProofTransport } from "./proof-protocol";
+import { ProofTransport, type Frame } from "./proof-protocol";
 import { installTerminalClipboard } from "./terminal-clipboard";
-import { TerminalSession } from "./terminal-session";
+import { TerminalSession, type SpawnCommand } from "./terminal-session";
 import { TerminalRuntime } from "./terminal-runtime";
 import type { TranscriptRequest } from "./terminal-transcript";
 
@@ -73,7 +73,7 @@ function deferred<T = void>() {
 const tick = async () => {
     for (let index = 0; index < 8; index++) await Promise.resolve();
 };
-function setup(options: Partial<ITerminalOptions> = {}, replay?: { request: TranscriptRequest; runId?: string }, workspaceId?: string) {
+function setup(options: Partial<ITerminalOptions> = {}, replay?: { request: TranscriptRequest; runId?: string }, workspaceId?: string, command?: SpawnCommand, taskId?: string) {
     const spawn = deferred();
     const request = vi.fn(
         (method: string, _args?: Record<string, unknown>): Promise<void> =>
@@ -93,7 +93,9 @@ function setup(options: Partial<ITerminalOptions> = {}, replay?: { request: Tran
         options,
         undefined,
         replay,
-        workspaceId
+        workspaceId,
+        command,
+        taskId
     );
     const terminal = vi.mocked(Terminal).mock.results.at(-1)!.value as MockTerminal;
     const host = { append: vi.fn() } as unknown as HTMLElement;
@@ -160,7 +162,7 @@ describe("terminal session lifetime", () => {
         session.attach(host);
         expect(request).toHaveBeenCalledWith("spawn", {
             session_id: 7, executable: "pwsh.exe", cwd: "C:/work", args: ["-NoLogo"],
-            run_id: session.runId, workspace_id: "workspace-one", cols: 80, rows: 24,
+            run_id: session.runId, workspace_id: "workspace-one", provider: "shell", task_id: undefined, cols: 80, rows: 24,
         });
         spawn.resolve();
         await tick();
@@ -170,6 +172,16 @@ describe("terminal session lifetime", () => {
         const { terminal } = setup({ fontSize: 19, lineHeight: 1.4, cursorStyle: "bar", theme: { background: "#12345600" }, allowTransparency: false });
         expect(terminal.options).toMatchObject({ fontSize: 19, lineHeight: 1.4, cursorStyle: "bar", allowTransparency: true, theme: { background: "#12345600" } });
         expect(terminal.open).not.toHaveBeenCalled();
+    });
+    it("binds a provider task spawn to its archive identity without losing command metadata", async () => {
+        const taskId = crypto.randomUUID();
+        const command = { provider: "codex" as const, executable: "powershell.exe", args: ["-EncodedCommand", "encoded"] };
+        const { session, host, request, spawn } = setup({}, undefined, "workspace-one", command, taskId);
+        session.attach(host);
+        expect(request).toHaveBeenCalledWith("spawn", expect.objectContaining({ provider: "codex", task_id: taskId,
+            run_id: session.runId, workspace_id: "workspace-one", cwd: "C:/work", executable: command.executable, args: command.args }));
+        spawn.resolve(); await tick();
+        expect(session.info.status).toBe("running");
     });
     it("reattaches the same surface and process while flushing geometry changed during startup", async () => {
         const { session, terminal, host, spawn, request } = setup();
@@ -203,6 +215,23 @@ describe("terminal session lifetime", () => {
         await closing;
         session.dispose();
         expect(terminal.dispose).toHaveBeenCalledOnce();
+    });
+
+    it("bounds a lost spawn reply using the real transport before confirming a stop", async () => {
+        const sent: Record<string, unknown>[] = [];
+        const transport = new ProofTransport(async (request) => { sent.push(request); });
+        const session = new TerminalSession(71, "C:/work", transport,
+            { executable: "pwsh.exe", cwd: "C:/work", pid: 1, args: [] }, vi.fn(), vi.fn(), 14, {});
+        const terminal = vi.mocked(Terminal).mock.results.at(-1)!.value as MockTerminal;
+        session.attach({ append: vi.fn() } as unknown as HTMLElement);
+        const ready = expect(session.waitForStarted()).rejects.toThrow("Timed out");
+        const closing = session.close();
+        await vi.advanceTimersByTimeAsync(15000); await ready;
+        const stop = sent.find((request) => request.method === "stop");
+        expect(stop).toBeDefined();
+        transport.receive({ version: 1, id: stop!.id as number, ok: false, error_code: "UnknownSession" });
+        await tick(); terminal.flush(); await closing;
+        expect(session.finished).toBe(true); session.dispose();
     });
 
     it("reattaches an exited transcript without opening or spawning another terminal", async () => {
@@ -576,10 +605,21 @@ describe("terminal runtime shutdown recovery", () => {
         const { runtime, receive } = await startRuntime();
         receive({ event: "transport_error", message: "Final output was not delivered" });
         await runtime.quit();
-        receive({ event: "transport_closed" });
         receive({ event: "shutdown_stalled", message: "Missing shutdown acknowledgement" });
         expect(runtime.getSnapshot()).toMatchObject({ phase: "disconnected", shutdownIssue: "Missing shutdown acknowledgement" });
+        expect(() => runtime.prepare(8, "C:/work")).toThrow("Terminal chưa kết nối");
         await runtime.forceQuit();
         expect(vi.mocked(invoke).mock.calls.at(-1)?.[0]).toBe("proof_force_quit");
+    });
+
+    it("does not restore connectivity when transport fails while a native quit request is pending", async () => {
+        const { runtime, receive } = await startRuntime();
+        const nativeQuit = deferred();
+        vi.mocked(invoke).mockReturnValueOnce(nativeQuit.promise);
+        const quitting = runtime.quit();
+        receive({ event: "transport_closed" });
+        nativeQuit.reject(new Error("Shutdown not confirmed"));
+        await expect(quitting).rejects.toThrow("Shutdown not confirmed");
+        expect(runtime.getSnapshot()).toMatchObject({ phase: "disconnected", shutdownIssue: "Error: Shutdown not confirmed" });
     });
 });

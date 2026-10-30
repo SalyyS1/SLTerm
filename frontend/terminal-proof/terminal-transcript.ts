@@ -29,8 +29,12 @@ export function validateTranscriptMetadata(value: Record<string, unknown>, expec
     if (typeof value.identity_json !== "string" || new TextEncoder().encode(value.identity_json).length > 8 * 1024) throw new Error("Invalid transcript identity.");
     try {
         const identity = JSON.parse(value.identity_json) as Record<string, unknown>;
-        if (!identity || identity.version !== 1 || identity.protocol_version !== 1 || identity.execution_host !== "windows-local" || typeof identity.cwd !== "string" && identity.cwd !== null || identity.provider !== "shell" || typeof identity.attempt_id !== "string") throw new Error();
+        if (!identity || identity.version !== 1 || identity.protocol_version !== 1 || identity.execution_host !== "windows-local" || typeof identity.cwd !== "string" && identity.cwd !== null || !["shell", "claude", "codex"].includes(String(identity.provider)) || typeof identity.attempt_id !== "string") throw new Error();
         uuid(identity.attempt_id);
+        if (identity.task_id != null) {
+            uuid(identity.task_id);
+            if (identity.provider === "shell" || typeof identity.cwd !== "string" || identity.worktree !== identity.cwd) throw new Error();
+        } else if (identity.worktree != null) throw new Error();
         if (expectedRunId && identity.attempt_id !== expectedRunId) throw new Error();
     } catch { throw new Error("Invalid transcript identity."); }
     for (const key of ["finished", "process_eof", "capture_complete", "truncated"])

@@ -5,7 +5,7 @@ export type Axis = "horizontal" | "vertical";
 export type DockSide = "left" | "right" | "up" | "down";
 export type PaneRect = { x: number; y: number; width: number; height: number };
 export type PaneProvider = "claude" | "codex";
-export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string; provider?: PaneProvider; remote?: RemoteConnection };
+export type PaneNode = { kind: "pane"; paneId: number; title: string; runId?: string; cwd?: string; provider?: PaneProvider; remote?: RemoteConnection };
 export type SplitNode = {
     kind: "split";
     splitId: string;
@@ -68,9 +68,10 @@ export function assertWorkspaceState(value: unknown): asserts value is Workspace
             const current = node as Record<string, unknown>;
             nodes.add(current);
             if (current.kind === "pane") {
-                if (!onlyKeys(current, ["kind", "paneId", "title", "runId", "provider", "remote"]) || typeof current.paneId !== "number" ||
+                if (!onlyKeys(current, ["kind", "paneId", "title", "runId", "cwd", "provider", "remote"]) || typeof current.paneId !== "number" ||
                     !validPaneId(current.paneId) || panes.has(current.paneId) || typeof current.title !== "string" ||
                     (Object.hasOwn(current, "runId") && (!isCanonicalRunId(current.runId) || runs.has(current.runId))) ||
+                    (Object.hasOwn(current, "cwd") && (typeof current.cwd !== "string" || !current.cwd || current.cwd.includes("\0") || current.cwd.length > 32767)) ||
                     (Object.hasOwn(current, "provider") && current.provider !== "claude" && current.provider !== "codex") ||
                     (Object.hasOwn(current, "remote") && !validRemote(current.remote))) invalid();
                 const pane = current as PaneNode;
@@ -264,7 +265,7 @@ export function splitPane(
     state: WorkspaceState,
     workspaceId: string,
     targetPaneId: number | null,
-    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider" | "remote">,
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "cwd" | "provider" | "remote">,
     splitId: string,
     axis: Axis
 ): WorkspaceState {
@@ -278,6 +279,7 @@ export function splitPane(
     return edit(state, workspaceId, (workspace) => {
         const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
             ...(newPane.runId === undefined ? {} : { runId: newPane.runId }),
+            ...(newPane.cwd === undefined ? {} : { cwd: newPane.cwd }),
             ...(newPane.provider === undefined ? {} : { provider: newPane.provider }),
             ...(newPane.remote === undefined ? {} : { remote: newPane.remote }) };
         if (!workspace.layout)
@@ -490,7 +492,7 @@ export function arrangePanes(state: WorkspaceState, workspaceId: string): Worksp
 export function addTerminal(
     state: WorkspaceState,
     workspaceId: string,
-    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "provider" | "remote">
+    newPane: Pick<PaneNode, "paneId" | "title" | "runId" | "cwd" | "provider" | "remote">
 ): WorkspaceState {
     if (
         !validPaneId(newPane.paneId) ||
@@ -501,6 +503,7 @@ export function addTerminal(
     return edit(state, workspaceId, (workspace) => {
         const pane: PaneNode = { kind: "pane", paneId: newPane.paneId, title: label(newPane.title, "Terminal"),
             ...(newPane.runId === undefined ? {} : { runId: newPane.runId }),
+            ...(newPane.cwd === undefined ? {} : { cwd: newPane.cwd }),
             ...(newPane.provider === undefined ? {} : { provider: newPane.provider }),
             ...(newPane.remote === undefined ? {} : { remote: newPane.remote }) };
         const panes = [...paneIds(workspace.layout).map((id) => findPane(workspace.layout, id)!), pane];

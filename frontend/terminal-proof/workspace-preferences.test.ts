@@ -9,7 +9,7 @@ function savedState(): WorkspaceState {
         ...createWorkspace("one", "Development", "C:\\Repo"), layoutMode: "free", arrangement: "manual",
         layout: { kind: "split", splitId: "split-7", axis: "horizontal", ratio: 0.37,
             first: { ...pane(8), title: "Build <local>" }, second: { kind: "split", splitId: "nested", axis: "vertical", ratio: 0.61,
-                first: pane(9), second: pane(10) } }, activePaneId: 8, zoomedPaneId: 8, hiddenPaneIds: [10, 9],
+                first: { ...pane(9), cwd: "C:\\Repo.slterm-worktrees\\task", provider: "codex" }, second: pane(10) } }, activePaneId: 8, zoomedPaneId: 8, hiddenPaneIds: [10, 9],
         floating: { 8: { x: 0.125, y: 0.25, width: 0.5, height: 0.375 }, 10: { x: 0, y: 0, width: 1, height: 1 } },
     }, { ...createWorkspace("two", "Tools", "D:\\Tools"), layout: pane(42), activePaneId: 42 }] };
 }

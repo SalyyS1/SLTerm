@@ -3,7 +3,7 @@ import { terminalAppearance, defaultAppearance } from "./appearance-settings";
 import { useWorkspacePreferences } from "./use-workspace-preferences";
 import { appearanceFor, restoreDescriptors, shortcutsFor, withDescriptors } from "./workspace-preferences";
 import { matchShortcut, type ShortcutAction } from "./workspace-shortcuts";
-import { TerminalRuntime } from "./terminal-runtime";
+import { TerminalRuntime, type ProviderLaunchOptions } from "./terminal-runtime";
 import { type DialogSpec } from "./workspace-dialog";
 import type { LayoutActions } from "./workspace-layout";
 import * as model from "./workspace-model";
@@ -11,6 +11,8 @@ import { workspacePath } from "./workspace-path";
 import type { EditorState } from "./editor-state";
 import type { AiProvider } from "./ai-cli";
 import { parseRemoteConnection, remoteLabel, type RemoteProtocol } from "./remote";
+import { TaskRunCoordinator } from "./task-run-coordinator";
+import { adjustTaskBudget, type WorkspaceTask } from "./workspace-tasks";
 
 export function useWorkspaceController(runtime: TerminalRuntime) {
     const snapshot = useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
@@ -66,22 +68,78 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
             );
         } catch (error) { runtime.report(error); }
     };
-    const openProvider = (provider: AiProvider) => {
-        if (!workspace || !connected || dialog) return undefined;
+    const openProvider = (provider: AiProvider, options: ProviderLaunchOptions = {}) => {
+        const owner = options.workspaceId ? state.workspaces.find((item) => item.id === options.workspaceId) : workspace;
+        if (!owner || !connected) return undefined;
+        const cwd = options.cwd ?? owner.cwd;
         const paneId = nextSerial("pane");
         try {
-            const command = runtime.providerCommand(provider);
-            const runId = runtime.prepare(paneId, workspace.cwd,
-                terminalAppearance(appearanceFor(preferences.value, workspace.id)), workspace.id, command);
+            const command = runtime.providerCommand(provider, options.prompt);
+            const runId = runtime.prepare(paneId, cwd,
+                terminalAppearance(appearanceFor(preferences.value, owner.id)), owner.id, command, options.attemptId, options.taskId);
             const label = provider === "claude" ? "Claude CLI" : "Codex CLI";
-            setState((current) => model.addTerminal(current, workspace.id, {
-                paneId, title: `${label} · Terminal ${paneId}`, runId, provider,
+            setState((current) => model.addTerminal(current, owner.id, {
+                paneId, title: `${label} · Terminal ${paneId}`, runId, provider, cwd,
             }));
         } catch (error) {
             runtime.report(error);
             throw error;
         }
         return paneId;
+    };
+    const taskDependencies = useRef({ preferences, openProvider });
+    taskDependencies.current = { preferences, openProvider };
+    const taskCoordinator = useRef<TaskRunCoordinator | null>(null);
+    taskCoordinator.current ??= new TaskRunCoordinator({
+        read: () => taskDependencies.current.preferences.getValue().tasks,
+        commit: (update) => taskDependencies.current.preferences.commit((value) => ({ ...value, tasks: update(value.tasks) })),
+        inspect: (root, id) => runtime.inspectWorktree(root, id),
+        prepare: (root, id, base, head) => runtime.prepareWorktree(root, id, base, head),
+        open: (provider, options) => taskDependencies.current.openProvider(provider, options),
+        started: (id) => runtime.waitForStarted(id), close: (id) => runtime.close(id), snapshot: runtime.getSnapshot,
+    });
+    const taskReconcileBusy = useRef(false);
+    useEffect(() => {
+        if (!hydrated || !connected) return;
+        const reconcile = () => {
+            if (taskReconcileBusy.current) return;
+            taskReconcileBusy.current = true;
+            void taskCoordinator.current!.reconcile().catch(runtime.report).finally(() => { taskReconcileBusy.current = false; });
+        };
+        reconcile();
+        const timer = setInterval(reconcile, 1000);
+        return () => clearInterval(timer);
+    }, [hydrated, connected, runtime]);
+    const requestTaskRun = async (task: WorkspaceTask) => {
+        const owner = state.workspaces.find((item) => item.id === task.workspaceId);
+        if (!owner || dialog || !connected) throw new Error("Workspace chưa sẵn sàng.");
+        const approval = await taskCoordinator.current!.review(task, owner.cwd);
+        setDialog({ title: "Duyệt lượt chạy task", accept: "Duyệt và chạy trong worktree",
+            body: <><p><strong>{task.title}</strong> · {task.provider} · lượt {task.attempts + 1}/{task.maxAttempts} · tối đa {task.maxMinutes} phút</p>
+                <p style={{ whiteSpace: "pre-wrap" }}>{task.goal}</p>
+                <p className="field-hint">Windows local · {approval.worktree.path}<br />{approval.worktree.branch}<br />Base: {approval.worktree.base_revision}<br />HEAD: {approval.worktree.head_revision}</p>
+                <p>Worktree tách file Git; process vẫn dùng quyền Windows hiện tại. CLI yêu cầu bạn duyệt quyền riêng. SLTerm sẽ dừng task khi hết thời gian; không tự merge và không tự chạy lại.</p></>,
+            submit: () => taskCoordinator.current!.start(approval),
+        });
+    };
+    const requestTaskStop = (task: WorkspaceTask, completed = false) => {
+        if (dialog) return;
+        setDialog({ title: completed ? "Dừng process và xác nhận task hoàn tất?" : "Dừng task?", danger: true,
+            accept: completed ? "Dừng và xác nhận hoàn tất" : "Dừng task",
+            body: <p>Dừng process của <strong>{task.title}</strong> và giữ transcript, branch, worktree để xem diff. {completed && "Bạn xác nhận mục tiêu đã đạt; SLTerm không tự suy luận kết quả từ exit code."}</p>,
+            submit: () => taskCoordinator.current!.stop(task.id, completed),
+        });
+    };
+    const requestTaskBudget = (task: WorkspaceTask) => {
+        if (dialog) return;
+        setDialog({ title: "Điều chỉnh budget task", accept: "Lưu budget",
+            body: <p>Đã dùng {task.attempts} lượt. Thay đổi này không chạy lại task; lượt tiếp theo vẫn cần duyệt mục tiêu và worktree.</p>,
+            fields: [
+                { name: "attempts", label: "Tổng lượt thử tối đa (1–100)", value: String(Math.min(100, Math.max(task.maxAttempts, task.attempts + 1))), inputMode: "numeric" },
+                { name: "minutes", label: "Phút mỗi lượt mới (1–10080)", value: String(task.maxMinutes), inputMode: "numeric" },
+            ],
+            submit: ({ attempts, minutes }) => preferences.commit((value) => ({ ...value, tasks: adjustTaskBudget(value.tasks, task.id, Number(attempts), Number(minutes)) })),
+        });
     };
     const openRemote = (protocol: RemoteProtocol, values: Record<string, string>) => {
         if (!workspace || !connected || dialog) return;
@@ -132,7 +190,7 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
                         const pane = model.findPane(owner.layout, id);
                         const command = pane?.remote ? runtime.remoteCommand(pane.remote)
                             : pane?.provider ? runtime.providerCommand(pane.provider) : undefined;
-                        runtime.restore(id, owner.cwd, pane?.runId,
+                        runtime.restore(id, pane?.cwd ?? owner.cwd, pane?.runId,
                             terminalAppearance(appearanceFor(saved, owner.id)), owner.id, command);
                     }
                     setState(restored); setHydrated(true); return;
@@ -408,6 +466,9 @@ export function useWorkspaceController(runtime: TerminalRuntime) {
         requestCloseWorkspace,
         renameWorkspace,
         openProvider,
+        requestTaskRun,
+        requestTaskStop,
+        requestTaskBudget,
         openAiDialog,
         openRemoteDialog,
         actions,

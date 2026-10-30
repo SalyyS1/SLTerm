@@ -91,16 +91,25 @@ when testing a replacement. These commands do not create an installer.
   login flow and SLTerm does not read, copy or send provider tokens. The pane's
   provider label is persisted with the layout, while restart restores its
   transcript as stopped history and never relaunches the CLI automatically.
-- **Chat** is a thin prompt surface over that same official CLI: sending waits
-  for the new pane to reach its running state, then delivers the prompt to it.
+- **Chat** is a prompt surface over that same official CLI: the initial prompt
+  is passed as one process argument, never typed into a shell. Sending waits
+  for the new pane to reach its running state.
   Provider output remains in the terminal pane so ANSI redraws, approvals and
   login prompts are preserved; SLTerm does not emulate or proxy provider auth.
-- **Tasks** stores a bounded task board in the versioned local profile. Creating
-  a task does not run anything; each **Chạy (duyệt)** click consumes one
-  approved attempt and sends the goal to the selected official CLI. The board
-  tracks attempts and explicit completed/blocked decisions. It does not invent
-  subscription cost, queue work automatically, merge branches or claim
-  worktree isolation yet.
+- **Tasks** persists tasks without a task-count cap; the profile has a byte
+  limit. **Xem và duyệt lượt** shows the goal, provider, time/attempt budget,
+  worktree path, branch, base and current HEAD. The approval is saved before
+  worktree creation or CLI launch. Retry checks the approved HEAD again.
+  Stop cancels pending startup or stops the owned process tree; unconfirmed
+  stops block retry. Expiry stops the task, and successful process exit alone
+  never marks it completed. Closing the board leaves its controller active.
+  **Điều chỉnh budget** replenishes attempts or changes time for a stopped
+  task; consumed attempts and the old approval stay intact. It never starts a
+  process, and the next run still needs a fresh review.
+  Restart restores stopped history and requires another review to run again.
+  Worktrees remain for user review; SLTerm never merges them automatically.
+  Worktrees are not sandboxes, and this manual CLI flow is not the automated
+  pipeline/lead workflow. Subscription cost is not estimated.
 - **AI tools** reads the current workspace's `.claude/skills`, agents,
   commands and `.mcp.json` as a read-only inventory. It shows descriptions and
   safe MCP field/transport summaries, redacts secret-valued fields, never
@@ -110,6 +119,23 @@ when testing a replacement. These commands do not create an installer.
   application/core, sessions and editor buffers. Use the Windows tray to reopen
   it or request the normal quit confirmation. This requires a registered tray
   icon and is not a daemon or a restart-resume guarantee.
+
+## Task worktree boundary
+
+Git ownership, receipts and checkout rules live in
+[git-worktrees.zig](../native-core/src/git-worktrees.zig); lifecycle approvals
+live in [task-run-coordinator.ts](../frontend/terminal-proof/task-run-coordinator.ts).
+The native host resolves an installed Git executable; no dependency is installed.
+Use a repository root with a committed HEAD. Executable checkout hooks, filters
+and included Git configuration are refused. A checkout exceeding the operation
+deadline has an unknown outcome: inspect it before retrying, without automatic
+force, removal or recreation. Worktree creation is serialized while existing
+terminals and approved tasks can keep running independently.
+The receipt records checkout completion only after Git succeeds and the core
+verifies the target. Missing, incomplete or corrupt receipts block another run;
+existing Git metadata alone cannot mark an interrupted checkout ready. The core
+uses a relative Git target internally to avoid Git for Windows' absolute
+`GIT_DIR` length guard; approval and verification retain the same absolute path.
 
 ## Local editor save boundary
 
@@ -161,6 +187,11 @@ cancel, or explicitly confirm **Buộc dừng và thoát**, which may lose final
 Force recovery terminates only the owned core handle and exits with status 1;
 confirmed graceful shutdown exits 0 after Tauri cleanup. Force is unavailable
 before a shutdown failure. It never reports an unconfirmed shutdown as success.
+If the core is disconnected, SQLite settings cannot be saved through it. The
+save error stays visible; **Thoát không lưu tùy chỉnh** and, after a failed
+shutdown, **Buộc thoát không lưu tùy chỉnh** are separate explicit choices.
+Canceling keeps the application open. Shutdown failure never reconnects a lost
+transport or enables new terminals on that connection.
 
 The core has a 256 KiB output queue plus one in-flight frame of at most 64 KiB.
 Serialization memory is separately bounded per active session; it is not a
@@ -178,6 +209,8 @@ npm run test:proof-tools
 npm run test:proof-core
 npm run test:provider-proof
 node scripts/terminal-proof/shutdown-recovery.mjs
+node scripts/terminal-proof/task-worktree-integration.mjs
+node scripts/terminal-proof/task-worktree-smoke.mjs
 ```
 
 Vitest owns frontend tests. The other scripts use Node's test runner; their
@@ -186,6 +219,13 @@ The shutdown GUI regression uses the current built executable, a disposable
 profile and local test CDP port 19231. It refuses an occupied port, exercises a
 deliberately killed test-owned core, verifies force confirmation/cancellation,
 checks restored preferences without restored processes, and checks cleanup.
+The task integration runs the actual coordinator against native Git IPC with
+two independent recorder processes. Its GUI counterpart uses port19232 and a
+disposable native executable as the provider; it checks exact initial arguments,
+approval persistence, cancellation, stop/completion, budget replenishment and
+stopped-history restore. Neither script makes an AI request or authenticates an
+account. Run these integration/GUI checks sequentially to avoid contention with
+the native Git operation deadline.
 
 Native Rust unit tests must use the proof build configuration. For example:
 

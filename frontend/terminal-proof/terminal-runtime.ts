@@ -17,6 +17,9 @@ export type RuntimeSnapshot = {
     shutdownIssue: string | null;
 };
 
+export type WorktreeResult = { root: string; path: string; branch: string; base_revision: string; head_revision: string; exists: boolean; ready: boolean; completion_unknown?: boolean };
+export type ProviderLaunchOptions = { cwd?: string; prompt?: string; workspaceId?: string; taskId?: string; attemptId?: string };
+
 /** Owns live terminal identity independently of React tabs or split-tree positions. */
 export class TerminalRuntime {
     private sessions = new Map<number, TerminalSession>();
@@ -33,6 +36,8 @@ export class TerminalRuntime {
     private transport = new ProofTransport((request) => invoke("proof_request", { request }));
     private environment?: ShellEnvironment;
     private starting?: Promise<ShellEnvironment>;
+    // Shutdown temporarily changes phase; it cannot restore a lost transport.
+    private connectionLost = false;
     private observer = new ResizeObserver(() => this.scheduleResize());
     private resizeTimer?: ReturnType<typeof setTimeout>;
     subscribe = (listener: () => void) => {
@@ -51,6 +56,13 @@ export class TerminalRuntime {
     consumeCloseRequest = () => this.update({ closeRequested: false });
     request = (method: string, args: Record<string, unknown> = {}) => this.transport.requestValue(method, args);
 
+    async inspectWorktree(root: string, taskId: string): Promise<WorktreeResult> {
+        return this.request("worktrees.inspect", { root, task_id: taskId }) as Promise<WorktreeResult>;
+    }
+    async prepareWorktree(root: string, taskId: string, baseRevision: string, headRevision?: string): Promise<WorktreeResult> {
+        return this.request("worktrees.prepare", { root, task_id: taskId, base_revision: baseRevision, if_match: headRevision }) as Promise<WorktreeResult>;
+    }
+
     start() {
         return (this.starting ??= (async () => {
             await listen<Frame>("proof-event", ({ payload }) => this.receive(payload));
@@ -59,6 +71,7 @@ export class TerminalRuntime {
             this.update({ phase: "connected" });
             return this.environment;
         })().catch((error) => {
+            this.connectionLost = true;
             this.update({ phase: "disconnected", error: String(error) });
             throw error;
         }));
@@ -75,10 +88,10 @@ export class TerminalRuntime {
         };
     }
 
-    prepare(id: number, cwd: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string, command?: SpawnCommand) {
+    prepare(id: number, cwd: string, options: Partial<ITerminalOptions> = {}, workspaceId?: string, command?: SpawnCommand, attemptId?: string, taskId?: string) {
         if (!this.environment || this.snapshot.phase !== "connected") throw new Error("Terminal chưa kết nối.");
         if (this.sessions.has(id)) throw new Error("Duplicate terminal identity");
-        const runId = crypto.randomUUID();
+        const runId = attemptId ?? crypto.randomUUID();
         const session = new TerminalSession(
             id,
             cwd,
@@ -90,16 +103,16 @@ export class TerminalRuntime {
             this.report,
             this.snapshot.fontSize,
             this.palette(),
-            options, runId, undefined, workspaceId, command
+            options, runId, undefined, workspaceId, command, taskId
         );
         this.sessions.set(id, session);
         this.update({ sessions: { ...this.snapshot.sessions, [id]: session.info } });
         return runId;
     }
 
-    providerCommand(provider: AiProvider): SpawnCommand {
+    providerCommand(provider: AiProvider, prompt?: string): SpawnCommand {
         if (!this.environment) throw new Error("Terminal chưa kết nối.");
-        return aiCommand(provider, this.environment.executable);
+        return aiCommand(provider, this.environment.executable, prompt);
     }
 
     remoteCommand(connection: RemoteConnection): SpawnCommand {
@@ -185,6 +198,12 @@ export class TerminalRuntime {
         return session.sendInput(data);
     }
 
+    waitForStarted(id: number) {
+        const session = this.sessions.get(id);
+        if (!session) return Promise.reject(new Error("Không tìm thấy terminal đích."));
+        return session.waitForStarted();
+    }
+
     async close(id: number) {
         await this.sessions.get(id)?.close();
     }
@@ -201,7 +220,7 @@ export class TerminalRuntime {
         try {
             await invoke("proof_quit");
         } catch (error) {
-            this.update({ phase, shutdownIssue: String(error) });
+            this.update({ phase: this.connectionLost ? "disconnected" : phase, shutdownIssue: String(error) });
             this.report(error);
             throw error;
         }
@@ -215,7 +234,7 @@ export class TerminalRuntime {
         this.update({ phase: "stopping" });
         try { await invoke("proof_force_quit"); }
         catch (error) {
-            this.update({ phase });
+            this.update({ phase: this.connectionLost ? "disconnected" : phase });
             this.report(error);
             throw error;
         }
@@ -231,6 +250,7 @@ export class TerminalRuntime {
                 return;
             }
             if (frame.event === "transport_closed" || frame.event === "transport_error") {
+                this.connectionLost = true;
                 const message = frame.message ?? "Backend đã ngắt kết nối.";
                 this.transport.close(message);
                 for (const session of this.sessions.values()) session.disconnected(message);
@@ -238,7 +258,7 @@ export class TerminalRuntime {
             } else if (frame.event === "close_requested") this.update({ closeRequested: true });
             else if (frame.event === "shutdown_started") this.update({ phase: "stopping" });
             else if (frame.event === "shutdown_stalled")
-                this.update({ phase: this.snapshot.phase === "disconnected" ? "disconnected" : "connected", error: frame.message ?? "Chưa xác nhận được dừng. Thử lại.",
+                this.update({ phase: this.connectionLost ? "disconnected" : "connected", error: frame.message ?? "Chưa xác nhận được dừng. Thử lại.",
                     shutdownIssue: frame.message ?? "Chưa xác nhận được dừng. Thử lại." });
         } catch (error) {
             this.report(error);
