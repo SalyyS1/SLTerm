@@ -35,10 +35,11 @@ See the [preview build and test guide](docs/terminal-preview.md).
 This source-only, unsigned preview is not the completed ADE or a replacement for
 the Electron release. SSH/SFTP interactive panes use the installed Windows
 OpenSSH client with host-key verification in the terminal; durable remote file
-sessions, SDK/app-server integrated chat, automated pipeline/lead workflows and
-daemon/resume sessions are not connected to this entrypoint. The current Chat
-surface launches an official CLI with an initial prompt. Worktrees separate Git
-files and are not operating-system sandboxes. The numerical
+sessions, Claude SDK chat, automated pipeline/lead workflows and daemon/resume
+sessions are not connected to this entrypoint. Codex app-server chat is now
+available when a local `codex.exe` is discovered; otherwise the Chat surface
+offers the official CLI fallback. Worktrees separate Git files and are not
+operating-system sandboxes. The numerical
 performance gate was explicitly deferred for implementation; comparable
 measurements, compatibility checks and approved budgets remain release work.
 

@@ -213,7 +213,7 @@ export function WorkspaceApp({ runtime }: { runtime: TerminalRuntime }) {
                             >
                                 <WorkspaceBackdrop settings={appearanceFor(app.preferences.value, owner.id)} assets={app.preferences.assets} />
                                 {toolsOpen && state.activeWorkspaceId === owner.id && <WorkspaceToolsPanel root={owner.cwd} request={runtime.request} close={() => setToolsOpen(false)} />}
-                                {chatOpen && state.activeWorkspaceId === owner.id && <AiChatPanel runtime={runtime} openProvider={app.openProvider} close={() => setChatOpen(false)} />}
+                                {chatOpen && state.activeWorkspaceId === owner.id && <AiChatPanel runtime={runtime} cwd={owner.cwd} openProvider={app.openProvider} close={() => setChatOpen(false)} />}
                                 {tasksOpen && state.activeWorkspaceId === owner.id && <TaskBoardPanel preferences={app.preferences} workspaceId={owner.id} workspaceCwd={owner.cwd} snapshot={snapshot} requestRun={app.requestTaskRun} requestStop={app.requestTaskStop} requestBudget={app.requestTaskBudget} close={() => setTasksOpen(false)} />}
                                 {editorOpen[owner.id] && <div className="workspace-editor-dock">
                                     <ProjectEditor root={owner.cwd} request={runtime.request}
