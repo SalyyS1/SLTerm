@@ -61,6 +61,10 @@ export class CodexChatSession {
 
     cancel(): Promise<void> { return this.protocol.cancelTurn(); }
 
+    respondApproval(requestId: string | number, decision: unknown): Promise<void> {
+        return this.protocol.respondApproval(requestId, decision);
+    }
+
     close(): void {
         this.protocol.close();
         this.unsubscribe?.();

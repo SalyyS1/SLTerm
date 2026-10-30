@@ -61,6 +61,16 @@ export const validatePinnedCodexSchema: CodexSchemaValidator = (schema, value) =
         case "ErrorNotification":
             return !!object && requiredStrings(object, ["threadId", "turnId"])
                 && typeof object.willRetry === "boolean" && object.error !== undefined;
+        case "CommandExecutionRequestApprovalParams":
+            return !!object && requiredStrings(object, ["threadId", "turnId", "itemId"])
+                && typeof object.startedAtMs === "number";
+        case "CommandExecutionRequestApprovalResponse": {
+            if (!object || !("decision" in object)) return false;
+            const decision = object.decision;
+            const decisionObject = record(decision);
+            return ["accept", "acceptForSession", "decline", "cancel"].includes(String(decision))
+                || (!!decisionObject && ("acceptWithExecpolicyAmendment" in decisionObject || "applyNetworkPolicyAmendment" in decisionObject));
+        }
         case "ItemStartedNotification":
             return !!object && requiredStrings(object, ["threadId", "turnId"])
                 && object.item !== undefined && typeof object.startedAtMs === "number";

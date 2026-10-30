@@ -75,6 +75,20 @@ describe("browser-safe Codex chat runtime", () => {
         expect(runtime.state).toBe("completed");
     });
 
+    it("surfaces exact command approvals and answers the correlated server request once", async () => {
+        const { runtime, sent, events } = harness();
+        await initialize(runtime, sent); await startThread(runtime, sent); await startTurn(runtime, sent);
+        runtime.receive({ id: "approval-1", method: "item/commandExecution/requestApproval", params: {
+            threadId: "thread-1", turnId: "turn-1", itemId: "item-1", startedAtMs: 1,
+            command: "git status", cwd: "C:\\repo", reason: "Needs repository access",
+        } });
+        const approval = events.find((event) => event.type === "approvalRequest");
+        expect(approval).toMatchObject({ type: "approvalRequest", requestId: "approval-1", command: "git status" });
+        await runtime.respondApproval("approval-1", "accept");
+        expect(sent.at(-1)).toEqual({ id: "approval-1", result: { decision: "accept" } });
+        await expect(runtime.respondApproval("approval-1", "accept")).rejects.toMatchObject({ code: "UNKNOWN_APPROVAL" });
+    });
+
     it("rejects duplicate turns, oversized frames, malformed replies and closes pending work", async () => {
         const { runtime, sent } = harness();
         await initialize(runtime, sent); await startThread(runtime, sent); await startTurn(runtime, sent);

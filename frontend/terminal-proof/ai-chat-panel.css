@@ -9,3 +9,6 @@
 .ai-chat-transcript { max-height: 260px; overflow: auto; margin: 0; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); white-space: pre-wrap; color: var(--text); background: var(--surface); font: var(--text-xs)/1.5 var(--font-mono, monospace); }
 .ai-chat-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .ai-chat-buttons { display: flex; align-items: center; gap: var(--space-2); }
+.ai-chat-approval { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--warning, var(--line-strong)); border-radius: var(--radius-sm); background: var(--surface); }
+.ai-chat-approval code { max-height: 120px; overflow: auto; padding: var(--space-2); white-space: pre-wrap; color: var(--text); background: var(--surface-raised); }
+.ai-chat-approval small { color: var(--text-muted); }

@@ -29,6 +29,7 @@ export type CodexRuntimeEvent =
     | { type: "agentMessageDelta"; threadId: string; turnId: string; itemId: string; delta: string }
     | { type: "turnInterruptAcknowledged"; threadId: string; turnId: string }
     | { type: "turnCompleted"; threadId: string; turnId: string; status: string; result: unknown }
+    | { type: "approvalRequest"; requestId: string | number; threadId: string; turnId: string; itemId: string; command?: string; cwd?: string; reason?: string; commandActions?: unknown }
     | { type: "providerError"; threadId: string; turnId: string; willRetry: boolean; error: unknown };
 
 export type CodexChatRuntimeOptions = {
@@ -65,6 +66,7 @@ export class CodexChatRuntime {
     private readonly requestLimit: number;
     private readonly frameLimit: number;
     private readonly pending = new Map<string | number, Pending>();
+    private readonly approvals = new Map<string | number, { threadId: string; turnId: string }>();
     private sequence = 0;
     private _state: CodexRuntimeState = "new";
     private threadId?: string;
@@ -178,6 +180,21 @@ export class CodexChatRuntime {
         }
     }
 
+    /** Respond exactly once to a provider command approval request. */
+    async respondApproval(requestId: string | number, decision: unknown): Promise<void> {
+        const approval = this.approvals.get(requestId);
+        if (!approval) throw new CodexChatRuntimeError("UNKNOWN_APPROVAL");
+        const result = { decision };
+        this.assertSchema("CommandExecutionRequestApprovalResponse", result);
+        this.approvals.delete(requestId);
+        try {
+            await this.send({ id: requestId, result });
+        } catch (error) {
+            this.fail(error);
+            throw error;
+        }
+    }
+
     receive(raw: unknown): void {
         if (this._state === "closed") throw new CodexChatRuntimeError("CONNECTION_CLOSED");
         const message = this.decode(raw);
@@ -194,6 +211,7 @@ export class CodexChatRuntime {
         const error = new CodexChatRuntimeError("CONNECTION_CLOSED");
         for (const pending of this.pending.values()) pending.reject(error);
         this.pending.clear();
+        this.approvals.clear();
         this.threadId = undefined;
         this.turnId = undefined;
     }
@@ -237,6 +255,24 @@ export class CodexChatRuntime {
         if (this._state === "new" || this._state === "initializing") throw this.protocol("NOT_INITIALIZED");
         const method = message.method as string;
         const params = message.params;
+        if (method === "item/commandExecution/requestApproval") {
+            const requestId = this.requestId(message.id);
+            if (this.approvals.has(requestId)) throw this.protocol("DUPLICATE_APPROVAL");
+            this.assertSchema("CommandExecutionRequestApprovalParams", params);
+            const value = this.object(params);
+            const threadId = this.stringAt(value, "threadId");
+            const turnId = this.stringAt(value, "turnId");
+            const itemId = this.stringAt(value, "itemId");
+            this.assertIdentity(threadId, this.threadId, "STALE_THREAD");
+            this.assertIdentity(turnId, this.turnId, "STALE_TURN");
+            this.approvals.set(requestId, { threadId, turnId });
+            this.emit({ type: "approvalRequest", requestId, threadId, turnId, itemId,
+                command: typeof value.command === "string" ? value.command : undefined,
+                cwd: typeof value.cwd === "string" ? value.cwd : undefined,
+                reason: typeof value.reason === "string" ? value.reason : undefined,
+                commandActions: value.commandActions });
+            return;
+        }
         if (method === "turn/started") {
             this.assertSchema("TurnStartedNotification", params);
             const value = this.object(params);
