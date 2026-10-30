@@ -10,11 +10,12 @@ const pins = JSON.parse(readFileSync(new URL("./protocol-pins.json", import.meta
 const validators = new Map<string, (value: unknown) => boolean>();
 
 export const codexVersion: string = pins.codex.version;
+export const codexSchemaNames: readonly string[] = Object.freeze(Object.keys(pins.codex.schemas));
 
 export function validateCodex(name: string, value: unknown): void {
     let validate = validators.get(name);
     if (!validate) {
-        const filename = pins.codex.schemas[name];
+        const filename = Object.hasOwn(pins.codex.schemas, name) ? pins.codex.schemas[name] : undefined;
         check(filename, "UNPINNED_SCHEMA");
         const bytes = readFileSync(new URL(`./schema/${name}.json`, import.meta.url));
         check(createHash("sha256").update(bytes).digest("hex") === filename.sha256, "SCHEMA_HASH_MISMATCH");

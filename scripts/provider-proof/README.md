@@ -18,12 +18,30 @@ The Codex checker accepts an explicit CLI executable as its first argument. The 
 
 | Evidence | Scope |
 | --- | --- |
-| Local CLI schema | Codex `0.165.0-alpha.1.2`; nine exact generated schema files and SHA-256 hashes. Regeneration must match. |
-| Schema fixtures | JSONL framing, stable initialization capability selection, correlated IDs/errors, command approval, resolution, turn cancellation and completion. |
+| Local CLI schema | Codex `0.165.0-alpha.1.2`; eighteen exact generated schema files and SHA-256 hashes. Regeneration must match. |
+| Schema fixtures | JSONL framing, initialization, correlated IDs/errors, thread/turn creation, assistant item/delta events, provider errors, command approval, resolution, turn cancellation and completion. |
 | Published SDK declarations | Claude Agent SDK `0.3.312`, whose manifest selects Claude Code `2.1.312`. Thin TypeScript bridge uses `query`, `CanUseTool`, hooks, `interrupt`, `close`, explicit API key, model and USD run budget. |
 | SDK fixtures | Injected SDK interface only. On-demand loading, API-only environment, isolated profile, approval expiration/abort/replay, cancellation timeout, error redaction. These are not SDK runtime or account checks. |
 
 Codex sends newline-delimited JSON without a `jsonrpc` header. The initialization request advertises `experimentalApi: false` and opts out of automatic gateway OAuth. Cancellation receipt does not finish a turn; a matching `turn/completed` event does. Only single-action command decisions are implemented. Other server requests get `-32601`; session-wide/persistent approvals are excluded from this narrow proof.
+
+### Chat schema foundation
+
+The eighteen pins include these nine additional, unmodified generated schemas:
+
+| Method | Payload schema |
+| --- | --- |
+| `thread/start` | `ThreadStartParams`, `ThreadStartResponse` |
+| `thread/started` | `ThreadStartedNotification` |
+| `turn/start` | `TurnStartParams`, `TurnStartResponse` |
+| `item/started` | `ItemStartedNotification` |
+| `item/completed` | `ItemCompletedNotification` |
+| `item/agentMessage/delta` | `AgentMessageDeltaNotification` |
+| `error` | `ErrorNotification` |
+
+`codex-chat-schema.test.mjs` validates offline payload fixtures through the same hash-checked validators as the proof peer. The selected version requires `startedAtMs` on item starts, `completedAtMs` on item completion, and `willRetry` on provider error notifications. The response fixtures include the generated thread metadata and negotiated policy fields. These tests validate payloads, not JSON-RPC envelopes or live event ordering.
+
+The generated schemas deliberately permit extra properties and forward-compatible error information in some places. Validation preserves that behavior; it does not establish application approval policy, supported-message dispatch, identity correlation, path authorization or integer-format ranges. The schema catalog is exposed as an immutable list; unpinned names are rejected. `CodexPeer` still lacks thread/turn submission and streamed chat handling. Pin expansion is a foundation for that implementation, not connected application chat.
 
 The application approval ledger binds a snapshot to provider turn, request ID, random generation and hash. It rejects changed tokens, duplicate IDs, expired decisions and retired turns. Buffers are limited to 256 KiB per frame/action/event; outstanding requests and approvals to 64, and the per-turn replay ledger to 4096. These are transport storage bounds, not limits on agent count. A full adapter must roll its connection/turn or fail explicitly at the ledger boundary. The host must honor stdio write backpressure; this in-memory peer does not launch processes or own an output queue.
 
@@ -38,9 +56,9 @@ The Claude bridge imports its SDK only when an explicitly configured generator i
 
 ## Primary sources
 
-Checked 2026-10-28. Schemas are unmodified output from the locally installed CLI; they are interface evidence, not live service evidence.
+Chat schema pins regenerated and checked 2026-10-31; earlier proof sources checked 2026-10-28. Schemas are unmodified output from the locally installed CLI; they are interface evidence, not live service evidence.
 
-- [OpenAI app-server protocol](https://developers.openai.com/codex/app-server): initialization, JSONL, capabilities, cancellation and approval lifecycle. Local `codex app-server generate-json-schema --help` supplies the version-matched generator.
+- [OpenAI app-server protocol](https://learn.chatgpt.com/docs/app-server): initialization, JSONL, thread/turn and item lifecycle, capabilities, cancellation and approvals. Exact fields come from the selected CLI's `generate-json-schema` output.
 - [Claude Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview): supported embedding route and API authentication for third-party products.
 - [Claude approvals](https://code.claude.com/docs/en/agent-sdk/user-input) and [permissions](https://code.claude.com/docs/en/agent-sdk/permissions): callback and hook behavior.
 - [Claude streaming input](https://code.claude.com/docs/en/agent-sdk/streaming-vs-single-mode): streaming query control.

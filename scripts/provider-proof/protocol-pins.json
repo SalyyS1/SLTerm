@@ -1,5 +1,5 @@
 {
-  "evidenceDate": "2026-10-28",
+  "evidenceDate": "2026-10-31",
   "codex": {
     "version": "codex-cli 0.165.0-alpha.1.2",
     "schemas": {
@@ -38,6 +38,42 @@
       "ServerRequestResolvedNotification": {
         "source": "v2/ServerRequestResolvedNotification.json",
         "sha256": "4f03d586a5af04edd912cad08cc97eceb658e7e06744565e6d41a93e04a55966"
+      },
+      "ThreadStartParams": {
+        "source": "v2/ThreadStartParams.json",
+        "sha256": "e9c6d3cc18d049bfbc0249add3808fb8e5a27e1a0b5a423767aafbc3859a9428"
+      },
+      "ThreadStartResponse": {
+        "source": "v2/ThreadStartResponse.json",
+        "sha256": "9cbed08ecdb67764d1e1ca90df5f33754dbeba2d1e21436d77fbc80bb626c844"
+      },
+      "ThreadStartedNotification": {
+        "source": "v2/ThreadStartedNotification.json",
+        "sha256": "95d5a90a5f0495fb4e119bbdb590ec12706022fe3d87459773e26b906b1b310c"
+      },
+      "TurnStartParams": {
+        "source": "v2/TurnStartParams.json",
+        "sha256": "835e0d4ca1a0ddc4fb6db1e2b3249dd67f07c50ac2506092ba81543efc92829b"
+      },
+      "TurnStartResponse": {
+        "source": "v2/TurnStartResponse.json",
+        "sha256": "9588fa7c85b5eb67b363d3fca8f4a6bf9291f3b4b8c6295b7e7d154228270159"
+      },
+      "ItemStartedNotification": {
+        "source": "v2/ItemStartedNotification.json",
+        "sha256": "c5dc7bc43ffd6164b0920004e15b97f0d2b91f44e21547615122dbd6b104faf1"
+      },
+      "ItemCompletedNotification": {
+        "source": "v2/ItemCompletedNotification.json",
+        "sha256": "2b80261a0bdb2c6fa2ffd97584ae3fb7979f2105614b395ef66375bc10b4e69b"
+      },
+      "AgentMessageDeltaNotification": {
+        "source": "v2/AgentMessageDeltaNotification.json",
+        "sha256": "996e6c0ea65e57bed5a00f410b94381fe5ebf804333e5d00c2b6e6d47e5c55f6"
+      },
+      "ErrorNotification": {
+        "source": "v2/ErrorNotification.json",
+        "sha256": "b8e15869d27dcb1403f6a45732d30e5137ae4d0920ac1ac4c1917f6908af0693"
       }
     }
   },
