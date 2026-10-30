@@ -21,6 +21,7 @@ export class CodexChatSession {
     private lineBuffer = "";
     private unsubscribe?: () => void;
     private providerExited = false;
+    private expectedSequence = 1;
     private readonly protocol: CodexChatRuntime;
 
     constructor(options: CodexChatSessionOptions) {
@@ -67,6 +68,7 @@ export class CodexChatSession {
 
     close(): void {
         this.protocol.close();
+        this.onState?.(this.protocol.state);
         this.unsubscribe?.();
         this.unsubscribe = undefined;
         if (!this.providerExited) {
@@ -86,7 +88,18 @@ export class CodexChatSession {
             this.onState?.(this.protocol.state);
             return;
         }
+        if (frame.event === "provider.error") {
+            this.protocol.close();
+            this.onState?.(this.protocol.state);
+            return;
+        }
         if (frame.event !== "provider.output" || !frame.data) return;
+        if (frame.sequence !== this.expectedSequence) {
+            this.protocol.close();
+            this.onState?.(this.protocol.state);
+            return;
+        }
+        this.expectedSequence += 1;
         const bytes = Uint8Array.from(atob(frame.data), (character) => character.charCodeAt(0));
         this.lineBuffer += this.decoder.decode(bytes, { stream: true });
         let newline: number;

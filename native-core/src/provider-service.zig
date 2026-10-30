@@ -15,6 +15,9 @@ pub const Service = struct {
     pub fn deinit(self: *Service) void {
         for (self.entries.items) |entry| if (entry.provider) |provider| provider.destroy();
         self.entries.deinit(a);
+        // Shutdown is also followed by the owning defer in main.zig. Reset the
+        // list so that the second ownership release is a harmless no-op.
+        self.entries = .empty;
     }
 
     pub fn stopAll(self: *Service) void {
@@ -36,10 +39,16 @@ pub const Service = struct {
         const id = req.provider_id orelse return error.MissingProviderId;
         const found = self.find(id);
         if (std.mem.eql(u8, req.method, "provider.start")) {
-            if (found != null) return error.DuplicateProvider;
-            const provider = try Provider.create(req, emitter);
-            errdefer provider.destroy();
-            try self.entries.append(a, .{ .id = id, .provider = provider });
+            if (found) |entry| {
+                if (entry.provider != null) return error.DuplicateProvider;
+                const provider = try Provider.create(req, emitter);
+                errdefer provider.destroy();
+                entry.provider = provider;
+            } else {
+                const provider = try Provider.create(req, emitter);
+                errdefer provider.destroy();
+                try self.entries.append(a, .{ .id = id, .provider = provider });
+            }
             try emitter.ok(req.id);
             return true;
         }

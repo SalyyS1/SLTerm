@@ -39,7 +39,7 @@ export const validatePinnedCodexSchema: CodexSchemaValidator = (schema, value) =
             return object !== undefined;
         case "ThreadStartResponse":
             return !!object && thread(object.thread) && string(object.cwd) && string(object.model)
-                && string(object.modelProvider) && string(object.sandbox);
+                && string(object.modelProvider) && record(object.sandbox) !== undefined;
         case "ThreadStartedNotification":
             return !!object && thread(object.thread);
         case "TurnStartParams":

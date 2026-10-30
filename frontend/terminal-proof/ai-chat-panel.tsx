@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AiProvider } from "./ai-cli";
 import type { TerminalRuntime } from "./terminal-runtime";
 import { CodexChatSession } from "./codex-chat-session";
-import type { CodexRuntimeEvent } from "./codex-chat-runtime";
+import type { CodexRuntimeEvent, CodexRuntimeState } from "./codex-chat-runtime";
 import { Icon } from "./workspace-icons";
 import "./ai-chat-panel.css";
 
@@ -21,6 +21,7 @@ export function AiChatPanel({ runtime, cwd, openProvider, close }: {
     const [approval, setApproval] = useState<Extract<CodexRuntimeEvent, { type: "approvalRequest" }> | null>(null);
     const session = useRef<CodexChatSession | null>(null);
     const providerId = useRef(Math.max(1, Date.now() % Number.MAX_SAFE_INTEGER));
+    const nextProviderId = () => { providerId.current = providerId.current >= Number.MAX_SAFE_INTEGER - 1 ? 1 : providerId.current + 1; return providerId.current; };
     useEffect(() => () => session.current?.close(), []);
     const handleCodexEvent = (event: CodexRuntimeEvent) => {
         if (event.type === "agentMessageDelta") setTranscript((current) => current + event.delta);
@@ -31,6 +32,13 @@ export function AiChatPanel({ runtime, cwd, openProvider, close }: {
             setNotice(event.willRetry ? "Codex sẽ thử lại lượt này." : "Codex báo lỗi; kiểm tra output hoặc mở CLI fallback.");
         }
     };
+    const handleCodexState = (state: CodexRuntimeState) => {
+        if (state === "closed" || state === "failed") {
+            setBusy(false);
+            setAppServerUnavailable(true);
+            setNotice("Codex app-server đã dừng hoặc mất kết nối. Bạn có thể thử lại hoặc mở CLI fallback.");
+        }
+    };
     const send = async () => {
         const value = prompt.trim();
         if (!value || busy) return;
@@ -38,7 +46,7 @@ export function AiChatPanel({ runtime, cwd, openProvider, close }: {
         try {
             if (provider === "codex" && !appServerUnavailable) {
                 if (!session.current) {
-                    session.current = new CodexChatSession({ runtime, providerId: providerId.current, cwd, onEvent: handleCodexEvent });
+                    session.current = new CodexChatSession({ runtime, providerId: providerId.current, cwd, onEvent: handleCodexEvent, onState: handleCodexState });
                     await session.current.start();
                 }
                 setTranscript((current) => current ? `${current}\n\n> ${value}\n` : `> ${value}\n`);
@@ -53,7 +61,7 @@ export function AiChatPanel({ runtime, cwd, openProvider, close }: {
             setNotice(`Đã mở ${provider === "claude" ? "Claude" : "Codex"} CLI với prompt ban đầu · Terminal ${paneId}. Output và trạng thái CLI hiển thị trong terminal mới.`);
         } catch (error) {
             if (provider === "codex") {
-                session.current?.close(); session.current = null; setAppServerUnavailable(true);
+                session.current?.close(); session.current = null; nextProviderId(); setAppServerUnavailable(true);
                 setNotice(`Codex app-server chưa sẵn sàng: ${error instanceof Error ? error.message : String(error)}. Bạn có thể mở Codex CLI fallback.`);
             } else setNotice(error instanceof Error ? error.message : String(error));
             setBusy(false);

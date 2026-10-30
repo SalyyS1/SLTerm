@@ -40,12 +40,14 @@ export type CodexChatRuntimeOptions = {
     validator?: CodexSchemaValidator;
     maxPendingRequests?: number;
     maxFrameBytes?: number;
+    requestTimeoutMs?: number;
 };
 
 type Pending = {
     schema?: string;
     resolve: (value: unknown) => void;
     reject: (error: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
 };
 
 export const MAX_PENDING_REQUESTS = 64;
@@ -65,6 +67,7 @@ export class CodexChatRuntime {
     private readonly validate?: CodexSchemaValidator;
     private readonly requestLimit: number;
     private readonly frameLimit: number;
+    private readonly requestTimeoutMs: number;
     private readonly pending = new Map<string | number, Pending>();
     private readonly approvals = new Map<string | number, { threadId: string; turnId: string }>();
     private sequence = 0;
@@ -88,10 +91,13 @@ export class CodexChatRuntime {
         this.validate = options.validate ?? options.validator;
         this.requestLimit = options.maxPendingRequests ?? MAX_PENDING_REQUESTS;
         this.frameLimit = options.maxFrameBytes ?? MAX_FRAME_BYTES;
+        this.requestTimeoutMs = options.requestTimeoutMs ?? 30000;
         if (!Number.isSafeInteger(this.requestLimit) || this.requestLimit < 1 || this.requestLimit > MAX_PENDING_REQUESTS)
             throw new CodexChatRuntimeError("INVALID_REQUEST_LIMIT");
         if (!Number.isSafeInteger(this.frameLimit) || this.frameLimit < 1 || this.frameLimit > MAX_FRAME_BYTES)
             throw new CodexChatRuntimeError("INVALID_FRAME_LIMIT");
+        if (!Number.isSafeInteger(this.requestTimeoutMs) || this.requestTimeoutMs < 1000 || this.requestTimeoutMs > 300000)
+            throw new CodexChatRuntimeError("INVALID_REQUEST_TIMEOUT");
     }
 
     get state(): CodexRuntimeState { return this._state; }
@@ -209,7 +215,7 @@ export class CodexChatRuntime {
         if (this._state === "closed") return;
         this._state = "closed";
         const error = new CodexChatRuntimeError("CONNECTION_CLOSED");
-        for (const pending of this.pending.values()) pending.reject(error);
+        for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
         this.pending.clear();
         this.approvals.clear();
         this.threadId = undefined;
@@ -222,12 +228,14 @@ export class CodexChatRuntime {
         if (!pending) throw this.protocol("STALE_REPLY");
         if (("result" in message) === ("error" in message)) {
             this.pending.delete(id);
+            clearTimeout(pending.timer);
             const failure = this.protocol("INVALID_REPLY");
             pending.reject(failure);
             this.fail(failure);
             throw failure;
         }
         this.pending.delete(id);
+        clearTimeout(pending.timer);
         if ("error" in message) {
             const error = message.error;
             if (!this.isRpcError(error)) {
@@ -351,7 +359,13 @@ export class CodexChatRuntime {
         const message: CodexMessage = { id, method, params };
         this.assertFrame(message);
         return new Promise((resolve, reject) => {
-            this.pending.set(id, { schema: schema ?? "", resolve, reject });
+            const timer = setTimeout(() => {
+                if (!this.pending.delete(id)) return;
+                const failure = this.protocol("REQUEST_TIMEOUT", `Timed out waiting for ${method}`);
+                reject(failure);
+                this.fail(failure);
+            }, this.requestTimeoutMs);
+            this.pending.set(id, { schema: schema ?? "", resolve, reject, timer });
             try {
                 const result = this.sendMessage(message);
                 if (result && typeof (result as Promise<void>).then === "function")
@@ -370,6 +384,7 @@ export class CodexChatRuntime {
         const pending = this.pending.get(id);
         if (!pending) return;
         this.pending.delete(id);
+        clearTimeout(pending.timer);
         const failure = error instanceof Error ? error : new CodexChatRuntimeError("TRANSPORT_WRITE_FAILED", String(error));
         pending.reject(failure);
         this.fail(failure);
