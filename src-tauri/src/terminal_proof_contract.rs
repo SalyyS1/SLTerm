@@ -21,4 +21,7 @@ pub const METHODS: &[&str] = &[
     "transcripts.read",
     "worktrees.inspect",
     "worktrees.prepare",
+    "provider.start",
+    "provider.input",
+    "provider.stop",
 ];

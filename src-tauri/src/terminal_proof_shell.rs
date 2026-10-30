@@ -118,6 +118,30 @@ fn provider_executable_roots(
     unique
 }
 
+/// Resolve an installed Codex executable without inheriting the host's PATH or
+/// any credential-bearing environment. Only existing absolute files are
+/// returned; callers pass the result to the Zig provider owner explicitly.
+pub fn discover_provider_executable() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        candidates.push(PathBuf::from(local).join("OpenAI/Codex/bin/codex.exe"));
+    }
+    if let Some(profile) = std::env::var_os("USERPROFILE") {
+        candidates.push(PathBuf::from(profile).join(".local/bin/codex.exe"));
+    }
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        candidates.push(PathBuf::from(appdata).join("npm/codex.exe"));
+    }
+    if let Some(path) = std::env::var_os("PATH") {
+        for root in std::env::split_paths(&path) {
+            if root.is_absolute() {
+                candidates.push(root.join("codex.exe"));
+            }
+        }
+    }
+    candidates.into_iter().find(|path| path.is_file())
+}
+
 fn child_environment(
     profile: &Path,
     windows: &Path,

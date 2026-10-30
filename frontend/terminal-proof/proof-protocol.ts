@@ -5,6 +5,7 @@ export type Frame = {
     error_code?: string;
     event?: string;
     session_id?: number;
+    provider_id?: number;
     data?: string;
     sequence?: number;
     exit_code?: number;

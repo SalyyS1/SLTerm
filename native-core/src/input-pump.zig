@@ -11,6 +11,7 @@ pub const InputPump = struct {
     event: c.HANDLE,
     emitter: *rpc.Emitter,
     session_id: u64,
+    provider_id: ?u64 = null,
     thread: ?std.Thread = null,
     lock: c.SRWLOCK = std.mem.zeroes(c.SRWLOCK),
     buffer: [capacity]u8 = undefined,
@@ -26,6 +27,12 @@ pub const InputPump = struct {
             .emitter = emitter,
             .session_id = session_id,
         };
+    }
+
+    pub fn initProvider(handle: c.HANDLE, emitter: *rpc.Emitter, provider_id: u64) !InputPump {
+        var pump = try init(handle, emitter, provider_id);
+        pump.provider_id = provider_id;
+        return pump;
     }
 
     pub fn start(self: *InputPump) !void {
@@ -64,7 +71,14 @@ pub const InputPump = struct {
     }
 
     fn reportUncertain(self: *InputPump, count: usize) void {
-        if (count != 0) self.emitter.send(.{
+        if (count == 0) return;
+        if (self.provider_id) |id| self.emitter.send(.{
+            .version = rpc.version,
+            .event = "provider.error",
+            .provider_id = id,
+            .error_code = "InputDeliveryUncertain",
+            .message = "Provider input delivery is uncertain; input was not replayed.",
+        }) else self.emitter.send(.{
             .version = rpc.version,
             .event = "input-error",
             .session_id = self.session_id,

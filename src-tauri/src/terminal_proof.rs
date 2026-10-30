@@ -228,7 +228,13 @@ fn proof_start(window: WebviewWindow, state: State<ProofState>) -> Result<Value,
         let _ = emit(&app, json!({"event":"transport_closed"}));
         output_closed.store(true, Ordering::SeqCst);
     });
-    Ok(json!({"pid":pid, "cwd":root, "executable":shell.executable, "args":shell.arguments}))
+    Ok(json!({
+        "pid":pid,
+        "cwd":root,
+        "executable":shell.executable,
+        "args":shell.arguments,
+        "codexExecutable": shell::discover_provider_executable(),
+    }))
 }
 
 #[tauri::command]

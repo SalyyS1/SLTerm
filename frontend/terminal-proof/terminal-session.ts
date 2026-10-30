@@ -10,7 +10,7 @@ import { replayTranscript, type TranscriptRequest } from "./terminal-transcript"
 
 export type SessionStatus = "starting" | "running" | "closing" | "exited" | "error";
 export type SessionInfo = { status: SessionStatus; exitCode?: number; message?: string; restored?: boolean; warning?: string };
-export type ShellEnvironment = { executable: string; cwd: string; pid: number; args: string[] };
+export type ShellEnvironment = { executable: string; cwd: string; pid: number; args: string[]; codexExecutable?: string };
 export type SpawnCommand = { executable: string; args: string[]; provider?: "claude" | "codex" };
 
 export class TerminalSession {

@@ -4,7 +4,7 @@
   "title": "SLTerm private ADE IPC",
   "protocolVersion": 1,
   "maxFrameBytes": 65536,
-  "methods": ["hello", "spawn", "input", "resize", "ack", "stop", "shutdown", "preferences.load", "preferences.save.begin", "preferences.save.chunk", "preferences.save.commit", "preferences.save.cancel", "files.list", "files.read", "files.save.begin", "files.save.chunk", "files.save.commit", "files.save.cancel", "transcripts.metadata", "transcripts.read", "worktrees.inspect", "worktrees.prepare"],
+  "methods": ["hello", "spawn", "input", "resize", "ack", "stop", "shutdown", "preferences.load", "preferences.save.begin", "preferences.save.chunk", "preferences.save.commit", "preferences.save.cancel", "files.list", "files.read", "files.save.begin", "files.save.chunk", "files.save.commit", "files.save.cancel", "transcripts.metadata", "transcripts.read", "worktrees.inspect", "worktrees.prepare", "provider.start", "provider.input", "provider.stop"],
   "hostReservedMethods": ["shutdown"],
   "$defs": {
     "request": {
@@ -36,6 +36,7 @@
         "task_id": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
         "base_revision": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"},
         "provider": {"type": ["string", "null"], "default": null, "zig": "?[]const u8"}
+        ,"provider_id": {"type": ["integer", "null"], "default": null, "zig": "?u64"}
       }
     },
     "response": {
@@ -53,8 +54,8 @@
       "required": ["version", "event"],
       "properties": {
         "version": {"const": 1},
-        "event": {"enum": ["ready", "output", "gap", "input-error", "archive-warning", "stream-error", "exit", "transport_error", "transport_closed", "close_requested", "shutdown_started", "shutdown_stalled"]},
-        "session_id": {"type": "integer"}, "data": {"type": "string"}, "sequence": {"type": "integer"},
+        "event": {"enum": ["ready", "output", "gap", "input-error", "archive-warning", "stream-error", "exit", "provider.output", "provider.stderr", "provider.exit", "provider.error", "transport_error", "transport_closed", "close_requested", "shutdown_started", "shutdown_stalled"]},
+        "session_id": {"type": "integer"}, "provider_id": {"type": "integer"}, "data": {"type": "string"}, "sequence": {"type": "integer"},
         "last_sequence": {"type": "integer"}, "exit_code": {"type": "integer"},
         "discarded_bytes": {"type": "integer"}, "affected_bytes": {"type": "integer"},
         "error_code": {"type": "string"}, "message": {"type": "string"}

@@ -24,4 +24,5 @@ pub const Request = struct {
     task_id: ?[]const u8 = null,
     base_revision: ?[]const u8 = null,
     provider: ?[]const u8 = null,
+    provider_id: ?u64 = null,
 };

@@ -19,6 +19,7 @@ export type RuntimeSnapshot = {
 
 export type WorktreeResult = { root: string; path: string; branch: string; base_revision: string; head_revision: string; exists: boolean; ready: boolean; completion_unknown?: boolean };
 export type ProviderLaunchOptions = { cwd?: string; prompt?: string; workspaceId?: string; taskId?: string; attemptId?: string };
+export type ProviderFrame = { event: string; provider_id?: number; sequence?: number; data?: string; exit_code?: number; last_sequence?: number; error_code?: string; message?: string };
 
 /** Owns live terminal identity independently of React tabs or split-tree positions. */
 export class TerminalRuntime {
@@ -40,6 +41,7 @@ export class TerminalRuntime {
     private connectionLost = false;
     private observer = new ResizeObserver(() => this.scheduleResize());
     private resizeTimer?: ReturnType<typeof setTimeout>;
+    private providerListeners = new Map<number, Set<(frame: ProviderFrame) => void>>();
     subscribe = (listener: () => void) => {
         this.subscribers.add(listener);
         return () => {
@@ -55,6 +57,23 @@ export class TerminalRuntime {
     clearError = () => this.update({ error: null });
     consumeCloseRequest = () => this.update({ closeRequested: false });
     request = (method: string, args: Record<string, unknown> = {}) => this.transport.requestValue(method, args);
+
+    onProvider(providerId: number, listener: (frame: ProviderFrame) => void) {
+        const listeners = this.providerListeners.get(providerId) ?? new Set<(frame: ProviderFrame) => void>();
+        listeners.add(listener); this.providerListeners.set(providerId, listeners);
+        return () => { listeners.delete(listener); if (!listeners.size) this.providerListeners.delete(providerId); };
+    }
+    async startCodexProvider(providerId: number, cwd: string) {
+        const executable = this.environment?.codexExecutable;
+        if (!executable) throw new Error("Chưa tìm thấy Codex app-server cục bộ.");
+        await this.request("provider.start", { provider_id: providerId, provider: "codex", executable, args: ["app-server"], cwd });
+    }
+    async sendProvider(providerId: number, data: string) {
+        const bytes = new TextEncoder().encode(data);
+        if (bytes.length > 64 * 1024) throw new Error("Provider frame vượt quá 64 KiB.");
+        await this.request("provider.input", { provider_id: providerId, data });
+    }
+    stopProvider(providerId: number) { return this.request("provider.stop", { provider_id: providerId }); }
 
     async inspectWorktree(root: string, taskId: string): Promise<WorktreeResult> {
         return this.request("worktrees.inspect", { root, task_id: taskId }) as Promise<WorktreeResult>;
@@ -247,6 +266,10 @@ export class TerminalRuntime {
                 const session = this.sessions.get(frame.session_id);
                 if (!session) throw new Error("Frame for unknown terminal " + frame.session_id);
                 session.receive(frame);
+                return;
+            }
+            if (frame.provider_id !== undefined) {
+                for (const listener of this.providerListeners.get(frame.provider_id) ?? []) listener(frame as ProviderFrame);
                 return;
             }
             if (frame.event === "transport_closed" || frame.event === "transport_error") {
