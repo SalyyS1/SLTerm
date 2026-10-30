@@ -1,5 +1,5 @@
 //! Disposable proof-shell policy, not a filesystem or operating-system sandbox.
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 pub struct ProofShell {
@@ -68,6 +68,56 @@ $ErrorActionPreference = 'Continue';
     )
 }
 
+fn provider_executable_roots(
+    user_profile: Option<&Path>,
+    user_appdata: Option<&Path>,
+    local_appdata: Option<&Path>,
+    host_path: Option<&OsStr>,
+) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(profile) = user_profile {
+        roots.push(profile.join(".local/bin"));
+        roots.push(profile.join("AppData/Roaming/npm"));
+    }
+    if let Some(appdata) = user_appdata {
+        roots.push(appdata.join("npm"));
+    }
+    if let Some(local) = local_appdata {
+        let codex_bin = local.join("OpenAI/Codex/bin");
+        // Preserve the host's active Codex installation before considering other
+        // installed versions. Only executable locations enter the child PATH.
+        if let Some(path) = host_path {
+            for root in std::env::split_paths(path) {
+                if root.is_absolute()
+                    && root.starts_with(&codex_bin)
+                    && root.join("codex.exe").is_file()
+                {
+                    roots.push(root);
+                }
+            }
+        }
+        if codex_bin.join("codex.exe").is_file() {
+            roots.push(codex_bin.clone());
+        }
+        if let Ok(entries) = std::fs::read_dir(codex_bin) {
+            let mut installed: Vec<_> = entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|root| root.join("codex.exe").is_file())
+                .collect();
+            installed.sort();
+            roots.extend(installed);
+        }
+    }
+    let mut unique = Vec::new();
+    for root in roots {
+        if !unique.contains(&root) {
+            unique.push(root);
+        }
+    }
+    unique
+}
+
 fn child_environment(
     profile: &Path,
     windows: &Path,
@@ -79,6 +129,7 @@ fn child_environment(
     // must use its own explicit login flow and no host token is copied in.
     let user_profile = std::env::var_os("USERPROFILE").map(PathBuf::from);
     let user_appdata = std::env::var_os("APPDATA").map(PathBuf::from);
+    let local_appdata = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
     let node_roots = [
         windows.join("System32"),
         windows.to_path_buf(),
@@ -88,14 +139,13 @@ fn child_environment(
         PathBuf::from(r"C:\Program Files\nodejs"),
     ];
     let mut path_roots = node_roots.to_vec();
-    if let Some(profile) = user_profile {
-        path_roots.push(profile.join("AppData/Roaming/npm"));
-    }
-    if let Some(appdata) = user_appdata {
-        path_roots.push(appdata.join("npm"));
-    }
-    let path = std::env::join_paths(path_roots)
-    .map_err(|e| e.to_string())?;
+    path_roots.extend(provider_executable_roots(
+        user_profile.as_deref(),
+        user_appdata.as_deref(),
+        local_appdata.as_deref(),
+        std::env::var_os("PATH").as_deref(),
+    ));
+    let path = std::env::join_paths(path_roots).map_err(|e| e.to_string())?;
     let modules = std::env::join_paths(module_roots).map_err(|e| e.to_string())?;
     Ok(vec![
         ("SystemRoot", windows.as_os_str().to_owned()),
@@ -171,7 +221,26 @@ mod tests {
             &[PathBuf::from("C:/machine-modules")],
         )
         .unwrap();
-        assert_eq!(vars.len(), 15);
+        assert_eq!(
+            vars.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
+            [
+                "SystemRoot",
+                "windir",
+                "ComSpec",
+                "PATH",
+                "PATHEXT",
+                "USERPROFILE",
+                "HOME",
+                "APPDATA",
+                "LOCALAPPDATA",
+                "TEMP",
+                "TMP",
+                "PSModulePath",
+                "PSModuleAnalysisCachePath",
+                "TERM",
+                "POWERSHELL_TELEMETRY_OPTOUT",
+            ]
+        );
         for key in [
             "USERPROFILE",
             "HOME",
@@ -195,6 +264,45 @@ mod tests {
         ] {
             assert!(!vars.iter().any(|(name, _)| *name == key));
         }
+    }
+
+    #[test]
+    fn provider_roots_add_executables_without_importing_the_host_path() {
+        let roots = provider_executable_roots(
+            Some(Path::new("C:/host-user")),
+            Some(Path::new("C:/host-user/AppData/Roaming")),
+            None,
+            Some(OsStr::new("C:/unrelated-host-bin")),
+        );
+        assert_eq!(
+            roots,
+            [
+                PathBuf::from("C:/host-user/.local/bin"),
+                PathBuf::from("C:/host-user/AppData/Roaming/npm"),
+            ]
+        );
+    }
+
+    #[test]
+    fn codex_discovery_prefers_the_active_installed_binary_directory() {
+        let scratch = std::env::temp_dir().join(format!(
+            "slterm-provider-path-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let first = scratch.join("OpenAI/Codex/bin/a-install");
+        let active = scratch.join("OpenAI/Codex/bin/z-install");
+        for root in [&first, &active] {
+            std::fs::create_dir_all(root).unwrap();
+            std::fs::write(root.join("codex.exe"), []).unwrap();
+        }
+        let host_path = std::env::join_paths([scratch.join("unrelated"), active.clone()]).unwrap();
+        let roots = provider_executable_roots(None, None, Some(&scratch), Some(&host_path));
+        assert_eq!(roots, [active, first]);
+        std::fs::remove_dir_all(scratch).unwrap();
     }
 
     #[test]
