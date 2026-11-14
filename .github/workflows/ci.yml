@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25.6"
+  NODE_VERSION: "22"
+  GOTOOLCHAIN: local
+
+jobs:
+  go-backend-tests:
+    name: Go Backend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+      - name: Run Go core package tests
+        run: |
+          go test -race -v \
+            ./pkg/agentteams/... \
+            ./pkg/aitools/... \
+            ./pkg/secretstore/... \
+            ./pkg/authkey/... \
+            ./pkg/remote/connparse/... \
+            ./pkg/web/...
+
+  frontend-terminal-tests:
+    name: Frontend Terminal Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run Vitest terminal test suite
+        run: npx vitest run frontend/app/view/term/tests/

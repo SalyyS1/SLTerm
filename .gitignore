@@ -46,3 +46,10 @@ build-log*.txt
 # Tauri shell build output
 src-tauri/target/
 src-tauri/gen/
+
+# Stray local build binaries and diagnostic logs
+/server
+/eb_output.txt
+/eb_errors.txt
+/SCOUT_FINDINGS.md
+
