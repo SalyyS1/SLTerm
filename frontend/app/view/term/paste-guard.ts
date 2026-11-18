@@ -448,3 +448,139 @@ export function sanitizeAndAnalyzePaste(text: string): PasteAnalysisResult {
         warnings,
     };
 }
+
+type PasteSarifRuleSpec = {
+    id: string;
+    name: string;
+    level: "error" | "warning";
+    securitySeverity: string;
+    shortDescription: string;
+};
+
+const PASTE_SARIF_RULES: Record<PasteWarningKind, PasteSarifRuleSpec> = {
+    bracketed_paste_breakout: {
+        id: "SLTP001",
+        name: "BracketedPasteBreakout",
+        level: "error",
+        securitySeverity: "9.3",
+        shortDescription: "Bracketed-paste boundary escape sequence closes paste envelope early",
+    },
+    osc52_clipboard_hijack: {
+        id: "SLTP002",
+        name: "Osc52ClipboardHijack",
+        level: "error",
+        securitySeverity: "8.6",
+        shortDescription: "OSC 52 terminal clipboard read or write sequence in pasted text",
+    },
+    dcs_control_string: {
+        id: "SLTP003",
+        name: "DcsDeviceControlString",
+        level: "error",
+        securitySeverity: "8.1",
+        shortDescription: "DCS, APC, PM, or SOS device control string in pasted text",
+    },
+    ansi_escape_smuggling: {
+        id: "SLTP004",
+        name: "AnsiEscapeSmuggling",
+        level: "warning",
+        securitySeverity: "6.4",
+        shortDescription: "Terminal escape or line-overwrite control characters in clipboard payload",
+    },
+    visual_line_deception: {
+        id: "SLTP005",
+        name: "VisualLineDeception",
+        level: "error",
+        securitySeverity: "8.9",
+        shortDescription: "VT100 line-editing controls conceal executed command tokens from visible output",
+    },
+    bidi_trojan_source: {
+        id: "SLTP006",
+        name: "TrojanSourceBiDiControl",
+        level: "error",
+        securitySeverity: "8.2",
+        shortDescription: "Unicode bidirectional override or isolate control characters in clipboard payload",
+    },
+    zero_width_smuggling: {
+        id: "SLTP007",
+        name: "ZeroWidthOrTagSmuggling",
+        level: "warning",
+        securitySeverity: "6.2",
+        shortDescription: "Invisible zero-width or Plane-14 tag characters in clipboard payload",
+    },
+    obfuscated_shell_exec: {
+        id: "SLTP008",
+        name: "ObfuscatedShellExecution",
+        level: "warning",
+        securitySeverity: "7.0",
+        shortDescription: "High-risk obfuscated pipe-to-shell or Punycode execution pattern",
+    },
+    secret_exposure: {
+        id: "SLTP009",
+        name: "ClipboardCredentialExposure",
+        level: "warning",
+        securitySeverity: "7.4",
+        shortDescription: "Live API token, bearer credential, or private key detected in clipboard payload",
+    },
+};
+
+/**
+ * Serialize a `PasteAnalysisResult` into an OASIS SARIF v2.1.0 object without
+ * embedding raw clipboard contents or matched credential values.
+ */
+export function exportPasteAnalysisSarif(
+    analysis: PasteAnalysisResult,
+    artifactUri = "clipboard://paste-buffer"
+): Record<string, unknown> {
+    const orderedKinds = Object.keys(PASTE_SARIF_RULES) as PasteWarningKind[];
+    const rules = orderedKinds.map((kind) => {
+        const spec = PASTE_SARIF_RULES[kind];
+        return {
+            id: spec.id,
+            name: spec.name,
+            shortDescription: { text: spec.shortDescription },
+            defaultConfiguration: { level: spec.level },
+            properties: {
+                "security-severity": spec.securitySeverity,
+                tags: ["security", "terminal", "paste-guard"],
+            },
+        };
+    });
+
+    const results = analysis.warnings.map((w) => {
+        const ruleIndex = orderedKinds.indexOf(w.kind);
+        const spec = PASTE_SARIF_RULES[w.kind];
+        return {
+            ruleId: spec.id,
+            ruleIndex,
+            level: spec.level,
+            message: { text: w.summary },
+            locations: [
+                {
+                    physicalLocation: {
+                        artifactLocation: { uri: artifactUri },
+                        region: { startLine: 1, startColumn: 1 },
+                    },
+                },
+            ],
+        };
+    });
+
+    return {
+        $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+        version: "2.1.0",
+        runs: [
+            {
+                tool: {
+                    driver: {
+                        name: "slterm-paste-guard",
+                        version: "0.22.0",
+                        informationUri: "https://github.com/SalyyS1/SLTerm",
+                        rules,
+                    },
+                },
+                invocations: [{ executionSuccessful: true }],
+                results,
+            },
+        ],
+    };
+}

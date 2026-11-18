@@ -18,8 +18,8 @@
   <a href="https://github.com/SalyyS1/SLTerm/releases"><img src="https://img.shields.io/github/downloads/SalyyS1/SLTerm/total?style=flat-square&color=58C142" alt="Downloads"></a>
 </p>
 
-> **[Launch the Interactive Browser Paste-Guard & VT100 Escape Sandbox -> `https://salyys1.github.io/SLTerm/`](https://salyys1.github.io/SLTerm/)**
-> *Test bracketed-paste `ESC[201~` breakouts, `OSC 52` clipboard hijacks, `CSI 2K`/`CR`/`BS` visual prompt masking, Trojan Source BiDi overrides, and secret redaction 100% client-side in your browser.*
+> **[Launch the Interactive Browser Terminal Security Lab -> `https://salyys1.github.io/SLTerm/`](https://salyys1.github.io/SLTerm/)**
+> *Audit `ESC[201~` bracketed-paste breakouts, `OSC 52` clipboard hijacks, OpenSSH `ProxyCommand` injection (`SLT001`..`SLT010`), terminal scrollback secret redaction, and OASIS SARIF v2.1.0 output 100% client-side in your browser.*
 
 ---
 
@@ -30,7 +30,8 @@ SLTerm is an open-source graphical terminal workspace engineered for multi-agent
 - **Dual Desktop Runtime (Tauri 2 Rust Host + Electron):** Ships a native Rust Tauri 2 host (`src-tauri/`) that spawns `wavesrv` as a managed sidecar on Windows, macOS, and Linux, cutting idle WebView memory overhead compared to Chromium-bundled shells while retaining Electron builds for legacy workflows.
 - **Claude Code Multi-Agent Teams Board (`pkg/agentteams`):** Read-only real-time observability view over live Claude Code team rosters (`config.json`) and shared task boards (`blockedBy` dependencies, task owners, active execution states, and explicit schema-drift warnings).
 - **AI CLI & MCP Inventory (`pkg/aitools`):** Unified inspector and editor for user-scope and project-scope Skills, Agents, Slash Commands, and MCP server definitions (`stdio` and `http` transports) across Claude Code and Codex, hardened against path-traversal (`validateName`).
-- **Terminal Paste Security Guard (`frontend/app/view/term/paste-guard.ts`):** Intercepts clipboard pastes before `xterm.js` ingestion, unconditionally stripping 7-bit (`ESC[201~`) and 8-bit C1 (`0x9B 201~`) bracketed-paste breakouts, `OSC 52` clipboard read/write hijack sequences (`ESC]52;...`), and `DCS`/`APC`/`PM`/`SOS` device control strings. Includes a deterministic VT100 line-buffer simulator (`simulateTerminalDisplay`) that detects visual prompt masking (`CSI 2K`, `\r`, `\x08` backspace overwrites) alongside Trojan Source Unicode BiDi overrides (`U+202A..U+202E`, `U+2066..U+2069`), zero-width and Plane-14 tag smuggling, obfuscated `base64 -d | sh` / Punycode commands, and secret-redacted credential warnings across 10 token families (OpenAI, Anthropic, GitHub, AWS IAM, Google API, HuggingFace, npm, Slack, JWT, and PEM private keys).
+- **Terminal Paste Security Guard & Output Secret Redactor (`frontend/app/view/term/paste-guard.ts`, `output-redactor.ts`):** Intercepts clipboard pastes before `xterm.js` ingestion, unconditionally stripping 7-bit (`ESC[201~`) and 8-bit C1 (`0x9B 201~`) bracketed-paste breakouts, `OSC 52` clipboard read/write hijack sequences (`ESC]52;...`), and `DCS`/`APC`/`PM`/`SOS` device control strings. Includes a deterministic VT100 line-buffer simulator (`simulateTerminalDisplay`), OASIS SARIF v2.1.0 export (`exportPasteAnalysisSarif`, rules `SLTP001`..`SLTP009`), and an ANSI-preserving scrollback/transcript redactor (`redactTerminalOutput`) that scrubs 12 credential families (OpenAI, Anthropic, GitHub, AWS IAM, Google API, HuggingFace, npm, Slack, Stripe, JWT, URL Basic Auth, Bearer headers, and PEM private keys) into deterministic correlation handles (`[REDACTED:label#digest]`).
+- **OpenSSH Config & `ProxyCommand` Security Auditor (`pkg/sshaudit`, `cmd/sshaudit`):** Static security analyzer and standalone CLI (`slterm-sshaudit`) covering 10 rules (`SLT001`..`SLT010`): `ProxyCommand` / `KnownHostsCommand` shell & leading-dash option injection (`CVE-2023-51385` class), `PermitLocalCommand` / `LocalCommand` execution, `StrictHostKeyChecking no` / `UserKnownHostsFile /dev/null` MITM bypasses, wildcard `ForwardAgent` / `ForwardX11Trusted`, weak ciphers/KEX/SHA-1 `ssh-rsa`, `SendEnv` credential leaks, `0.0.0.0` tunnel binds, `Match exec` pre-auth token injection, `/tmp` `ControlPath` sockets, and inline secret or Trojan Source BiDi smuggling with OASIS SARIF v2.1.0 export (`--sarif`).
 - **XChaCha20-Poly1305 Envelope Secret Store (`pkg/secretstore`):** Seals stored SSH and API credentials with 24-byte random-nonce authenticated encryption (`SLTERM-SECRETS-1:`), decoupling secret storage from Electron `safeStorage` so credentials migrate cleanly to the Tauri 2 runtime.
 - **Zero-Ghost Terminal Layout & Replay Pipeline:** Pre-layout spawn gating (`term-spawn-gate.ts`) blocks premature `2x1` PTY starts prior to CSS box layout; carried terminal parking (`term-carry-over.ts`), loopback offset reconciliation (`term-replay.ts`), and batched frame/input writers (`term-batched-writer.ts`) keep high-throughput output smooth.
 - **Workspace Blocks & Remote SSH:** Drag-and-drop tiled terminals, Monaco code editors, Markdown/CSV/PDF/media previews, web blocks, `wsh` workspace CLI control, and one-click SSH + remote filesystem sessions.
@@ -88,7 +89,13 @@ npm install
 npx vitest run frontend/app/view/term/tests/
 
 # Run Go backend unit tests
-go test -race ./pkg/agentteams/... ./pkg/aitools/... ./pkg/secretstore/...
+go test -race ./pkg/sshaudit/... ./cmd/sshaudit/... ./pkg/agentteams/... ./pkg/aitools/... ./pkg/secretstore/...
+
+# Audit an OpenSSH client config and emit OASIS SARIF v2.1.0
+go run ./cmd/sshaudit audit ~/.ssh/config --sarif ssh-audit.sarif
+
+# Redact live credentials from a terminal transcript
+go run ./cmd/sshaudit redact session.log > session.redacted.log
 
 # Run Tauri 2 native desktop shell in development
 npm run dev:tauri

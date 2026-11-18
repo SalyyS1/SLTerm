@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { sanitizeAndAnalyzePaste, simulateTerminalDisplay } from "../paste-guard";
+import { exportPasteAnalysisSarif, sanitizeAndAnalyzePaste, simulateTerminalDisplay } from "../paste-guard";
 
 describe("sanitizeAndAnalyzePaste", () => {
     it("passes ordinary single-line and multi-line commands through untouched", () => {
@@ -139,5 +139,14 @@ describe("sanitizeAndAnalyzePaste", () => {
             "pem-private-key",
         ]);
         expect(secretWarning?.summary).not.toContain(jwt);
+
+        const sarif = exportPasteAnalysisSarif(res, "clipboard://session-1") as {
+            version: string;
+            runs: Array<{ results: Array<{ ruleId: string; message: { text: string } }> }>;
+        };
+        expect(sarif.version).toBe("2.1.0");
+        expect(sarif.runs[0].results.map((r) => r.ruleId)).toContain("SLTP009");
+        expect(JSON.stringify(sarif)).not.toContain(jwt);
+        expect(JSON.stringify(sarif)).not.toContain(awsId);
     });
 });

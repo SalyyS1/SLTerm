@@ -30,6 +30,8 @@ jobs:
             ./pkg/agentteams/... \
             ./pkg/aitools/... \
             ./pkg/secretstore/... \
+            ./pkg/sshaudit/... \
+            ./cmd/sshaudit/... \
             ./pkg/authkey/... \
             ./pkg/remote/connparse/... \
             ./pkg/web/...
