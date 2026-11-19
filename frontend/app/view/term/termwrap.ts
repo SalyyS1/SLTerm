@@ -36,6 +36,7 @@ import { reconcileHeldData, waveFileDataStartIdx, type HeldChunk } from "./term-
 import { BatchedWriter } from "./term-batched-writer";
 import { canMeasureTermLayout } from "./term-spawn-gate";
 import { parkCarriedTerminal, takeCarriedTerminal } from "./term-carry-over";
+import { analyzeShellCommand } from "./command-guard";
 import { sanitizeAndAnalyzePaste } from "./paste-guard";
 import { createTempFileFromBlob, extractAllClipboardData } from "./termutil";
 
@@ -879,6 +880,13 @@ export class TermWrap {
                         console.warn(`[SLTerm paste-guard] ${warning.kind}: ${warning.summary}`);
                     }
                     if (pasteCheck.sanitizedText.length > 0) {
+                        const cmdReport = analyzeShellCommand(pasteCheck.sanitizedText, { source: "clipboard" });
+                        for (const finding of cmdReport.findings) {
+                            dlog("cmdguard %s (%s): %s", finding.ruleId, cmdReport.verdict, finding.message);
+                            console.warn(
+                                `[SLTerm cmdguard] ${finding.ruleId} (${cmdReport.verdict}): ${finding.message}`
+                            );
+                        }
                         this.terminal.paste(pasteCheck.sanitizedText);
                     }
                 }

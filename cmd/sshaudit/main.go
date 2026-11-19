@@ -14,7 +14,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/sshaudit"
 )
 
-const cliVersion = "0.22.0"
+const cliVersion = "0.23.0"
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))

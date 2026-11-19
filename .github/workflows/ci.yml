@@ -32,6 +32,8 @@ jobs:
             ./pkg/secretstore/... \
             ./pkg/sshaudit/... \
             ./cmd/sshaudit/... \
+            ./pkg/cmdguard/... \
+            ./cmd/cmdguard/... \
             ./pkg/authkey/... \
             ./pkg/remote/connparse/... \
             ./pkg/web/...

@@ -92,7 +92,7 @@ type sarifRegion struct {
 // JSON document suitable for GitHub Code Scanning and CI security gates.
 func BuildSARIF(reports []AuditReport, version string) ([]byte, error) {
 	if version == "" {
-		version = "0.22.0"
+		version = "0.23.0"
 	}
 
 	rules := make([]sarifRule, 0, len(ruleCatalog))

@@ -15,7 +15,7 @@ import (
 func TestCLIAuditAndSarifAndRedact(t *testing.T) {
 	var out, errBuf bytes.Buffer
 	code := run([]string{"--version"}, strings.NewReader(""), &out, &errBuf)
-	if code != 0 || !strings.Contains(out.String(), "0.22.0") {
+	if code != 0 || !strings.Contains(out.String(), "0.23.0") {
 		t.Fatalf("unexpected version output: code=%d out=%q", code, out.String())
 	}
 

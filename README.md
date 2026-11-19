@@ -19,7 +19,7 @@
 </p>
 
 > **[Launch the Interactive Browser Terminal Security Lab -> `https://salyys1.github.io/SLTerm/`](https://salyys1.github.io/SLTerm/)**
-> *Audit `ESC[201~` bracketed-paste breakouts, `OSC 52` clipboard hijacks, OpenSSH `ProxyCommand` injection (`SLT001`..`SLT010`), terminal scrollback secret redaction, and OASIS SARIF v2.1.0 output 100% client-side in your browser.*
+> *Audit `ESC[201~` bracketed-paste breakouts, `OSC 52` clipboard hijacks, OpenSSH `ProxyCommand` injection (`SLT001`..`SLT010`), Shell & Agent Command Firewall hazards (`SLT011`..`SLT016`), terminal scrollback secret redaction, and OASIS SARIF v2.1.0 output 100% client-side in your browser.*
 
 ---
 
@@ -32,6 +32,7 @@ SLTerm is an open-source graphical terminal workspace engineered for multi-agent
 - **AI CLI & MCP Inventory (`pkg/aitools`):** Unified inspector and editor for user-scope and project-scope Skills, Agents, Slash Commands, and MCP server definitions (`stdio` and `http` transports) across Claude Code and Codex, hardened against path-traversal (`validateName`).
 - **Terminal Paste Security Guard & Output Secret Redactor (`frontend/app/view/term/paste-guard.ts`, `output-redactor.ts`):** Intercepts clipboard pastes before `xterm.js` ingestion, unconditionally stripping 7-bit (`ESC[201~`) and 8-bit C1 (`0x9B 201~`) bracketed-paste breakouts, `OSC 52` clipboard read/write hijack sequences (`ESC]52;...`), and `DCS`/`APC`/`PM`/`SOS` device control strings. Includes a deterministic VT100 line-buffer simulator (`simulateTerminalDisplay`), OASIS SARIF v2.1.0 export (`exportPasteAnalysisSarif`, rules `SLTP001`..`SLTP009`), and an ANSI-preserving scrollback/transcript redactor (`redactTerminalOutput`) that scrubs 12 credential families (OpenAI, Anthropic, GitHub, AWS IAM, Google API, HuggingFace, npm, Slack, Stripe, JWT, URL Basic Auth, Bearer headers, and PEM private keys) into deterministic correlation handles (`[REDACTED:label#digest]`).
 - **OpenSSH Config & `ProxyCommand` Security Auditor (`pkg/sshaudit`, `cmd/sshaudit`):** Static security analyzer and standalone CLI (`slterm-sshaudit`) covering 10 rules (`SLT001`..`SLT010`): `ProxyCommand` / `KnownHostsCommand` shell & leading-dash option injection (`CVE-2023-51385` class), `PermitLocalCommand` / `LocalCommand` execution, `StrictHostKeyChecking no` / `UserKnownHostsFile /dev/null` MITM bypasses, wildcard `ForwardAgent` / `ForwardX11Trusted`, weak ciphers/KEX/SHA-1 `ssh-rsa`, `SendEnv` credential leaks, `0.0.0.0` tunnel binds, `Match exec` pre-auth token injection, `/tmp` `ControlPath` sockets, and inline secret or Trojan Source BiDi smuggling with OASIS SARIF v2.1.0 export (`--sarif`).
+- **Shell Command & AI Agent Execution Risk Firewall (`pkg/cmdguard`, `cmd/cmdguard`, `frontend/app/view/term/command-guard.ts`):** Lexical and AST-aware shell firewall and standalone CLI (`slterm-cmdguard`) covering 6 rules (`SLT011`..`SLT016`): recursive root/home/block-device destruction and unguarded `$VAR/*` wipes (`SLT011`), `curl`/`wget` and Base64 decode pipes to interpreters plus PowerShell `-EncodedCommand` (`SLT012`), `/dev/tcp`, `nc -e`, `socat`, and scripting socket reverse shells (`SLT013`), SSH/AWS/kube/`.env` credential and cloud IMDS (`169.254.169.254`) exfiltration (`SLT014`), SUID, `sudoers`/`authorized_keys`/`LD_PRELOAD` persistence, and `--privileged` container host escapes (`SLT015`), and unprotected `git push --force`, `git reset --hard`, and `--no-verify` hook bypasses (`SLT016`). Unwraps `sudo`, `env`, `timeout`, `sh -c`, `eval`, `$(...)`, `<(...)`, and Base64 payloads with configurable `strict` / `balanced` / `permissive` policy verdicts and OASIS SARIF v2.1.0 export.
 - **XChaCha20-Poly1305 Envelope Secret Store (`pkg/secretstore`):** Seals stored SSH and API credentials with 24-byte random-nonce authenticated encryption (`SLTERM-SECRETS-1:`), decoupling secret storage from Electron `safeStorage` so credentials migrate cleanly to the Tauri 2 runtime.
 - **Zero-Ghost Terminal Layout & Replay Pipeline:** Pre-layout spawn gating (`term-spawn-gate.ts`) blocks premature `2x1` PTY starts prior to CSS box layout; carried terminal parking (`term-carry-over.ts`), loopback offset reconciliation (`term-replay.ts`), and batched frame/input writers (`term-batched-writer.ts`) keep high-throughput output smooth.
 - **Workspace Blocks & Remote SSH:** Drag-and-drop tiled terminals, Monaco code editors, Markdown/CSV/PDF/media previews, web blocks, `wsh` workspace CLI control, and one-click SSH + remote filesystem sessions.
@@ -89,7 +90,10 @@ npm install
 npx vitest run frontend/app/view/term/tests/
 
 # Run Go backend unit tests
-go test -race ./pkg/sshaudit/... ./cmd/sshaudit/... ./pkg/agentteams/... ./pkg/aitools/... ./pkg/secretstore/...
+go test -race ./pkg/cmdguard/... ./cmd/cmdguard/... ./pkg/sshaudit/... ./cmd/sshaudit/... ./pkg/agentteams/... ./pkg/aitools/... ./pkg/secretstore/...
+
+# Evaluate a shell script or agent command and emit OASIS SARIF v2.1.0
+go run ./cmd/cmdguard check deploy.sh --policy balanced --sarif cmdguard.sarif
 
 # Audit an OpenSSH client config and emit OASIS SARIF v2.1.0
 go run ./cmd/sshaudit audit ~/.ssh/config --sarif ssh-audit.sarif
