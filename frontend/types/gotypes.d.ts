@@ -198,6 +198,20 @@ declare global {
         remediation: string;
     };
 
+    // wshrpc.AdeContextFileData
+    type AdeContextFileData = {
+        dir: string;
+        name: string;
+        exists: boolean;
+        content: string;
+    };
+
+    // wshrpc.AdeContextFileRequestData
+    type AdeContextFileRequestData = {
+        dir: string;
+        name: string;
+    };
+
     // wshrpc.AdeCostBudgetRequestData
     type AdeCostBudgetRequestData = {
         budgetUsd: number;
@@ -417,6 +431,13 @@ declare global {
     // wshrpc.AdeWorkspaceDeleteRequestData
     type AdeWorkspaceDeleteRequestData = {
         id: string;
+    };
+
+    // wshrpc.AdeWriteContextFileRequestData
+    type AdeWriteContextFileRequestData = {
+        dir: string;
+        name: string;
+        content: string;
     };
 
     // wshrpc.AgentTeamsMemberData

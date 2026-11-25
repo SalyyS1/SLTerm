@@ -129,6 +129,12 @@ func AdeMoveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeMoveTaskRequestData, o
 	return resp, err
 }
 
+// command "adereadcontextfile", wshserver.AdeReadContextFileCommand
+func AdeReadContextFileCommand(w *wshutil.WshRpc, data wshrpc.AdeContextFileRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeContextFileData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeContextFileData](w, "adereadcontextfile", data, opts)
+	return resp, err
+}
+
 // command "aderesetcost", wshserver.AdeResetCostCommand
 func AdeResetCostCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AdeCostSnapshotData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCostSnapshotData](w, "aderesetcost", nil, opts)
@@ -156,6 +162,12 @@ func AdeSaveWorkspaceCommand(w *wshutil.WshRpc, data wshrpc.AdeWorkspaceData, op
 // command "adesetcostbudget", wshserver.AdeSetCostBudgetCommand
 func AdeSetCostBudgetCommand(w *wshutil.WshRpc, data wshrpc.AdeCostBudgetRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeCostSnapshotData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCostSnapshotData](w, "adesetcostbudget", data, opts)
+	return resp, err
+}
+
+// command "adewritecontextfile", wshserver.AdeWriteContextFileCommand
+func AdeWriteContextFileCommand(w *wshutil.WshRpc, data wshrpc.AdeWriteContextFileRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "adewritecontextfile", data, opts)
 	return resp, err
 }
 

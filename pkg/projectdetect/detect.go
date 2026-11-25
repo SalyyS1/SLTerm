@@ -235,3 +235,69 @@ func EnsureWorktreeInclude(dir string) (string, bool, error) {
 	}
 	return target, true, nil
 }
+
+// AllowedContextFiles restricts inline editing strictly to non-secret AI/ADE config files.
+var allowedContextFiles = map[string]string{
+	"CLAUDE.md":        "# Project Instructions for Claude Code\n\n- Build/test commands:\n- Architecture rules:\n",
+	"AGENTS.md":        "# Project Instructions for AI Coding Agents\n\n- Conventions:\n- Verification steps:\n",
+	".worktreeinclude": defaultWorktreeIncludeBody,
+	".gitignore":       ".env\n.env.local\nnode_modules/\ndist/\n",
+}
+
+const maxContextFileBytes = 256 * 1024 // 256 KiB safety cap
+
+// ReadContextFile reads an allowlisted project ADE context file (never secrets like .env).
+func ReadContextFile(dir, name string) (string, bool, error) {
+	if _, ok := allowedContextFiles[name]; !ok {
+		return "", false, errors.New("file is not in the allowlisted ADE context set")
+	}
+	abs, err := filepath.Abs(strings.TrimSpace(dir))
+	if err != nil {
+		return "", false, err
+	}
+	p := filepath.Join(abs, name)
+	info, err := os.Lstat(p)
+	if os.IsNotExist(err) {
+		return allowedContextFiles[name], false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if !info.Mode().IsRegular() {
+		return "", false, errors.New("refusing to read non-regular file or symlink")
+	}
+	if info.Size() > maxContextFileBytes {
+		return "", false, errors.New("context file exceeds 256 KiB limit")
+	}
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		return "", false, err
+	}
+	return string(raw), true, nil
+}
+
+// WriteContextFile writes an allowlisted project ADE context file safely (refuses symlinks & traversal).
+func WriteContextFile(dir, name, content string) (string, error) {
+	if _, ok := allowedContextFiles[name]; !ok {
+		return "", errors.New("file is not in the allowlisted ADE context set")
+	}
+	if len(content) > maxContextFileBytes {
+		return "", errors.New("content exceeds 256 KiB limit")
+	}
+	abs, err := filepath.Abs(strings.TrimSpace(dir))
+	if err != nil {
+		return "", err
+	}
+	st, err := os.Stat(abs)
+	if err != nil || !st.IsDir() {
+		return "", errors.New("project directory does not exist")
+	}
+	p := filepath.Join(abs, name)
+	if info, err := os.Lstat(p); err == nil && !info.Mode().IsRegular() {
+		return "", errors.New("refusing to overwrite non-regular file or symlink")
+	}
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		return "", err
+	}
+	return p, nil
+}

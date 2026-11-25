@@ -563,7 +563,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.37.0"
+		cur = "0.38.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -740,4 +740,25 @@ func (ws *WshServer) AdeKillDevPortCommand(ctx context.Context, data wshrpc.AdeK
 	msg := fmt.Sprintf("Stopped dev server %s (PID %d) on :%d", killed.Process, killed.PID, killed.Port)
 	agentwatch.DefaultHub().Record("system", "info", msg, killed.URL, "", "")
 	return &wshrpc.VcsActionResultData{Output: msg}, nil
+}
+
+func (ws *WshServer) AdeReadContextFileCommand(ctx context.Context, data wshrpc.AdeContextFileRequestData) (*wshrpc.AdeContextFileData, error) {
+	content, exists, err := projectdetect.ReadContextFile(data.Dir, data.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.AdeContextFileData{
+		Dir:     data.Dir,
+		Name:    data.Name,
+		Exists:  exists,
+		Content: content,
+	}, nil
+}
+
+func (ws *WshServer) AdeWriteContextFileCommand(ctx context.Context, data wshrpc.AdeWriteContextFileRequestData) (*wshrpc.VcsActionResultData, error) {
+	p, err := projectdetect.WriteContextFile(data.Dir, data.Name, data.Content)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: "Saved " + p}, nil
 }

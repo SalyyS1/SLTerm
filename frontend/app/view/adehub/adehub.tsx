@@ -176,6 +176,27 @@ export class AdeHubViewModel implements ViewModel {
         }
     }
 
+    async readContextFile(dir: string, name: string): Promise<AdeContextFileData | null> {
+        try {
+            return await RpcApi.AdeReadContextFileCommand(TabRpcClient, { dir, name });
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return null;
+        }
+    }
+
+    async writeContextFile(dir: string, name: string, content: string): Promise<boolean> {
+        try {
+            const res = await RpcApi.AdeWriteContextFileCommand(TabRpcClient, { dir, name, content });
+            globalStore.set(this.noticeAtom, res?.output || `Saved ${name}`);
+            await this.inspectProject(dir);
+            return true;
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return false;
+        }
+    }
+
     async runProjectCommand(cwd: string, command: string): Promise<void> {
         const parts = command.trim().split(/\s+/);
         await createBlock({
@@ -549,6 +570,8 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const [wsAgent, setWsAgent] = React.useState("claude");
     const [wsPreset, setWsPreset] = React.useState("full-ade");
     const [wsPort, setWsPort] = React.useState("");
+    const [ctxFile, setCtxFile] = React.useState<AdeContextFileData | null>(null);
+    const [ctxDraft, setCtxDraft] = React.useState("");
 
     React.useEffect(() => {
         model.refresh(query, agentFilter);
@@ -977,6 +1000,60 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                                 ▶ {c.label}
                                             </button>
                                         ))}
+                                    </div>
+                                )}
+                                <div className="adehub-task-actions" style={{ marginTop: 4 }}>
+                                    <span className="adehub-card-meta">Edit AI Context:</span>
+                                    {["CLAUDE.md", "AGENTS.md", ".worktreeinclude", ".gitignore"].map((fname) => (
+                                        <button
+                                            key={fname}
+                                            className={`adehub-btn ${ctxFile?.name === fname ? "primary" : ""}`}
+                                            onClick={async () => {
+                                                const loaded = await model.readContextFile(project.dir, fname);
+                                                if (loaded) {
+                                                    setCtxFile(loaded);
+                                                    setCtxDraft(loaded.content);
+                                                }
+                                            }}
+                                        >
+                                            ✎ {fname}
+                                        </button>
+                                    ))}
+                                </div>
+                                {ctxFile && ctxFile.dir === project.dir && (
+                                    <div style={{ marginTop: 8 }}>
+                                        <div className="adehub-card-head" style={{ justifyContent: "space-between" }}>
+                                            <span className="adehub-card-meta">
+                                                {ctxFile.name} {ctxFile.exists ? "(existing)" : "(starter template)"}
+                                            </span>
+                                            <div className="adehub-card-actions">
+                                                <button
+                                                    className="adehub-btn primary"
+                                                    onClick={async () => {
+                                                        if (
+                                                            await model.writeContextFile(
+                                                                ctxFile.dir,
+                                                                ctxFile.name,
+                                                                ctxDraft
+                                                            )
+                                                        ) {
+                                                            setCtxFile({ ...ctxFile, exists: true, content: ctxDraft });
+                                                        }
+                                                    }}
+                                                >
+                                                    Save {ctxFile.name}
+                                                </button>
+                                                <button className="adehub-btn" onClick={() => setCtxFile(null)}>
+                                                    Close
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea
+                                            className="adehub-textarea"
+                                            rows={6}
+                                            value={ctxDraft}
+                                            onChange={(e) => setCtxDraft(e.target.value)}
+                                        />
                                     </div>
                                 )}
                             </div>

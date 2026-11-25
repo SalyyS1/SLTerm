@@ -49,4 +49,23 @@ func TestInspectAndEnsureWorktreeInclude(t *testing.T) {
 	if err != nil || created2 {
 		t.Fatalf("expected second EnsureWorktreeInclude to be no-op, created=%v err=%v", created2, err)
 	}
+
+	// Inline context editor allowlist guard: must reject .env and traversal, allow AGENTS.md.
+	if _, _, err := ReadContextFile(dir, ".env"); err == nil {
+		t.Fatal("expected .env to be rejected by context file allowlist")
+	}
+	if _, err := WriteContextFile(dir, "../escape.txt", "bad"); err == nil {
+		t.Fatal("expected path traversal to be rejected")
+	}
+	tmpl, exists, err := ReadContextFile(dir, "AGENTS.md")
+	if err != nil || exists || tmpl == "" {
+		t.Fatalf("expected starter template for missing AGENTS.md, exists=%v err=%v", exists, err)
+	}
+	if _, err := WriteContextFile(dir, "AGENTS.md", "# Custom Rules\n"); err != nil {
+		t.Fatalf("WriteContextFile failed: %v", err)
+	}
+	got, exists2, err := ReadContextFile(dir, "AGENTS.md")
+	if err != nil || !exists2 || got != "# Custom Rules\n" {
+		t.Fatalf("unexpected ReadContextFile after write: got=%q exists=%v err=%v", got, exists2, err)
+	}
 }

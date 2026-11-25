@@ -259,6 +259,8 @@ type WshRpcInterface interface {
 	AdeSetCostBudgetCommand(ctx context.Context, data AdeCostBudgetRequestData) (*AdeCostSnapshotData, error)
 	AdeResetCostCommand(ctx context.Context) (*AdeCostSnapshotData, error)
 	AdeKillDevPortCommand(ctx context.Context, data AdeKillPortRequestData) (*VcsActionResultData, error)
+	AdeReadContextFileCommand(ctx context.Context, data AdeContextFileRequestData) (*AdeContextFileData, error)
+	AdeWriteContextFileCommand(ctx context.Context, data AdeWriteContextFileRequestData) (*VcsActionResultData, error)
 }
 
 // for frontend
@@ -1478,6 +1480,24 @@ type AdeProjectReportData struct {
 type AdeKillPortRequestData struct {
 	Port int `json:"port"`
 	PID  int `json:"pid"`
+}
+
+type AdeContextFileRequestData struct {
+	Dir  string `json:"dir"`
+	Name string `json:"name"`
+}
+
+type AdeContextFileData struct {
+	Dir     string `json:"dir"`
+	Name    string `json:"name"`
+	Exists  bool   `json:"exists"`
+	Content string `json:"content"`
+}
+
+type AdeWriteContextFileRequestData struct {
+	Dir     string `json:"dir"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 type AdeActivityEventData struct {

@@ -102,6 +102,11 @@ class RpcApiType {
         return client.wshRpcCall("ademovetask", data, opts);
     }
 
+    // command "adereadcontextfile" [call]
+    AdeReadContextFileCommand(client: WshClient, data: AdeContextFileRequestData, opts?: RpcOpts): Promise<AdeContextFileData> {
+        return client.wshRpcCall("adereadcontextfile", data, opts);
+    }
+
     // command "aderesetcost" [call]
     AdeResetCostCommand(client: WshClient, opts?: RpcOpts): Promise<AdeCostSnapshotData> {
         return client.wshRpcCall("aderesetcost", null, opts);
@@ -125,6 +130,11 @@ class RpcApiType {
     // command "adesetcostbudget" [call]
     AdeSetCostBudgetCommand(client: WshClient, data: AdeCostBudgetRequestData, opts?: RpcOpts): Promise<AdeCostSnapshotData> {
         return client.wshRpcCall("adesetcostbudget", data, opts);
+    }
+
+    // command "adewritecontextfile" [call]
+    AdeWriteContextFileCommand(client: WshClient, data: AdeWriteContextFileRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("adewritecontextfile", data, opts);
     }
 
     // command "agentteamsgetsnapshot" [call]
