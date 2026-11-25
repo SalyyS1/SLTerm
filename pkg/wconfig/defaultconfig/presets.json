@@ -4,6 +4,22 @@
         "display:order": -1,
         "bg:*": true
     },
+    "bg@rem-aqua": {
+        "display:name": "❄ Rem Aqua Breeze",
+        "display:order": 0.1,
+        "bg:*": true,
+        "bg": "radial-gradient(circle at 16% 18%, rgba(95, 212, 244, 0.24), transparent 46%), radial-gradient(circle at 84% 16%, rgba(244, 143, 177, 0.16), transparent 42%), linear-gradient(155deg, rgba(9, 19, 30, 0.96) 0%, rgba(14, 32, 50, 0.92) 55%, rgba(10, 23, 38, 0.96) 100%)",
+        "bg:opacity": 0.92,
+        "bg:activebordercolor": "#5fd4f4"
+    },
+    "bg@rem-twilight": {
+        "display:name": "☾ Rem Starlit Night",
+        "display:order": 0.2,
+        "bg:*": true,
+        "bg": "radial-gradient(circle at 20% 22%, rgba(103, 232, 249, 0.20), transparent 45%), radial-gradient(circle at 80% 78%, rgba(216, 180, 254, 0.16), transparent 48%), linear-gradient(160deg, rgba(13, 19, 36, 0.96) 0%, rgba(21, 30, 56, 0.92) 60%, rgba(11, 17, 32, 0.96) 100%)",
+        "bg:opacity": 0.92,
+        "bg:activebordercolor": "#67e8f9"
+    },
     "bg@rainbow": {
         "display:name": "Rainbow",
         "display:order": 2.1,

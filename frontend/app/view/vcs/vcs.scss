@@ -155,10 +155,15 @@
 
 .vcs-cl-pill {
     font-size: 10px;
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: rgba(56, 189, 248, 0.16);
-    color: #38bdf8;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(95, 212, 244, 0.16);
+    color: var(--rem-aqua, #5fd4f4);
+
+    &.dirty {
+        background: rgba(244, 143, 177, 0.18);
+        color: var(--rem-pink, #f48fb1);
+    }
 }
 
 .vcs-mini,
@@ -221,13 +226,18 @@
 
     &.primary {
         background: var(--accent-color);
-        color: #0b1220;
+        color: #09131e;
         border-color: var(--accent-color);
         font-weight: 600;
     }
 
+    &.merge {
+        border-color: rgba(94, 234, 212, 0.45);
+        color: var(--rem-mint, #5eead4);
+    }
+
     &.danger {
-        color: #f87171;
+        color: #fb7185;
     }
 
     &:disabled {

@@ -102,13 +102,15 @@ func (ws *WshServer) VcsListWorktreesCommand(ctx context.Context, data wshrpc.Vc
 	out := make([]wshrpc.VcsWorktreeData, 0, len(wts))
 	for _, wt := range wts {
 		out = append(out, wshrpc.VcsWorktreeData{
-			Path:     wt.Path,
-			Head:     wt.Head,
-			Branch:   wt.Branch,
-			IsMain:   wt.IsMain,
-			Detached: wt.Detached,
-			Bare:     wt.Bare,
-			Locked:   wt.Locked,
+			Path:          wt.Path,
+			Head:          wt.Head,
+			Branch:        wt.Branch,
+			IsMain:        wt.IsMain,
+			Detached:      wt.Detached,
+			Bare:          wt.Bare,
+			Locked:        wt.Locked,
+			DirtyCount:    wt.DirtyCount,
+			HydratedFiles: wt.HydratedFiles,
 		})
 	}
 	return out, nil
@@ -120,18 +122,28 @@ func (ws *WshServer) VcsCreateWorktreeCommand(ctx context.Context, data wshrpc.V
 		return nil, err
 	}
 	return &wshrpc.VcsWorktreeData{
-		Path:     wt.Path,
-		Head:     wt.Head,
-		Branch:   wt.Branch,
-		IsMain:   wt.IsMain,
-		Detached: wt.Detached,
-		Bare:     wt.Bare,
-		Locked:   wt.Locked,
+		Path:          wt.Path,
+		Head:          wt.Head,
+		Branch:        wt.Branch,
+		IsMain:        wt.IsMain,
+		Detached:      wt.Detached,
+		Bare:          wt.Bare,
+		Locked:        wt.Locked,
+		DirtyCount:    wt.DirtyCount,
+		HydratedFiles: wt.HydratedFiles,
 	}, nil
 }
 
 func (ws *WshServer) VcsRemoveWorktreeCommand(ctx context.Context, data wshrpc.VcsRemoveWorktreeRequestData) error {
 	return vcs.RemoveWorktree(ctx, data.Dir, data.WorktreePath, data.Force)
+}
+
+func (ws *WshServer) VcsMergeWorktreeCommand(ctx context.Context, data wshrpc.VcsMergeWorktreeRequestData) (*wshrpc.VcsActionResultData, error) {
+	out, err := vcs.MergeWorktree(ctx, data.Dir, data.Branch, data.WorktreePath, data.RemoveAfter)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: out}, nil
 }
 
 func (ws *WshServer) VcsAssignChangelistCommand(ctx context.Context, data wshrpc.VcsChangelistAssignData) error {

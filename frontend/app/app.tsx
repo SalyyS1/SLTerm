@@ -31,6 +31,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { AppBackground } from "./app-bg";
 import { CenteredDiv } from "./element/quickelems";
+import { RemAmbientBackdrop } from "./element/rem-ambient";
 import { NotificationBubbles } from "./notification/notificationbubbles";
 import { PetHUD } from "./view/pet/pet-hud";
 import { PetOverlay } from "./view/pet/pet-overlay";
@@ -359,6 +360,7 @@ const AppInner = () => {
             onContextMenu={handleContextMenu}
         >
             <AppBackground />
+            <RemAmbientBackdrop />
             <AppKeyHandlers />
             <AppFocusHandler />
             <AppSettingsUpdater />

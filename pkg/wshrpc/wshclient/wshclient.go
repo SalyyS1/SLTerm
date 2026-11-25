@@ -949,6 +949,12 @@ func VcsListWorktreesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, o
 	return resp, err
 }
 
+// command "vcsmergeworktree", wshserver.VcsMergeWorktreeCommand
+func VcsMergeWorktreeCommand(w *wshutil.WshRpc, data wshrpc.VcsMergeWorktreeRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcsmergeworktree", data, opts)
+	return resp, err
+}
+
 // command "vcspull", wshserver.VcsPullCommand
 func VcsPullCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcspull", data, opts)

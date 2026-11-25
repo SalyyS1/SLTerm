@@ -224,6 +224,7 @@ type WshRpcInterface interface {
 	VcsListWorktreesCommand(ctx context.Context, data VcsDirRequestData) ([]VcsWorktreeData, error)
 	VcsCreateWorktreeCommand(ctx context.Context, data VcsCreateWorktreeRequestData) (*VcsWorktreeData, error)
 	VcsRemoveWorktreeCommand(ctx context.Context, data VcsRemoveWorktreeRequestData) error
+	VcsMergeWorktreeCommand(ctx context.Context, data VcsMergeWorktreeRequestData) (*VcsActionResultData, error)
 	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
 	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes & OTLP cost HUD)
 	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)
@@ -1161,13 +1162,15 @@ type VcsStatusData struct {
 }
 
 type VcsWorktreeData struct {
-	Path     string `json:"path"`
-	Head     string `json:"head"`
-	Branch   string `json:"branch"`
-	IsMain   bool   `json:"isMain"`
-	Detached bool   `json:"detached"`
-	Bare     bool   `json:"bare"`
-	Locked   bool   `json:"locked"`
+	Path          string   `json:"path"`
+	Head          string   `json:"head"`
+	Branch        string   `json:"branch"`
+	IsMain        bool     `json:"isMain"`
+	Detached      bool     `json:"detached"`
+	Bare          bool     `json:"bare"`
+	Locked        bool     `json:"locked"`
+	DirtyCount    int      `json:"dirtyCount"`
+	HydratedFiles []string `json:"hydratedFiles,omitempty"`
 }
 
 type VcsCreateWorktreeRequestData struct {
@@ -1180,6 +1183,13 @@ type VcsRemoveWorktreeRequestData struct {
 	Dir          string `json:"dir"`
 	WorktreePath string `json:"worktreePath"`
 	Force        bool   `json:"force,omitempty"`
+}
+
+type VcsMergeWorktreeRequestData struct {
+	Dir          string `json:"dir"`
+	Branch       string `json:"branch"`
+	WorktreePath string `json:"worktreePath,omitempty"`
+	RemoveAfter  bool   `json:"removeAfter,omitempty"`
 }
 
 type VcsChangelistAssignData struct {

@@ -1929,6 +1929,14 @@ declare global {
         path: string;
     };
 
+    // wshrpc.VcsMergeWorktreeRequestData
+    type VcsMergeWorktreeRequestData = {
+        dir: string;
+        branch: string;
+        worktreePath?: string;
+        removeAfter?: boolean;
+    };
+
     // wshrpc.VcsPathsRequestData
     type VcsPathsRequestData = {
         dir: string;
@@ -1965,6 +1973,8 @@ declare global {
         detached: boolean;
         bare: boolean;
         locked: boolean;
+        dirtyCount: number;
+        hydratedFiles?: string[];
     };
 
     type WSCommandType = {

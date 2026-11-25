@@ -145,12 +145,32 @@ export class VcsViewModel implements ViewModel {
                 branch,
                 targetPath: targetPath?.trim() || undefined,
             });
-            globalStore.set(this.noticeAtom, `Created worktree ${wt.branch} at ${wt.path}`);
+            const hyd =
+                wt.hydratedFiles && wt.hydratedFiles.length > 0
+                    ? ` · hydrated ${wt.hydratedFiles.join(", ")}`
+                    : "";
+            globalStore.set(this.noticeAtom, `Created worktree ${wt.branch} at ${wt.path}${hyd}`);
             await this.refresh(dir);
             return true;
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
             return false;
+        }
+    }
+
+    async mergeWorktree(branch: string, worktreePath: string, removeAfter = false): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const res = await RpcApi.VcsMergeWorktreeCommand(TabRpcClient, {
+                dir,
+                branch,
+                worktreePath,
+                removeAfter,
+            });
+            globalStore.set(this.noticeAtom, res?.output?.split("\n")[0] || `Merged ${branch} into main`);
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
         }
     }
 
@@ -438,6 +458,9 @@ function VcsView({ model }: { model: VcsViewModel }) {
                                     <div className="vcs-wt-title">
                                         <strong>{wt.branch || (wt.detached ? "detached" : "HEAD")}</strong>
                                         {wt.isMain && <span className="vcs-cl-pill">MAIN</span>}
+                                        {wt.dirtyCount > 0 && (
+                                            <span className="vcs-cl-pill dirty">{wt.dirtyCount} dirty</span>
+                                        )}
                                         {wt.head && <span className="vcs-sha">{wt.head.slice(0, 7)}</span>}
                                     </div>
                                     <div className="vcs-wt-path">{wt.path}</div>
@@ -452,6 +475,15 @@ function VcsView({ model }: { model: VcsViewModel }) {
                                     <button className="vcs-btn" onClick={() => model.openAgentInDir(wt.path, "codex")}>
                                         Codex
                                     </button>
+                                    {!wt.isMain && wt.branch && (
+                                        <button
+                                            className="vcs-btn merge"
+                                            title="Merge this agent branch into the main worktree"
+                                            onClick={() => model.mergeWorktree(wt.branch, wt.path, false)}
+                                        >
+                                            Merge → Main
+                                        </button>
+                                    )}
                                     {!wt.isMain && (
                                         <button className="vcs-btn danger" onClick={() => model.removeWorktree(wt.path)}>
                                             Remove

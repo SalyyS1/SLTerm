@@ -9,6 +9,7 @@
 //   4. Live embedded OTLP/JSON DELTA Cost & Token HUD.
 
 import type { BlockNodeModel } from "@/app/block/blocktypes";
+import { cycleRemFxMode, getRemFxMode, RemFxMode } from "@/app/element/rem-ambient";
 import { createBlock, globalStore } from "@/app/store/global";
 import type { TabModel } from "@/app/store/tab-model";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -137,6 +138,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const [noteTitle, setNoteTitle] = React.useState("");
     const [noteAgent, setNoteAgent] = React.useState("any");
     const [noteBody, setNoteBody] = React.useState("");
+    const [fxMode, setFxMode] = React.useState<RemFxMode>(() => getRemFxMode());
 
     React.useEffect(() => {
         model.refresh(query, agentFilter);
@@ -166,6 +168,13 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                     <span>
                         Cache: <strong>{fmtTokens(cost?.totalCacheTokens ?? 0)}</strong>
                     </span>
+                    <button
+                        className="adehub-btn rem-fx"
+                        onClick={() => setFxMode(cycleRemFxMode())}
+                        title="Toggle Rem Aqua Anime Ambient FX (Calm / Dreamy / Off)"
+                    >
+                        {fxMode === "off" ? "✧ FX: Off" : fxMode === "dreamy" ? "✦ FX: Dreamy" : "❄ FX: Calm"}
+                    </button>
                     <button
                         className="adehub-btn"
                         onClick={() => model.refresh(query, agentFilter)}

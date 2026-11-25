@@ -242,13 +242,19 @@
 
     &.primary {
         background: var(--accent-color);
-        color: #0b1220;
+        color: #09131e;
         border-color: var(--accent-color);
         font-weight: 600;
     }
 
+    &.rem-fx {
+        border-color: rgba(244, 143, 177, 0.36);
+        color: var(--rem-pink, #f48fb1);
+        background: rgba(244, 143, 177, 0.1);
+    }
+
     &.danger {
-        color: #f87171;
+        color: #fb7185;
     }
 
     &:disabled {

@@ -792,6 +792,11 @@ class RpcApiType {
         return client.wshRpcCall("vcslistworktrees", data, opts);
     }
 
+    // command "vcsmergeworktree" [call]
+    VcsMergeWorktreeCommand(client: WshClient, data: VcsMergeWorktreeRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcsmergeworktree", data, opts);
+    }
+
     // command "vcspull" [call]
     VcsPullCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
         return client.wshRpcCall("vcspull", data, opts);

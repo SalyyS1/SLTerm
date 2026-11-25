@@ -57,13 +57,15 @@ type StatusReport struct {
 
 // WorktreeInfo represents one entry from `git worktree list --porcelain`.
 type WorktreeInfo struct {
-	Path     string `json:"path"`
-	Head     string `json:"head"`
-	Branch   string `json:"branch"`
-	IsMain   bool   `json:"isMain"`
-	Detached bool   `json:"detached"`
-	Bare     bool   `json:"bare"`
-	Locked   bool   `json:"locked"`
+	Path          string   `json:"path"`
+	Head          string   `json:"head"`
+	Branch        string   `json:"branch"`
+	IsMain        bool     `json:"isMain"`
+	Detached      bool     `json:"detached"`
+	Bare          bool     `json:"bare"`
+	Locked        bool     `json:"locked"`
+	DirtyCount    int      `json:"dirtyCount"`
+	HydratedFiles []string `json:"hydratedFiles,omitempty"`
 }
 
 var safeBranchRe = regexp.MustCompile(`^[A-Za-z0-9._/@-]+$`)
@@ -429,10 +431,98 @@ func ListWorktrees(ctx context.Context, dir string) ([]WorktreeInfo, error) {
 		}
 	}
 	flush()
+	for i := range out {
+		if out[i].Bare || out[i].Path == "" {
+			continue
+		}
+		if stOut, err := runGit(ctx, out[i].Path, "status", "--porcelain"); err == nil {
+			cnt := 0
+			for _, ln := range strings.Split(stOut, "\n") {
+				if strings.TrimSpace(ln) != "" {
+					cnt++
+				}
+			}
+			out[i].DirtyCount = cnt
+		}
+	}
 	return out, nil
 }
 
-// CreateWorktree provisions an isolated Orca-style agent worktree on a new branch.
+const maxHydrateFileBytes = 2 * 1024 * 1024 // 2 MiB safety cap per copied config file
+
+var defaultHydrateCandidates = []string{
+	".env",
+	".env.local",
+	".env.development",
+	".mcp.json",
+	"CLAUDE.md",
+	"AGENTS.md",
+}
+
+// hydrateWorktreeFiles safely copies untracked local environment & AI context files
+// (`.env`, `.env.local`, `.mcp.json`, `CLAUDE.md`, `AGENTS.md`, plus any safe relative paths
+// listed in `.worktreeinclude`) from the main repo root into a newly created agent worktree.
+// Strictly rejects path traversal (`..`), absolute paths, symlinks, and files > 2 MiB.
+func hydrateWorktreeFiles(root, dest string) []string {
+	candidates := make([]string, 0, len(defaultHydrateCandidates)+8)
+	seen := make(map[string]struct{})
+	addCand := func(rel string) {
+		clean, err := ValidateRelativePath(strings.TrimSpace(rel))
+		if err != nil {
+			return
+		}
+		if _, exists := seen[clean]; exists {
+			return
+		}
+		seen[clean] = struct{}{}
+		candidates = append(candidates, clean)
+	}
+	for _, c := range defaultHydrateCandidates {
+		addCand(c)
+	}
+	if raw, err := os.ReadFile(filepath.Join(root, ".worktreeinclude")); err == nil {
+		for _, line := range strings.Split(string(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			addCand(line)
+		}
+	}
+
+	hydrated := make([]string, 0)
+	for _, rel := range candidates {
+		src := filepath.Join(root, filepath.FromSlash(rel))
+		dst := filepath.Join(dest, filepath.FromSlash(rel))
+		// Do not overwrite files already tracked/present in the new worktree.
+		if _, err := os.Lstat(dst); err == nil {
+			continue
+		}
+		info, err := os.Lstat(src)
+		if err != nil || !info.Mode().IsRegular() || info.Size() > maxHydrateFileBytes {
+			continue
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			continue
+		}
+		perm := info.Mode().Perm()
+		if perm == 0 {
+			perm = 0600
+		}
+		if err := os.WriteFile(dst, data, perm); err != nil {
+			continue
+		}
+		hydrated = append(hydrated, rel)
+	}
+	return hydrated
+}
+
+// CreateWorktree provisions an isolated Orca-style agent worktree on a new branch and
+// auto-hydrates local env/AI config files (`.env`, `.mcp.json`, `CLAUDE.md`, `.worktreeinclude`).
 // If targetPath is empty, it creates a sibling directory `<repo>-wt-<slug>`.
 func CreateWorktree(ctx context.Context, dir, branchName, targetPath string) (*WorktreeInfo, error) {
 	root, err := ResolveRepoRoot(ctx, dir)
@@ -459,13 +549,56 @@ func CreateWorktree(ctx context.Context, dir, branchName, targetPath string) (*W
 	if _, err := runGit(ctx, root, "worktree", "add", "-b", branch, "--", dest); err != nil {
 		return nil, err
 	}
+	hydrated := hydrateWorktreeFiles(root, dest)
 	headShort, _ := runGit(ctx, dest, "rev-parse", "--short", "HEAD")
 	return &WorktreeInfo{
-		Path:   filepath.Clean(dest),
-		Head:   strings.TrimSpace(headShort),
-		Branch: branch,
-		IsMain: false,
+		Path:          filepath.Clean(dest),
+		Head:          strings.TrimSpace(headShort),
+		Branch:        branch,
+		IsMain:        false,
+		HydratedFiles: hydrated,
 	}, nil
+}
+
+// MergeWorktree merges a finished agent branch back into the main checkout and optionally removes
+// the linked worktree. Refuses to merge if the main checkout has uncommitted changes.
+func MergeWorktree(ctx context.Context, dir, branchName, worktreePath string, removeAfter bool) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	branch, err := ValidateBranchName(branchName)
+	if err != nil {
+		return "", err
+	}
+	wts, err := ListWorktrees(ctx, root)
+	if err != nil {
+		return "", err
+	}
+	mainPath := root
+	for _, wt := range wts {
+		if wt.IsMain {
+			mainPath = wt.Path
+			break
+		}
+	}
+	st, err := runGit(ctx, mainPath, "status", "--porcelain")
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(st) != "" {
+		return "", errors.New("main worktree has uncommitted changes; commit or stash before merging")
+	}
+	out, err := runGit(ctx, mainPath, "merge", "--no-edit", branch)
+	if err != nil {
+		return out, err
+	}
+	if removeAfter && strings.TrimSpace(worktreePath) != "" {
+		if rmErr := RemoveWorktree(ctx, mainPath, worktreePath, false); rmErr != nil {
+			return out, fmt.Errorf("merged %s, but worktree removal failed: %w", branch, rmErr)
+		}
+	}
+	return out, nil
 }
 
 // RemoveWorktree removes a linked worktree (refuses to remove the main checkout).

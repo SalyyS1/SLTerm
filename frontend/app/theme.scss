@@ -2,47 +2,52 @@
 // SPDX-License-Identifier: Apache-2.0
 
 :root {
-    --main-text-color: #f7f7f7;
+    --main-text-color: #ebf7fc;
     --title-font-size: 18px;
     --window-opacity: 1;
-    --secondary-text-color: rgb(195, 200, 194);
-    --grey-text-color: #666;
-    --main-bg-color: rgb(34, 34, 34);
-    --border-color: rgba(255, 255, 255, 0.16);
+    --secondary-text-color: #93b5cb;
+    --grey-text-color: #5b7b91;
+    --main-bg-color: #0b1623;
+    --border-color: rgba(114, 211, 244, 0.2);
     --base-font: normal 14px / normal "Inter", sans-serif;
     --fixed-font: normal 12px / normal "Hack", monospace;
-    --accent-color: #67e6d6;
-    --panel-bg-color: rgba(31, 33, 31, 0.5);
-    --highlight-bg-color: rgba(255, 255, 255, 0.2);
+    --accent-color: #5fd4f4;
+    --rem-aqua: #5fd4f4;
+    --rem-aqua-soft: rgba(95, 212, 244, 0.14);
+    --rem-pink: #f48fb1;
+    --rem-pink-soft: rgba(244, 143, 177, 0.15);
+    --rem-mint: #5eead4;
+    --panel-bg-color: rgba(13, 27, 42, 0.72);
+    --highlight-bg-color: rgba(95, 212, 244, 0.13);
     --markdown-font-family:
         -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji",
         "Segoe UI Emoji";
     --markdown-font-size: 14px;
     --markdown-fixed-font-size: 12px;
-    --error-color: rgb(229, 77, 46);
-    --warning-color: rgb(224, 185, 86);
-    --success-color: rgb(78, 154, 6);
-    --hover-bg-color: rgba(255, 255, 255, 0.1);
-    --block-bg-color: rgba(0, 0, 0, 0.5);
-    --block-bg-solid-color: rgb(0, 0, 0);
-    --block-border-radius: 8px;
+    --error-color: #fb7185;
+    --warning-color: #fcd34d;
+    --success-color: #5eead4;
+    --hover-bg-color: rgba(95, 212, 244, 0.1);
+    --block-bg-color: rgba(9, 19, 30, 0.68);
+    --block-bg-solid-color: #09131e;
+    --block-border-radius: 10px;
 
-    --keybinding-color: #e0e0e0;
-    --keybinding-bg-color: #333;
-    --keybinding-border-color: #444;
+    --keybinding-color: #d8eef7;
+    --keybinding-bg-color: #14263a;
+    --keybinding-border-color: rgba(114, 211, 244, 0.28);
 
     /* scrollbar colors */
     --scrollbar-background-color: transparent;
-    --scrollbar-thumb-color: rgba(255, 255, 255, 0.15);
-    --scrollbar-thumb-hover-color: rgba(255, 255, 255, 0.5);
-    --scrollbar-thumb-active-color: rgba(255, 255, 255, 0.6);
+    --scrollbar-thumb-color: rgba(95, 212, 244, 0.18);
+    --scrollbar-thumb-hover-color: rgba(95, 212, 244, 0.42);
+    --scrollbar-thumb-active-color: rgba(95, 212, 244, 0.58);
 
     --header-font: 700 11px / normal "Inter", sans-serif;
     --header-icon-size: 14px;
     --header-icon-width: 16px;
     --header-height: 30px;
 
-    --tab-green: rgb(88, 193, 66);
+    --tab-green: #5eead4;
 
     /* z-index values */
     --zindex-header-hover: 100;

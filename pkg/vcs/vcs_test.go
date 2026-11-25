@@ -101,7 +101,21 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 		t.Fatalf("Commit failed: %v", err)
 	}
 
-	// Create and list an isolated agent worktree, then remove it cleanly.
+	// Add untracked local .env, CLAUDE.md, and .worktreeinclude (including a malicious traversal line that must be ignored).
+	if err := os.WriteFile(filepath.Join(repo, ".env"), []byte("API_MODE=local\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "CLAUDE.md"), []byte("# Claude Rules\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "config.local.json"), []byte("{\"port\":3000}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".worktreeinclude"), []byte("# copy local config\nconfig.local.json\n../../etc/passwd\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create and list an isolated agent worktree, verify auto-hydration, dirty count, merge-back, and clean removal.
 	wtDest := filepath.Join(t.TempDir(), "wt-claude")
 	wt, err := CreateWorktree(ctx, repo, "agent/claude-task", wtDest)
 	if err != nil {
@@ -109,6 +123,15 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 	}
 	if wt.Branch != "agent/claude-task" {
 		t.Fatalf("unexpected worktree: %+v", wt)
+	}
+	if len(wt.HydratedFiles) < 3 {
+		t.Fatalf("expected .env, CLAUDE.md, and config.local.json to be hydrated, got %+v", wt.HydratedFiles)
+	}
+	if _, err := os.Stat(filepath.Join(wt.Path, ".env")); err != nil {
+		t.Fatalf("expected .env hydrated into worktree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wt.Path, "config.local.json")); err != nil {
+		t.Fatalf("expected .worktreeinclude file hydrated into worktree: %v", err)
 	}
 	wtStatus, err := GetStatus(ctx, wt.Path)
 	if err != nil || !wtStatus.IsWorktree {
@@ -118,6 +141,31 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 	if err != nil || len(wts) != 2 {
 		t.Fatalf("expected 2 worktrees, got %+v err=%v", wts, err)
 	}
+	if wts[1].DirtyCount == 0 {
+		t.Fatalf("expected hydrated untracked files to report DirtyCount > 0, got %+v", wts[1])
+	}
+
+	// Make a committed change in the worktree, clean untracked files on main, then MergeWorktree back to main.
+	if err := os.WriteFile(filepath.Join(wt.Path, "feature.txt"), []byte("hello from agent\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := StageFiles(ctx, wt.Path, []string{"feature.txt"}); err != nil {
+		t.Fatalf("StageFiles in worktree failed: %v", err)
+	}
+	if _, err := Commit(ctx, wt.Path, "feat: agent feature"); err != nil {
+		t.Fatalf("Commit in worktree failed: %v", err)
+	}
+	// Clean untracked test files in main repo so MergeWorktree sees a clean main checkout.
+	for _, f := range []string{".env", "CLAUDE.md", "config.local.json", ".worktreeinclude"} {
+		_ = os.Remove(filepath.Join(repo, f))
+	}
+	if _, err := MergeWorktree(ctx, repo, "agent/claude-task", wt.Path, false); err != nil {
+		t.Fatalf("MergeWorktree failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "feature.txt")); err != nil {
+		t.Fatalf("expected merged feature.txt in main repo: %v", err)
+	}
+
 	if err := RemoveWorktree(ctx, repo, repo, false); err == nil {
 		t.Fatal("expected removing main worktree to be refused")
 	}
