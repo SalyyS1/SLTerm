@@ -111,33 +111,53 @@ const THEME_LABELS: Record<RemThemeName, string> = {
     "glacier-mist": "☀ Glacier",
 };
 
+function timeGreeting(isVi: boolean): string {
+    const h = new Date().getHours();
+    if (isVi) {
+        if (h < 12) return "Chào buổi sáng — Rem Aqua AI Studio ❄";
+        if (h < 18) return "Chào buổi chiều — Rem Aqua AI Studio ❄";
+        return "Chào buổi tối — Rem Aqua AI Studio ❄";
+    }
+    if (h < 12) return "Good morning — Rem Aqua AI Studio ❄";
+    if (h < 18) return "Good afternoon — Rem Aqua AI Studio ❄";
+    return "Good evening — Rem Aqua AI Studio ❄";
+}
+
 const RemCrestSvg: React.FC<{ size?: number }> = ({ size = 28 }) => (
     <svg
         width={size}
         height={size}
-        viewBox="0 0 40 40"
+        viewBox="0 0 48 48"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="studio-rem-crest"
         aria-hidden="true"
     >
         <defs>
-            <linearGradient id="remAquaGrad" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#7dd3fc" />
-                <stop offset="55%" stopColor="#5fd4f4" />
+            <linearGradient id="remAquaGrad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="#bae6fd" />
+                <stop offset="52%" stopColor="#5fd4f4" />
                 <stop offset="100%" stopColor="#f48fb1" />
             </linearGradient>
         </defs>
-        <circle cx="20" cy="20" r="17.5" stroke="url(#remAquaGrad)" strokeWidth="1.5" strokeOpacity="0.55" />
+        <circle cx="24" cy="24" r="21" stroke="url(#remAquaGrad)" strokeWidth="1.4" strokeOpacity="0.52" />
         <path
-            d="M20 6L23.2 14.8L32 14.8L25 20.2L27.6 29L20 23.8L12.4 29L15 20.2L8 14.8L16.8 14.8L20 6Z"
+            d="M24 5.5L27.4 16.2L38.5 16.2L29.6 22.8L33 33.8L24 27.1L15 33.8L18.4 22.8L9.5 16.2L20.6 16.2L24 5.5Z"
             fill="url(#remAquaGrad)"
-            fillOpacity="0.24"
+            fillOpacity="0.22"
             stroke="url(#remAquaGrad)"
-            strokeWidth="1.4"
+            strokeWidth="1.45"
             strokeLinejoin="round"
         />
-        <circle cx="20" cy="19.5" r="3" fill="#f48fb1" />
+        <path
+            d="M17.5 36.2C20 38.6 28 38.6 30.5 36.2"
+            stroke="#f48fb1"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeOpacity="0.88"
+        />
+        <circle cx="24" cy="22.8" r="3.4" fill="#f48fb1" />
+        <circle cx="34.5" cy="11.5" r="1.4" fill="#e0f2fe" />
     </svg>
 );
 
@@ -163,11 +183,13 @@ export const AdeStudio: React.FC = () => {
     const [sessionPreview, setSessionPreview] = React.useState<AdeSessionPreviewData | null>(null);
     const [localMsgs, setLocalMsgs] = React.useState<LocalChatMsg[]>([]);
     const [activeRepoDir, setActiveRepoDir] = React.useState(".");
+    const [repoPathInput, setRepoPathInput] = React.useState("");
 
     // Composer state
     const [composerText, setComposerText] = React.useState("");
     const [promptQueue, setPromptQueue] = React.useState<string[]>([]);
     const [composerAgent, setComposerAgent] = React.useState<ComposerAgent>("claude");
+    const [composerEffort, setComposerEffort] = React.useState<"balanced" | "deep" | "fast">("balanced");
     const [useWorktree, setUseWorktree] = React.useState(false);
     const [riskPreview, setRiskPreview] = React.useState<AdeCommandRiskData | null>(null);
     const [notice, setNotice] = React.useState<string | null>(null);
@@ -182,7 +204,9 @@ export const AdeStudio: React.FC = () => {
     const [rightTab, setRightTab] = React.useState<RightTab>("preview");
     const [previewUrl, setPreviewUrl] = React.useState("");
     const [previewFrameKey, setPreviewFrameKey] = React.useState(0);
-    const [previewViewport, setPreviewViewport] = React.useState<"desktop" | "mobile">("desktop");
+    const [previewViewport, setPreviewViewport] = React.useState<"desktop" | "tablet" | "mobile">("desktop");
+    const [selectedFileDiffPath, setSelectedFileDiffPath] = React.useState<string | null>(null);
+    const [selectedFileDiff, setSelectedFileDiff] = React.useState("");
     const [selectedCommitSha, setSelectedCommitSha] = React.useState<string | null>(null);
     const [selectedCommitDiff, setSelectedCommitDiff] = React.useState("");
     const [commitDraft, setCommitDraft] = React.useState("");
@@ -369,8 +393,15 @@ export const AdeStudio: React.FC = () => {
     };
 
     const handleSendPrompt = async (overridePrompt?: string) => {
-        const prompt = (overridePrompt ?? composerText).trim();
-        if (!prompt) return;
+        const rawPrompt = (overridePrompt ?? composerText).trim();
+        if (!rawPrompt) return;
+        const effortPrefix =
+            composerEffort === "deep"
+                ? "[Deep Think: analyze edge cases, architecture & write tests before editing]\n"
+                : composerEffort === "fast"
+                ? "[Fast Ship: implement the smallest clean diff and verify]\n"
+                : "";
+        const prompt = effortPrefix + rawPrompt;
 
         // Command Firewall check before dispatching
         const risk = await RpcApi.AdeCheckCommandRiskCommand(TabRpcClient, {
@@ -541,12 +572,49 @@ export const AdeStudio: React.FC = () => {
                     </div>
                 </div>
 
-                {workspaces.length > 0 && (
-                    <div className="studio-side-workspaces">
-                        <div className="studio-side-label">
-                            <span>{isVi ? "Dự án" : "Projects"}</span>
-                            <span className="studio-count">{workspaces.length}</span>
-                        </div>
+                <div className="studio-side-workspaces">
+                    <div className="studio-side-label">
+                        <span>{isVi ? "Dự án & Thư mục" : "Projects & Folder"}</span>
+                        <span className="studio-count">{workspaces.length}</span>
+                    </div>
+                    <div className="studio-drawer-search">
+                        <input
+                            className="studio-search"
+                            value={repoPathInput}
+                            onChange={(e) => setRepoPathInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && repoPathInput.trim()) {
+                                    setActiveRepoDir(repoPathInput.trim());
+                                    void refreshAll(repoPathInput.trim());
+                                }
+                            }}
+                            placeholder={isVi ? "Mở thư mục (C:\\work\\app)…" : "Open folder (C:\\work\\app)…"}
+                        />
+                        <button
+                            className="studio-icon-btn"
+                            title={isVi ? "Ghim thư mục hiện tại vào Dự án" : "Pin folder as saved workspace"}
+                            disabled={!repoPathInput.trim() && activeRepoDir === "."}
+                            onClick={async () => {
+                                const target = (repoPathInput.trim() || activeRepoDir).trim();
+                                if (!target || target === ".") return;
+                                const name = target.split(/[\\/]/).filter(Boolean).pop() || "Project";
+                                await RpcApi.AdeSaveWorkspaceCommand(TabRpcClient, {
+                                    name,
+                                    repoDir: target,
+                                    defaultAgent: composerAgent === "dual" ? "claude" : composerAgent,
+                                    layoutPreset: "full-ade",
+                                    color: "aqua",
+                                });
+                                setActiveRepoDir(target);
+                                setRepoPathInput("");
+                                showToast(`📌 Pinned project "${name}"`);
+                                await refreshAll(target);
+                            }}
+                        >
+                            📌
+                        </button>
+                    </div>
+                    {workspaces.length > 0 && (
                         <div className="studio-ws-chips">
                             {workspaces.slice(0, 6).map((w) => (
                                 <button
@@ -563,8 +631,8 @@ export const AdeStudio: React.FC = () => {
                                 </button>
                             ))}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 <div className="studio-side-foot">
                     <button
@@ -654,11 +722,7 @@ export const AdeStudio: React.FC = () => {
                                 <div className="studio-welcome-emblem">
                                     <RemCrestSvg size={64} />
                                 </div>
-                                <h1 className="studio-welcome-title">
-                                    {isVi
-                                        ? "Chào mừng trở lại — Rem Aqua AI Studio ❄"
-                                        : "Welcome back to Rem Aqua AI Studio ❄"}
-                                </h1>
+                                <h1 className="studio-welcome-title">{timeGreeting(isVi)}</h1>
                                 <p className="studio-welcome-sub">
                                     {isVi
                                         ? "Tập trung hoàn toàn vào AI, xem trước sản phẩm Web trực tiếp và theo dõi Changelogs — Terminal chỉ mở khi bạn cần."
@@ -883,6 +947,16 @@ export const AdeStudio: React.FC = () => {
                                     <option value="gemini">◈ Gemini CLI</option>
                                     <option value="dual">🚀 Dual (Claude + Codex)</option>
                                 </select>
+                                <select
+                                    className="studio-agent-select"
+                                    value={composerEffort}
+                                    onChange={(e) => setComposerEffort(e.target.value as "balanced" | "deep" | "fast")}
+                                    title="Reasoning effort hint"
+                                >
+                                    <option value="balanced">❄ Balanced</option>
+                                    <option value="deep">🧠 Deep Think</option>
+                                    <option value="fast">⚡ Fast Ship</option>
+                                </select>
                                 <label className={`studio-toggle-pill ${useWorktree ? "on" : ""}`}>
                                     <input
                                         type="checkbox"
@@ -1075,12 +1149,14 @@ export const AdeStudio: React.FC = () => {
                                 />
                                 <button
                                     className="studio-icon-btn"
-                                    title="Desktop / Mobile 390px viewport"
+                                    title="Cycle Desktop / Tablet 768px / Mobile 390px viewport"
                                     onClick={() =>
-                                        setPreviewViewport((v) => (v === "desktop" ? "mobile" : "desktop"))
+                                        setPreviewViewport((v) =>
+                                            v === "desktop" ? "tablet" : v === "tablet" ? "mobile" : "desktop"
+                                        )
                                     }
                                 >
-                                    {previewViewport === "desktop" ? "🖥" : "📱"}
+                                    {previewViewport === "desktop" ? "🖥" : previewViewport === "tablet" ? "📟" : "📱"}
                                 </button>
                                 <button
                                     className="studio-icon-btn"
@@ -1089,6 +1165,18 @@ export const AdeStudio: React.FC = () => {
                                 >
                                     ↻
                                 </button>
+                                {previewUrl && (
+                                    <button
+                                        className="studio-icon-btn"
+                                        title="Copy Preview URL"
+                                        onClick={() => {
+                                            navigator.clipboard?.writeText(previewUrl);
+                                            showToast(`Copied ${previewUrl}`);
+                                        }}
+                                    >
+                                        ⧉
+                                    </button>
+                                )}
                                 {previewUrl && (
                                     <button
                                         className="studio-icon-btn"
@@ -1135,9 +1223,23 @@ export const AdeStudio: React.FC = () => {
                                         <strong>{isVi ? "Xem trước sản phẩm Web trực tiếp" : "Live Web Product Preview"}</strong>
                                         <p>
                                             {isVi
-                                                ? "SLTerm tự phát hiện dev server (Vite :5173, Next :3000, Go :8080…) hoặc dán URL bất kỳ vào thanh địa chỉ phía trên."
-                                                : "Start a local dev server (Vite :5173, Next :3000, Go :8080…) or enter any URL above to preview right beside your AI."}
+                                                ? "SLTerm tự phát hiện dev server (Vite :5173, Next :3000, Go :8080…) hoặc bấm nhanh cổng bên dưới."
+                                                : "Start a local dev server or click a quick localhost port preset below to preview live beside your AI."}
                                         </p>
+                                        <div className="studio-port-strip" style={{ justifyContent: "center", marginTop: 10 }}>
+                                            {[5173, 3000, 8080, 1420].map((port) => (
+                                                <button
+                                                    key={port}
+                                                    className="studio-port-pill"
+                                                    onClick={() => {
+                                                        setPreviewUrl(`http://127.0.0.1:${port}`);
+                                                        setPreviewFrameKey((k) => k + 1);
+                                                    }}
+                                                >
+                                                    :{port}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1190,6 +1292,38 @@ export const AdeStudio: React.FC = () => {
                                         >
                                             ✓ Commit Staged
                                         </button>
+                                    </div>
+                                )}
+                                {(vcsStatus?.changes ?? []).length > 0 && (
+                                    <div className="studio-ws-chips" style={{ marginTop: 8 }}>
+                                        {(vcsStatus?.changes ?? []).slice(0, 10).map((ch) => (
+                                            <button
+                                                key={`${ch.path}:${ch.staged}`}
+                                                className={`studio-ws-chip ${
+                                                    selectedFileDiffPath === ch.path ? "active" : ""
+                                                }`}
+                                                title={`Inspect unified diff for ${ch.path}`}
+                                                onClick={async () => {
+                                                    setSelectedFileDiffPath(ch.path);
+                                                    const d = await RpcApi.VcsGetDiffCommand(TabRpcClient, {
+                                                        dir: activeRepoDir,
+                                                        path: ch.path,
+                                                        staged: ch.staged && !ch.unstaged,
+                                                    }).catch(() => null);
+                                                    setSelectedFileDiff(d?.diff || "(untracked or binary file)");
+                                                }}
+                                            >
+                                                {ch.untracked ? "?" : ch.staged ? "S" : "M"} {ch.path.split("/").pop()}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {selectedFileDiffPath && selectedFileDiff && (
+                                    <div style={{ marginTop: 8 }}>
+                                        <StudioMessageBody
+                                            text={`\`\`\`diff\n${selectedFileDiff.slice(0, 4000)}\n\`\`\``}
+                                            onCopy={() => showToast(`Copied diff for ${selectedFileDiffPath}`)}
+                                        />
                                     </div>
                                 )}
                             </div>

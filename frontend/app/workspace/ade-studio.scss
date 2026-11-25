@@ -911,6 +911,13 @@
     display: flex;
     justify-content: center;
 
+    &.tablet .studio-preview-iframe {
+        width: 768px;
+        max-width: 100%;
+        border-left: 1px solid rgba(114, 211, 244, 0.25);
+        border-right: 1px solid rgba(114, 211, 244, 0.25);
+    }
+
     &.mobile .studio-preview-iframe {
         width: 390px;
         max-width: 100%;
