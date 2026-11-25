@@ -149,6 +149,30 @@ declare global {
         updatedAtMs: number;
     };
 
+    // wshrpc.AdeCheckCommandRiskRequestData
+    type AdeCheckCommandRiskRequestData = {
+        command: string;
+        policy?: string;
+    };
+
+    // wshrpc.AdeCommandRiskData
+    type AdeCommandRiskData = {
+        verdict: string;
+        riskScore: number;
+        errorCount: number;
+        warningCount: number;
+        findings: AdeCommandRiskFindingData[];
+    };
+
+    // wshrpc.AdeCommandRiskFindingData
+    type AdeCommandRiskFindingData = {
+        ruleId: string;
+        ruleName: string;
+        severity: string;
+        message: string;
+        remediation: string;
+    };
+
     // wshrpc.AdeCostSnapshotData
     type AdeCostSnapshotData = {
         totalCostUsd: number;
@@ -167,6 +191,12 @@ declare global {
         installed: boolean;
         binaryPath?: string;
         description: string;
+    };
+
+    // wshrpc.AdeForkSessionRequestData
+    type AdeForkSessionRequestData = {
+        agent: string;
+        sessionId: string;
     };
 
     // wshrpc.AdeHubRequestData

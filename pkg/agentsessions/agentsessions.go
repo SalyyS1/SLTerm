@@ -13,6 +13,7 @@ package agentsessions
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -602,4 +603,67 @@ func persistNotesLocked(notes []PromptNote) error {
 		return err
 	}
 	return os.WriteFile(p, raw, 0600)
+}
+
+func newUUIDv4() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// ForkSession safely clones an existing Claude Code or Codex JSONL session transcript under a
+// new UUID so a developer can branch an AI conversation mid-task without mutating the original.
+func ForkSession(agent, sessionID string) (*SessionSummary, error) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" || strings.ContainsAny(sid, `/\..`) || strings.ContainsRune(sid, '\x00') {
+		return nil, errors.New("invalid session id")
+	}
+	wantAgent := strings.ToLower(strings.TrimSpace(agent))
+	idx, err := ListSessions("", wantAgent, 200)
+	if err != nil {
+		return nil, err
+	}
+	var src *SessionSummary
+	for i := range idx.Sessions {
+		if idx.Sessions[i].ID == sid && (wantAgent == "" || idx.Sessions[i].Agent == wantAgent) {
+			cp := idx.Sessions[i]
+			src = &cp
+			break
+		}
+	}
+	if src == nil || src.FilePath == "" {
+		return nil, fmt.Errorf("session %q not found", sid)
+	}
+	// Confine strictly to homeDir()/.claude or homeDir()/.codex
+	allowedRoot := filepath.Clean(homeDir())
+	cleanSrc := filepath.Clean(src.FilePath)
+	if !strings.HasPrefix(strings.ToLower(cleanSrc), strings.ToLower(allowedRoot)) {
+		return nil, errors.New("refusing to fork session outside agent home directory")
+	}
+	raw, err := os.ReadFile(cleanSrc)
+	if err != nil {
+		return nil, err
+	}
+	newID := newUUIDv4()
+	dst := filepath.Join(filepath.Dir(cleanSrc), newID+".jsonl")
+	if err := os.WriteFile(dst, raw, 0600); err != nil {
+		return nil, err
+	}
+	resumeCmd := "claude --resume=" + newID
+	if src.Agent == "codex" {
+		resumeCmd = "codex resume " + newID
+	}
+	return &SessionSummary{
+		ID:            newID,
+		Agent:         src.Agent,
+		Cwd:           src.Cwd,
+		Title:         "[Fork] " + src.Title,
+		Status:        "idle",
+		MessageCount:  src.MessageCount,
+		UpdatedAtMs:   time.Now().UnixMilli(),
+		FilePath:      dst,
+		ResumeCommand: resumeCmd,
+	}, nil
 }

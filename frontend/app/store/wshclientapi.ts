@@ -12,6 +12,11 @@ class RpcApiType {
         return client.wshRpcCall("activity", data, opts);
     }
 
+    // command "adecheckcommandrisk" [call]
+    AdeCheckCommandRiskCommand(client: WshClient, data: AdeCheckCommandRiskRequestData, opts?: RpcOpts): Promise<AdeCommandRiskData> {
+        return client.wshRpcCall("adecheckcommandrisk", data, opts);
+    }
+
     // command "adedeletepromptnote" [call]
     AdeDeletePromptNoteCommand(client: WshClient, data: AdeNoteDeleteRequestData, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("adedeletepromptnote", data, opts);
@@ -20,6 +25,11 @@ class RpcApiType {
     // command "adedeletetask" [call]
     AdeDeleteTaskCommand(client: WshClient, data: AdeTaskDeleteRequestData, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("adedeletetask", data, opts);
+    }
+
+    // command "adeforksession" [call]
+    AdeForkSessionCommand(client: WshClient, data: AdeForkSessionRequestData, opts?: RpcOpts): Promise<AdeSessionData> {
+        return client.wshRpcCall("adeforksession", data, opts);
     }
 
     // command "adegethubsnapshot" [call]

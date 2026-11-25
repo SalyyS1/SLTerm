@@ -12,6 +12,7 @@ import (
 	"context"
 
 	"github.com/SalyyS1/SLTerm/pkg/agentsessions"
+	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/portwatch"
 	"github.com/SalyyS1/SLTerm/pkg/taskboard"
@@ -335,4 +336,45 @@ func (ws *WshServer) AdeMoveTaskCommand(ctx context.Context, data wshrpc.AdeMove
 
 func (ws *WshServer) AdeDeleteTaskCommand(ctx context.Context, data wshrpc.AdeTaskDeleteRequestData) error {
 	return taskboard.DeleteTask(data.ID)
+}
+
+func (ws *WshServer) AdeForkSessionCommand(ctx context.Context, data wshrpc.AdeForkSessionRequestData) (*wshrpc.AdeSessionData, error) {
+	forked, err := agentsessions.ForkSession(data.Agent, data.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.AdeSessionData{
+		ID:            forked.ID,
+		Agent:         forked.Agent,
+		Cwd:           forked.Cwd,
+		Title:         forked.Title,
+		Status:        forked.Status,
+		MessageCount:  forked.MessageCount,
+		UpdatedAtMs:   forked.UpdatedAtMs,
+		FilePath:      forked.FilePath,
+		ResumeCommand: forked.ResumeCommand,
+	}, nil
+}
+
+func (ws *WshServer) AdeCheckCommandRiskCommand(ctx context.Context, data wshrpc.AdeCheckCommandRiskRequestData) (*wshrpc.AdeCommandRiskData, error) {
+	rep := cmdguard.AnalyzeCommand(data.Command, cmdguard.AnalyzeOptions{
+		Policy: cmdguard.PolicyMode(data.Policy),
+	})
+	findings := make([]wshrpc.AdeCommandRiskFindingData, 0, len(rep.Findings))
+	for _, f := range rep.Findings {
+		findings = append(findings, wshrpc.AdeCommandRiskFindingData{
+			RuleID:      f.RuleID,
+			RuleName:    f.RuleName,
+			Severity:    string(f.Severity),
+			Message:     f.Message,
+			Remediation: f.Remediation,
+		})
+	}
+	return &wshrpc.AdeCommandRiskData{
+		Verdict:      string(rep.Verdict),
+		RiskScore:    rep.RiskScore,
+		ErrorCount:   rep.ErrorCount,
+		WarningCount: rep.WarningCount,
+		Findings:     findings,
+	}, nil
 }

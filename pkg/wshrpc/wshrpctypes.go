@@ -235,6 +235,8 @@ type WshRpcInterface interface {
 	AdeSaveTaskCommand(ctx context.Context, data AdeTaskData) (*AdeTaskData, error)
 	AdeMoveTaskCommand(ctx context.Context, data AdeMoveTaskRequestData) (*AdeTaskData, error)
 	AdeDeleteTaskCommand(ctx context.Context, data AdeTaskDeleteRequestData) error
+	AdeForkSessionCommand(ctx context.Context, data AdeForkSessionRequestData) (*AdeSessionData, error)
+	AdeCheckCommandRiskCommand(ctx context.Context, data AdeCheckCommandRiskRequestData) (*AdeCommandRiskData, error)
 }
 
 // for frontend
@@ -1304,4 +1306,30 @@ type AdeMoveTaskRequestData struct {
 
 type AdeTaskDeleteRequestData struct {
 	ID string `json:"id"`
+}
+
+type AdeForkSessionRequestData struct {
+	Agent     string `json:"agent"`
+	SessionID string `json:"sessionId"`
+}
+
+type AdeCheckCommandRiskRequestData struct {
+	Command string `json:"command"`
+	Policy  string `json:"policy,omitempty"`
+}
+
+type AdeCommandRiskFindingData struct {
+	RuleID      string `json:"ruleId"`
+	RuleName    string `json:"ruleName"`
+	Severity    string `json:"severity"`
+	Message     string `json:"message"`
+	Remediation string `json:"remediation"`
+}
+
+type AdeCommandRiskData struct {
+	Verdict      string                      `json:"verdict"`
+	RiskScore    int                         `json:"riskScore"`
+	ErrorCount   int                         `json:"errorCount"`
+	WarningCount int                         `json:"warningCount"`
+	Findings     []AdeCommandRiskFindingData `json:"findings"`
 }

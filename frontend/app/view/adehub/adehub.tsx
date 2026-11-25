@@ -176,6 +176,35 @@ export class AdeHubViewModel implements ViewModel {
         });
     }
 
+    async forkSession(session: AdeSessionData): Promise<void> {
+        try {
+            const forked = await RpcApi.AdeForkSessionCommand(TabRpcClient, {
+                agent: session.agent,
+                sessionId: session.id,
+            });
+            globalStore.set(
+                this.noticeAtom,
+                `Forked ${session.agent} session ${session.id.slice(0, 8)} → ${forked.id.slice(0, 8)}`
+            );
+            await this.refresh();
+            await this.resumeSession(forked);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async checkCommandRisk(command: string): Promise<AdeCommandRiskData | null> {
+        try {
+            return await RpcApi.AdeCheckCommandRiskCommand(TabRpcClient, {
+                command,
+                policy: "balanced",
+            });
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return null;
+        }
+    }
+
     async launchAgent(agent: AdeDetectedAgentData, cwd: string): Promise<void> {
         const parts = agent.command.trim().split(/\s+/);
         const cmd = parts[0];
@@ -241,6 +270,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const [taskPriority, setTaskPriority] = React.useState("medium");
     const [taskRepo, setTaskRepo] = React.useState("");
     const [devPortsOnly, setDevPortsOnly] = React.useState(true);
+    const [riskReport, setRiskReport] = React.useState<AdeCommandRiskData | null>(null);
 
     React.useEffect(() => {
         model.refresh(query, agentFilter);
@@ -378,6 +408,13 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                                 title={s.resumeCommand}
                                             >
                                                 Resume
+                                            </button>
+                                            <button
+                                                className="adehub-btn"
+                                                onClick={() => model.forkSession(s)}
+                                                title="Clone transcript into a new branch session without mutating the original"
+                                            >
+                                                Fork
                                             </button>
                                             <button
                                                 className="adehub-btn"
@@ -634,12 +671,23 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                     <option value="shell">Shell</option>
                                 </select>
                                 <button
+                                    className="adehub-btn"
+                                    disabled={!noteBody.trim()}
+                                    title="Run SLTerm Command Firewall (SLT011-SLT016) safety scan before saving/executing"
+                                    onClick={async () => {
+                                        setRiskReport(await model.checkCommandRisk(noteBody));
+                                    }}
+                                >
+                                    🛡 Audit Risk
+                                </button>
+                                <button
                                     className="adehub-btn primary"
                                     disabled={!noteTitle.trim() || !noteBody.trim()}
                                     onClick={async () => {
                                         if (await model.saveNote(noteTitle, noteAgent, noteBody)) {
                                             setNoteTitle("");
                                             setNoteBody("");
+                                            setRiskReport(null);
                                         }
                                     }}
                                 >
@@ -651,8 +699,24 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                 rows={2}
                                 value={noteBody}
                                 onChange={(e) => setNoteBody(e.target.value)}
-                                placeholder="Reusable prompt or command workflow..."
+                                placeholder="Reusable prompt or shell command workflow (click 🛡 Audit Risk for SLT011–SLT016 preview)..."
                             />
+                            {riskReport && (
+                                <div className={`adehub-risk-box verdict-${riskReport.verdict}`}>
+                                    <div className="adehub-card-head">
+                                        <strong>Command Firewall: {riskReport.verdict.toUpperCase()}</strong>
+                                        <span className="adehub-pill">Risk {riskReport.riskScore}/100</span>
+                                        <span className="adehub-card-meta">
+                                            {riskReport.findings?.length ?? 0} finding(s)
+                                        </span>
+                                    </div>
+                                    {(riskReport.findings ?? []).map((f, i) => (
+                                        <div key={i} className="adehub-card-meta">
+                                            [{f.ruleId}] {f.message} — {f.remediation}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="adehub-list">
@@ -666,6 +730,15 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                         <div className="adehub-note-body">{n.body}</div>
                                     </div>
                                     <div className="adehub-card-actions">
+                                        <button
+                                            className="adehub-btn"
+                                            title="Audit this workflow with SLTerm Command Firewall"
+                                            onClick={async () => {
+                                                setRiskReport(await model.checkCommandRisk(n.body));
+                                            }}
+                                        >
+                                            🛡 Check
+                                        </button>
                                         <button
                                             className="adehub-btn primary"
                                             onClick={() => {

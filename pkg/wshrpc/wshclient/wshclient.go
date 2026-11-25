@@ -21,6 +21,12 @@ func ActivityCommand(w *wshutil.WshRpc, data wshrpc.ActivityUpdate, opts *wshrpc
 	return err
 }
 
+// command "adecheckcommandrisk", wshserver.AdeCheckCommandRiskCommand
+func AdeCheckCommandRiskCommand(w *wshutil.WshRpc, data wshrpc.AdeCheckCommandRiskRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeCommandRiskData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCommandRiskData](w, "adecheckcommandrisk", data, opts)
+	return resp, err
+}
+
 // command "adedeletepromptnote", wshserver.AdeDeletePromptNoteCommand
 func AdeDeletePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdeNoteDeleteRequestData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "adedeletepromptnote", data, opts)
@@ -31,6 +37,12 @@ func AdeDeletePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdeNoteDeleteRequ
 func AdeDeleteTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeTaskDeleteRequestData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "adedeletetask", data, opts)
 	return err
+}
+
+// command "adeforksession", wshserver.AdeForkSessionCommand
+func AdeForkSessionCommand(w *wshutil.WshRpc, data wshrpc.AdeForkSessionRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeSessionData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeSessionData](w, "adeforksession", data, opts)
+	return resp, err
 }
 
 // command "adegethubsnapshot", wshserver.AdeGetHubSnapshotCommand

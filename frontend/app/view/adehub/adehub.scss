@@ -328,3 +328,28 @@
     flex-wrap: wrap;
     margin-top: 2px;
 }
+
+.adehub-risk-box {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: rgba(9, 19, 30, 0.78);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    &.verdict-allow {
+        border-color: rgba(94, 234, 212, 0.45);
+        color: var(--rem-mint, #5eead4);
+    }
+    &.verdict-warn,
+    &.verdict-require_approval {
+        border-color: rgba(252, 211, 77, 0.5);
+        color: #fcd34d;
+    }
+    &.verdict-block {
+        border-color: rgba(251, 113, 133, 0.55);
+        color: #fb7185;
+    }
+}

@@ -1,0 +1,111 @@
+// Copyright 2026, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.ade-palette-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    background: rgba(5, 12, 20, 0.58);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 11vh;
+}
+
+.ade-palette-box {
+    width: min(620px, 92vw);
+    border-radius: 14px;
+    border: 1px solid rgba(95, 212, 244, 0.34);
+    background: rgba(13, 27, 42, 0.94);
+    box-shadow: 0 24px 64px rgba(2, 8, 16, 0.72), 0 0 0 1px rgba(244, 143, 177, 0.14);
+    overflow: hidden;
+    animation: modalFadeIn 130ms ease-out;
+}
+
+.ade-palette-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(114, 211, 244, 0.18);
+}
+
+.ade-palette-sigil {
+    color: var(--rem-aqua, #5fd4f4);
+    font-size: 16px;
+}
+
+.ade-palette-input {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--main-text-color, #ebf7fc);
+    font-size: 13.5px;
+    outline: none;
+}
+
+.ade-palette-kbd {
+    font-family: var(--fixed-font);
+    font-size: 10.5px;
+    padding: 2px 6px;
+    border-radius: 5px;
+    border: 1px solid rgba(114, 211, 244, 0.25);
+    color: var(--secondary-text-color);
+}
+
+.ade-palette-list {
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ade-palette-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--main-text-color, #ebf7fc);
+    font-size: 12.5px;
+    cursor: pointer;
+
+    &.active,
+    &:hover {
+        background: rgba(95, 212, 244, 0.14);
+        border-color: rgba(95, 212, 244, 0.3);
+    }
+}
+
+.ade-palette-ico {
+    width: 20px;
+    text-align: center;
+    color: var(--rem-aqua, #5fd4f4);
+}
+
+.ade-palette-lbl {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ade-palette-hint {
+    font-family: var(--fixed-font);
+    font-size: 11px;
+    color: var(--rem-pink, #f48fb1);
+}
+
+.ade-palette-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--secondary-text-color);
+    font-size: 12px;
+}

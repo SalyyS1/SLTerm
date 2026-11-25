@@ -84,4 +84,19 @@ func TestListSessionsAndPromptNotesCRUD(t *testing.T) {
 	if err := DeleteNote(saved.ID); err != nil {
 		t.Fatalf("DeleteNote failed: %v", err)
 	}
+
+	// Verify 1-click Session Fork clones transcript cleanly & rejects traversal IDs
+	forked, err := ForkSession("claude", "abc12345")
+	if err != nil {
+		t.Fatalf("ForkSession failed: %v", err)
+	}
+	if forked.ID == "" || forked.ID == "abc12345" || forked.Agent != "claude" {
+		t.Fatalf("unexpected forked session: %+v", forked)
+	}
+	if _, err := os.Stat(forked.FilePath); err != nil {
+		t.Fatalf("expected forked jsonl file on disk: %v", err)
+	}
+	if _, err := ForkSession("claude", "../../etc/passwd"); err == nil {
+		t.Fatal("expected traversal session id to be rejected")
+	}
 }

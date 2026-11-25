@@ -30,6 +30,7 @@ import { Fragment, useEffect, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { AppBackground } from "./app-bg";
+import { AdeCommandPalette } from "./element/ade-palette";
 import { CenteredDiv } from "./element/quickelems";
 import { RemAmbientBackdrop } from "./element/rem-ambient";
 import { NotificationBubbles } from "./notification/notificationbubbles";
@@ -376,6 +377,7 @@ const AppInner = () => {
                 they belong. */}
             <PetOverlay />
             <PetHUD />
+            <AdeCommandPalette />
             <FlashError />
             {isDev() ? <NotificationBubbles></NotificationBubbles> : null}
         </div>
