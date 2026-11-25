@@ -31,6 +31,8 @@ jobs:
             ./pkg/agentsessions/... \
             ./pkg/aitools/... \
             ./pkg/otelcost/... \
+            ./pkg/portwatch/... \
+            ./pkg/taskboard/... \
             ./pkg/vcs/... \
             ./pkg/secretstore/... \
             ./pkg/sshaudit/... \

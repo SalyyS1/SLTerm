@@ -226,10 +226,15 @@ type WshRpcInterface interface {
 	VcsRemoveWorktreeCommand(ctx context.Context, data VcsRemoveWorktreeRequestData) error
 	VcsMergeWorktreeCommand(ctx context.Context, data VcsMergeWorktreeRequestData) (*VcsActionResultData, error)
 	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
-	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes & OTLP cost HUD)
+	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes, OTLP cost HUD, port radar & mini-kanban)
 	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)
 	AdeSavePromptNoteCommand(ctx context.Context, data AdePromptNoteData) (*AdePromptNoteData, error)
 	AdeDeletePromptNoteCommand(ctx context.Context, data AdeNoteDeleteRequestData) error
+	AdeListPortsCommand(ctx context.Context) ([]AdePortData, error)
+	AdeListTasksCommand(ctx context.Context) ([]AdeTaskData, error)
+	AdeSaveTaskCommand(ctx context.Context, data AdeTaskData) (*AdeTaskData, error)
+	AdeMoveTaskCommand(ctx context.Context, data AdeMoveTaskRequestData) (*AdeTaskData, error)
+	AdeDeleteTaskCommand(ctx context.Context, data AdeTaskDeleteRequestData) error
 }
 
 // for frontend
@@ -1265,4 +1270,38 @@ type AdeHubSnapshotData struct {
 	Notes    []AdePromptNoteData    `json:"notes"`
 	Cost     AdeCostSnapshotData    `json:"cost"`
 	Warnings []string               `json:"warnings,omitempty"`
+}
+
+type AdePortData struct {
+	Port        int    `json:"port"`
+	Protocol    string `json:"protocol"`
+	Address     string `json:"address"`
+	PID         int    `json:"pid"`
+	Process     string `json:"process"`
+	URL         string `json:"url"`
+	IsDevLikely bool   `json:"isDevLikely"`
+}
+
+type AdeTaskData struct {
+	ID           string `json:"id,omitempty"`
+	Title        string `json:"title"`
+	Description  string `json:"description,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Agent        string `json:"agent,omitempty"`
+	Priority     string `json:"priority,omitempty"`
+	Branch       string `json:"branch,omitempty"`
+	RepoDir      string `json:"repoDir,omitempty"`
+	WorktreePath string `json:"worktreePath,omitempty"`
+	CreatedAtMs  int64  `json:"createdAtMs,omitempty"`
+	UpdatedAtMs  int64  `json:"updatedAtMs,omitempty"`
+}
+
+type AdeMoveTaskRequestData struct {
+	ID           string `json:"id"`
+	Status       string `json:"status"`
+	WorktreePath string `json:"worktreePath,omitempty"`
+}
+
+type AdeTaskDeleteRequestData struct {
+	ID string `json:"id"`
 }

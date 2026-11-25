@@ -268,3 +268,63 @@
     padding: 14px;
     text-align: center;
 }
+
+.adehub-kanban {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(190px, 1fr));
+    gap: 10px;
+    align-items: start;
+}
+
+.adehub-kanban-col {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    background: rgba(13, 27, 42, 0.56);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.adehub-kanban-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--rem-aqua, #5fd4f4);
+}
+
+.adehub-kanban-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.adehub-task-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    background: rgba(9, 19, 30, 0.72);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    &.prio-high {
+        box-shadow: inset 3px 0 0 var(--rem-pink, #f48fb1);
+    }
+    &.prio-medium {
+        box-shadow: inset 3px 0 0 var(--rem-aqua, #5fd4f4);
+    }
+    &.prio-low {
+        box-shadow: inset 3px 0 0 var(--rem-mint, #5eead4);
+    }
+}
+
+.adehub-task-actions {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}

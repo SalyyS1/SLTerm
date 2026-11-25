@@ -185,9 +185,27 @@ declare global {
         warnings?: string[];
     };
 
+    // wshrpc.AdeMoveTaskRequestData
+    type AdeMoveTaskRequestData = {
+        id: string;
+        status: string;
+        worktreePath?: string;
+    };
+
     // wshrpc.AdeNoteDeleteRequestData
     type AdeNoteDeleteRequestData = {
         id: string;
+    };
+
+    // wshrpc.AdePortData
+    type AdePortData = {
+        port: number;
+        protocol: string;
+        address: string;
+        pid: number;
+        process: string;
+        url: string;
+        isDevLikely: boolean;
     };
 
     // wshrpc.AdePromptNoteData
@@ -211,6 +229,26 @@ declare global {
         updatedAtMs: number;
         filePath: string;
         resumeCommand: string;
+    };
+
+    // wshrpc.AdeTaskData
+    type AdeTaskData = {
+        id?: string;
+        title: string;
+        description?: string;
+        status?: string;
+        agent?: string;
+        priority?: string;
+        branch?: string;
+        repoDir?: string;
+        worktreePath?: string;
+        createdAtMs?: number;
+        updatedAtMs?: number;
+    };
+
+    // wshrpc.AdeTaskDeleteRequestData
+    type AdeTaskDeleteRequestData = {
+        id: string;
     };
 
     // wshrpc.AgentTeamsMemberData

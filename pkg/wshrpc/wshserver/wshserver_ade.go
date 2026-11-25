@@ -13,6 +13,8 @@ import (
 
 	"github.com/SalyyS1/SLTerm/pkg/agentsessions"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
+	"github.com/SalyyS1/SLTerm/pkg/portwatch"
+	"github.com/SalyyS1/SLTerm/pkg/taskboard"
 	"github.com/SalyyS1/SLTerm/pkg/vcs"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc"
 )
@@ -253,4 +255,84 @@ func (ws *WshServer) AdeSavePromptNoteCommand(ctx context.Context, data wshrpc.A
 
 func (ws *WshServer) AdeDeletePromptNoteCommand(ctx context.Context, data wshrpc.AdeNoteDeleteRequestData) error {
 	return agentsessions.DeleteNote(data.ID)
+}
+
+func (ws *WshServer) AdeListPortsCommand(ctx context.Context) ([]wshrpc.AdePortData, error) {
+	ports, err := portwatch.ListLocalPorts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wshrpc.AdePortData, 0, len(ports))
+	for _, p := range ports {
+		out = append(out, wshrpc.AdePortData{
+			Port:        p.Port,
+			Protocol:    p.Protocol,
+			Address:     p.Address,
+			PID:         p.PID,
+			Process:     p.Process,
+			URL:         p.URL,
+			IsDevLikely: p.IsDevLikely,
+		})
+	}
+	return out, nil
+}
+
+func taskToRpc(t taskboard.TaskItem) wshrpc.AdeTaskData {
+	return wshrpc.AdeTaskData{
+		ID:           t.ID,
+		Title:        t.Title,
+		Description:  t.Description,
+		Status:       t.Status,
+		Agent:        t.Agent,
+		Priority:     t.Priority,
+		Branch:       t.Branch,
+		RepoDir:      t.RepoDir,
+		WorktreePath: t.WorktreePath,
+		CreatedAtMs:  t.CreatedAtMs,
+		UpdatedAtMs:  t.UpdatedAtMs,
+	}
+}
+
+func (ws *WshServer) AdeListTasksCommand(ctx context.Context) ([]wshrpc.AdeTaskData, error) {
+	tasks, err := taskboard.ListTasks()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wshrpc.AdeTaskData, 0, len(tasks))
+	for _, t := range tasks {
+		out = append(out, taskToRpc(t))
+	}
+	return out, nil
+}
+
+func (ws *WshServer) AdeSaveTaskCommand(ctx context.Context, data wshrpc.AdeTaskData) (*wshrpc.AdeTaskData, error) {
+	saved, err := taskboard.SaveTask(taskboard.TaskItem{
+		ID:           data.ID,
+		Title:        data.Title,
+		Description:  data.Description,
+		Status:       data.Status,
+		Agent:        data.Agent,
+		Priority:     data.Priority,
+		Branch:       data.Branch,
+		RepoDir:      data.RepoDir,
+		WorktreePath: data.WorktreePath,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rpcVal := taskToRpc(*saved)
+	return &rpcVal, nil
+}
+
+func (ws *WshServer) AdeMoveTaskCommand(ctx context.Context, data wshrpc.AdeMoveTaskRequestData) (*wshrpc.AdeTaskData, error) {
+	moved, err := taskboard.MoveTask(data.ID, data.Status, data.WorktreePath)
+	if err != nil {
+		return nil, err
+	}
+	rpcVal := taskToRpc(*moved)
+	return &rpcVal, nil
+}
+
+func (ws *WshServer) AdeDeleteTaskCommand(ctx context.Context, data wshrpc.AdeTaskDeleteRequestData) error {
+	return taskboard.DeleteTask(data.ID)
 }

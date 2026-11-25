@@ -27,15 +27,45 @@ func AdeDeletePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdeNoteDeleteRequ
 	return err
 }
 
+// command "adedeletetask", wshserver.AdeDeleteTaskCommand
+func AdeDeleteTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeTaskDeleteRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "adedeletetask", data, opts)
+	return err
+}
+
 // command "adegethubsnapshot", wshserver.AdeGetHubSnapshotCommand
 func AdeGetHubSnapshotCommand(w *wshutil.WshRpc, data wshrpc.AdeHubRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeHubSnapshotData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeHubSnapshotData](w, "adegethubsnapshot", data, opts)
 	return resp, err
 }
 
+// command "adelistports", wshserver.AdeListPortsCommand
+func AdeListPortsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdePortData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdePortData](w, "adelistports", nil, opts)
+	return resp, err
+}
+
+// command "adelisttasks", wshserver.AdeListTasksCommand
+func AdeListTasksCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdeTaskData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdeTaskData](w, "adelisttasks", nil, opts)
+	return resp, err
+}
+
+// command "ademovetask", wshserver.AdeMoveTaskCommand
+func AdeMoveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeMoveTaskRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeTaskData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeTaskData](w, "ademovetask", data, opts)
+	return resp, err
+}
+
 // command "adesavepromptnote", wshserver.AdeSavePromptNoteCommand
 func AdeSavePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdePromptNoteData, opts *wshrpc.RpcOpts) (*wshrpc.AdePromptNoteData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdePromptNoteData](w, "adesavepromptnote", data, opts)
+	return resp, err
+}
+
+// command "adesavetask", wshserver.AdeSaveTaskCommand
+func AdeSaveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeTaskData, opts *wshrpc.RpcOpts) (*wshrpc.AdeTaskData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeTaskData](w, "adesavetask", data, opts)
 	return resp, err
 }
 

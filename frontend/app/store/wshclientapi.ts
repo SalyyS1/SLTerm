@@ -17,14 +17,39 @@ class RpcApiType {
         return client.wshRpcCall("adedeletepromptnote", data, opts);
     }
 
+    // command "adedeletetask" [call]
+    AdeDeleteTaskCommand(client: WshClient, data: AdeTaskDeleteRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("adedeletetask", data, opts);
+    }
+
     // command "adegethubsnapshot" [call]
     AdeGetHubSnapshotCommand(client: WshClient, data: AdeHubRequestData, opts?: RpcOpts): Promise<AdeHubSnapshotData> {
         return client.wshRpcCall("adegethubsnapshot", data, opts);
     }
 
+    // command "adelistports" [call]
+    AdeListPortsCommand(client: WshClient, opts?: RpcOpts): Promise<AdePortData[]> {
+        return client.wshRpcCall("adelistports", null, opts);
+    }
+
+    // command "adelisttasks" [call]
+    AdeListTasksCommand(client: WshClient, opts?: RpcOpts): Promise<AdeTaskData[]> {
+        return client.wshRpcCall("adelisttasks", null, opts);
+    }
+
+    // command "ademovetask" [call]
+    AdeMoveTaskCommand(client: WshClient, data: AdeMoveTaskRequestData, opts?: RpcOpts): Promise<AdeTaskData> {
+        return client.wshRpcCall("ademovetask", data, opts);
+    }
+
     // command "adesavepromptnote" [call]
     AdeSavePromptNoteCommand(client: WshClient, data: AdePromptNoteData, opts?: RpcOpts): Promise<AdePromptNoteData> {
         return client.wshRpcCall("adesavepromptnote", data, opts);
+    }
+
+    // command "adesavetask" [call]
+    AdeSaveTaskCommand(client: WshClient, data: AdeTaskData, opts?: RpcOpts): Promise<AdeTaskData> {
+        return client.wshRpcCall("adesavetask", data, opts);
     }
 
     // command "agentteamsgetsnapshot" [call]
