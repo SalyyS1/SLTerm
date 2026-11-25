@@ -6,7 +6,9 @@
 package portwatch
 
 import (
+	"context"
 	"os/exec"
+	"strconv"
 	"syscall"
 )
 
@@ -17,4 +19,9 @@ func hideWindow(cmd *exec.Cmd) {
 		HideWindow:    true,
 		CreationFlags: createNoWindow,
 	}
+}
+
+func terminatePID(ctx context.Context, pid int) error {
+	_, err := runQuiet(ctx, "taskkill", "/PID", strconv.Itoa(pid), "/T", "/F")
+	return err
 }

@@ -56,3 +56,26 @@ LISTEN 0      128    [::]:22            [::]:*            users:(("sshd",pid=512
 		t.Fatalf("unexpected second ss port: %+v", ports[1])
 	}
 }
+
+func TestValidateKillTargetGuards(t *testing.T) {
+	ports := []ListeningPort{
+		{Port: 5173, PID: 8821, Process: "node.exe", IsDevLikely: true},
+		{Port: 135, PID: 900, Process: "svchost.exe", IsDevLikely: false},
+	}
+	if _, err := ValidateKillTarget(ports, 135, 900, 1234); err == nil {
+		t.Fatal("expected non-dev system port 135 to be rejected")
+	}
+	if _, err := ValidateKillTarget(ports, 5173, 1234, 1234); err == nil {
+		t.Fatal("expected self PID to be rejected")
+	}
+	if _, err := ValidateKillTarget(ports, 5173, 4, 1234); err == nil {
+		t.Fatal("expected protected PID <= 4 to be rejected")
+	}
+	if _, err := ValidateKillTarget(ports, 5173, 9999, 1234); err == nil {
+		t.Fatal("expected mismatched PID to be rejected")
+	}
+	got, err := ValidateKillTarget(ports, 5173, 8821, 1234)
+	if err != nil || got.PID != 8821 || got.Port != 5173 {
+		t.Fatalf("expected valid dev port kill target, got %+v err=%v", got, err)
+	}
+}

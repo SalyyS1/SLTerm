@@ -563,7 +563,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.36.0"
+		cur = "0.37.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -673,6 +673,8 @@ func (ws *WshServer) AdeInspectProjectCommand(ctx context.Context, data wshrpc.V
 		HasMcpJSON:         rep.HasMcpJSON,
 		HasWorktreeInclude: rep.HasWorktreeInclude,
 		HasDotEnv:          rep.HasDotEnv,
+		EnvExampleCount:    rep.EnvExampleCount,
+		MissingEnvKeys:     rep.MissingEnvKeys,
 	}, nil
 }
 
@@ -728,4 +730,14 @@ func (ws *WshServer) AdeResetCostCommand(ctx context.Context) (*wshrpc.AdeCostSn
 	otelcost.DefaultCollector().Reset()
 	snap := costToRpc(otelcost.DefaultCollector().Snapshot())
 	return &snap, nil
+}
+
+func (ws *WshServer) AdeKillDevPortCommand(ctx context.Context, data wshrpc.AdeKillPortRequestData) (*wshrpc.VcsActionResultData, error) {
+	killed, err := portwatch.KillDevPort(ctx, data.Port, data.PID)
+	if err != nil {
+		return nil, err
+	}
+	msg := fmt.Sprintf("Stopped dev server %s (PID %d) on :%d", killed.Process, killed.PID, killed.Port)
+	agentwatch.DefaultHub().Record("system", "info", msg, killed.URL, "", "")
+	return &wshrpc.VcsActionResultData{Output: msg}, nil
 }

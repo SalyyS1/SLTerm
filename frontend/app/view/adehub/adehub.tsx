@@ -12,9 +12,10 @@ import type { BlockNodeModel } from "@/app/block/blocktypes";
 import { cycleRemFxMode, getRemFxMode, RemFxMode } from "@/app/element/rem-ambient";
 import { createBlock, globalStore } from "@/app/store/global";
 import type { TabModel } from "@/app/store/tab-model";
+import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { makeIconClass } from "@/util/util";
+import { makeIconClass, stringToBase64 } from "@/util/util";
 import { Atom, atom, PrimitiveAtom, useAtomValue } from "jotai";
 import * as React from "react";
 import "./adehub.scss";
@@ -347,6 +348,58 @@ export class AdeHubViewModel implements ViewModel {
                 url,
             },
         });
+    }
+
+    async killDevPort(port: number, pid: number): Promise<void> {
+        try {
+            const res = await RpcApi.AdeKillDevPortCommand(TabRpcClient, { port, pid });
+            globalStore.set(this.noticeAtom, res?.output || `Stopped dev server PID ${pid} on :${port}`);
+            await this.refresh();
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async broadcastToTabTerminals(text: string): Promise<void> {
+        const clean = text.trim();
+        if (!clean) return;
+        // Run SLTerm Command Firewall (SLT011–SLT016) before broadcasting to multiple terminals!
+        const risk = await this.checkCommandRisk(clean);
+        if (risk && risk.verdict === "block") {
+            globalStore.set(
+                this.errorAtom,
+                `Broadcast BLOCKED by Command Firewall (Risk ${risk.riskScore}/100): ${risk.findings?.[0]?.message || "high-risk command"}`
+            );
+            return;
+        }
+        const tabData = globalStore.get(this.tabModel.tabAtom);
+        const blockIds = tabData?.blockids ?? [];
+        const termIds: string[] = [];
+        for (const bid of blockIds) {
+            if (bid === this.blockId) continue;
+            const blk = WOS.getObjectValue<Block>(WOS.makeORef("block", bid), globalStore.get);
+            if (blk?.meta?.view === "term") {
+                termIds.push(bid);
+            }
+        }
+        if (termIds.length === 0) {
+            globalStore.set(this.errorAtom, "No open terminal blocks found in this tab to broadcast to.");
+            return;
+        }
+        const payload64 = stringToBase64(clean + "\n");
+        let sent = 0;
+        for (const bid of termIds) {
+            try {
+                await RpcApi.ControllerInputCommand(TabRpcClient, {
+                    blockid: bid,
+                    inputdata64: payload64,
+                });
+                sent++;
+            } catch {
+                // ignore closed terminal race
+            }
+        }
+        globalStore.set(this.noticeAtom, `📡 Broadcasted command/prompt to ${sent} open terminal block(s) in this tab`);
     }
 
     async resumeSession(session: AdeSessionData): Promise<void> {
@@ -907,6 +960,10 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                     {project.hasAgentsMd ? "✓ AGENTS.md" : "· AGENTS.md"} ·{" "}
                                     {project.hasMcpJson ? "✓ .mcp.json" : "· .mcp.json"} ·{" "}
                                     {project.hasWorktreeInclude ? "✓ .worktreeinclude" : "⚠ no .worktreeinclude"}
+                                    {project.envExampleCount > 0 &&
+                                        ((project.missingEnvKeys?.length ?? 0) > 0
+                                            ? ` · ⚠ missing .env keys (${project.missingEnvKeys.length}): ${project.missingEnvKeys.join(", ")}`
+                                            : ` · ✓ .env complete (${project.envExampleCount} keys)`)}
                                 </div>
                                 {(project.commands ?? []).length > 0 && (
                                     <div className="adehub-task-actions">
@@ -979,6 +1036,23 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                                 >
                                                     Copy URL
                                                 </button>
+                                                {p.isDevLikely && p.pid > 4 && (
+                                                    <button
+                                                        className="adehub-btn danger"
+                                                        title={`Safely stop localhost dev server PID ${p.pid} on :${p.port}`}
+                                                        onClick={() => {
+                                                            if (
+                                                                window.confirm(
+                                                                    `Stop local dev server ${p.process || "process"} (PID ${p.pid}) listening on :${p.port}?`
+                                                                )
+                                                            ) {
+                                                                void model.killDevPort(p.port, p.pid);
+                                                            }
+                                                        }}
+                                                    >
+                                                        ⏹ Stop PID
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))
@@ -1049,6 +1123,14 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                     onClick={() => model.launchParallelAgents(["claude", "codex"], launchCwd, noteBody)}
                                 >
                                     🚀 Dual Launch
+                                </button>
+                                <button
+                                    className="adehub-btn"
+                                    disabled={!noteBody.trim()}
+                                    title="Send this prompt/command to ALL open terminal blocks in the current tab (Command Firewall checked)"
+                                    onClick={() => model.broadcastToTabTerminals(noteBody)}
+                                >
+                                    📡 Broadcast
                                 </button>
                                 <button
                                     className="adehub-btn"

@@ -20,6 +20,12 @@ func TestInspectAndEnsureWorktreeInclude(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte("# Claude\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, ".env.example"), []byte("# template\nOPENAI_API_KEY=\nDATABASE_URL=postgres://localhost/db\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("DATABASE_URL=super-secret-value-never-leak\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	rep, err := Inspect(dir)
 	if err != nil {
@@ -27,6 +33,9 @@ func TestInspectAndEnsureWorktreeInclude(t *testing.T) {
 	}
 	if !rep.HasClaudeMD || rep.HasWorktreeInclude {
 		t.Fatalf("unexpected readiness flags: %+v", rep)
+	}
+	if rep.EnvExampleCount != 2 || len(rep.MissingEnvKeys) != 1 || rep.MissingEnvKeys[0] != "OPENAI_API_KEY" {
+		t.Fatalf("unexpected env drift report: count=%d missing=%+v", rep.EnvExampleCount, rep.MissingEnvKeys)
 	}
 	if len(rep.Stacks) < 3 || len(rep.Commands) < 4 {
 		t.Fatalf("expected Node+Vite+Go stacks and >=4 commands, got %+v", rep)

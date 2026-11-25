@@ -36,6 +36,59 @@ type ProjectReport struct {
 	HasMcpJSON         bool             `json:"hasMcpJson"`
 	HasWorktreeInclude bool             `json:"hasWorktreeInclude"`
 	HasDotEnv          bool             `json:"hasDotEnv"`
+	EnvExampleCount    int              `json:"envExampleCount"`
+	MissingEnvKeys     []string         `json:"missingEnvKeys,omitempty"`
+}
+
+func parseEnvKeysOnly(path string) map[string]bool {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	keys := make(map[string]bool)
+	for _, ln := range strings.Split(string(raw), "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" || strings.HasPrefix(ln, "#") {
+			continue
+		}
+		ln = strings.TrimPrefix(ln, "export ")
+		idx := strings.IndexByte(ln, '=')
+		if idx <= 0 {
+			continue
+		}
+		k := strings.TrimSpace(ln[:idx])
+		if k != "" {
+			keys[k] = true
+		}
+	}
+	return keys
+}
+
+func checkEnvDrift(abs string) (int, []string) {
+	var exKeys map[string]bool
+	for _, name := range []string{".env.example", ".env.sample", ".env.template"} {
+		if m := parseEnvKeysOnly(filepath.Join(abs, name)); len(m) > 0 {
+			exKeys = m
+			break
+		}
+	}
+	if len(exKeys) == 0 {
+		return 0, nil
+	}
+	present := make(map[string]bool)
+	for _, name := range []string{".env", ".env.local", ".env.development"} {
+		for k := range parseEnvKeysOnly(filepath.Join(abs, name)) {
+			present[k] = true
+		}
+	}
+	missing := make([]string, 0)
+	for k := range exKeys {
+		if !present[k] {
+			missing = append(missing, k)
+		}
+	}
+	sort.Strings(missing)
+	return len(exKeys), missing
 }
 
 func fileExists(p string) bool {
@@ -152,6 +205,8 @@ func Inspect(dir string) (*ProjectReport, error) {
 	if fileExists(filepath.Join(abs, "Dockerfile")) || fileExists(filepath.Join(abs, "docker-compose.yml")) || fileExists(filepath.Join(abs, "compose.yml")) {
 		rep.Stacks = append(rep.Stacks, "Docker")
 	}
+
+	rep.EnvExampleCount, rep.MissingEnvKeys = checkEnvDrift(abs)
 
 	return rep, nil
 }

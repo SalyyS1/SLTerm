@@ -247,6 +247,12 @@ declare global {
         warnings?: string[];
     };
 
+    // wshrpc.AdeKillPortRequestData
+    type AdeKillPortRequestData = {
+        port: number;
+        pid: number;
+    };
+
     // wshrpc.AdeMoveTaskRequestData
     type AdeMoveTaskRequestData = {
         id: string;
@@ -289,6 +295,8 @@ declare global {
         hasMcpJson: boolean;
         hasWorktreeInclude: boolean;
         hasDotEnv: boolean;
+        envExampleCount: number;
+        missingEnvKeys?: string[];
     };
 
     // wshrpc.AdePromptNoteData

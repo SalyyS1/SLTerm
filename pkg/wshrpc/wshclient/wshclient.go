@@ -93,6 +93,12 @@ func AdeInspectProjectCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, 
 	return resp, err
 }
 
+// command "adekilldevport", wshserver.AdeKillDevPortCommand
+func AdeKillDevPortCommand(w *wshutil.WshRpc, data wshrpc.AdeKillPortRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "adekilldevport", data, opts)
+	return resp, err
+}
+
 // command "adelistports", wshserver.AdeListPortsCommand
 func AdeListPortsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdePortData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdePortData](w, "adelistports", nil, opts)

@@ -10,7 +10,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -243,4 +245,41 @@ func sortPorts(m map[int]ListeningPort) []ListeningPort {
 		return out[i].Port < out[j].Port
 	})
 	return out
+}
+
+// ValidateKillTarget ensures only a live, verified local dev-server PID can be terminated.
+// Refuses system PIDs (<= 4), SLTerm's own process, non-dev ports, and mismatched PIDs.
+func ValidateKillTarget(ports []ListeningPort, port, pid, selfPID int) (*ListeningPort, error) {
+	if port <= 0 || port > 65535 {
+		return nil, errors.New("invalid port number")
+	}
+	if !IsDevPort(port) {
+		return nil, fmt.Errorf("refusing to kill non-dev port %d", port)
+	}
+	if pid <= 4 || pid == selfPID {
+		return nil, fmt.Errorf("refusing to kill protected or self PID %d", pid)
+	}
+	for i := range ports {
+		if ports[i].Port == port && ports[i].PID == pid && ports[i].IsDevLikely {
+			cp := ports[i]
+			return &cp, nil
+		}
+	}
+	return nil, fmt.Errorf("no active dev server found listening on port %d with PID %d", port, pid)
+}
+
+// KillDevPort safely terminates a verified localhost dev server listening on (port, pid).
+func KillDevPort(ctx context.Context, port, pid int) (*ListeningPort, error) {
+	ports, err := ListLocalPorts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target, err := ValidateKillTarget(ports, port, pid, os.Getpid())
+	if err != nil {
+		return nil, err
+	}
+	if err := terminatePID(ctx, target.PID); err != nil {
+		return nil, err
+	}
+	return target, nil
 }

@@ -258,6 +258,7 @@ type WshRpcInterface interface {
 	AdeMarkActivityReadCommand(ctx context.Context) error
 	AdeSetCostBudgetCommand(ctx context.Context, data AdeCostBudgetRequestData) (*AdeCostSnapshotData, error)
 	AdeResetCostCommand(ctx context.Context) (*AdeCostSnapshotData, error)
+	AdeKillDevPortCommand(ctx context.Context, data AdeKillPortRequestData) (*VcsActionResultData, error)
 }
 
 // for frontend
@@ -1470,6 +1471,13 @@ type AdeProjectReportData struct {
 	HasMcpJSON         bool                    `json:"hasMcpJson"`
 	HasWorktreeInclude bool                    `json:"hasWorktreeInclude"`
 	HasDotEnv          bool                    `json:"hasDotEnv"`
+	EnvExampleCount    int                     `json:"envExampleCount"`
+	MissingEnvKeys     []string                `json:"missingEnvKeys,omitempty"`
+}
+
+type AdeKillPortRequestData struct {
+	Port int `json:"port"`
+	PID  int `json:"pid"`
 }
 
 type AdeActivityEventData struct {

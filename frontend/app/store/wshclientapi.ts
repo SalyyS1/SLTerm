@@ -72,6 +72,11 @@ class RpcApiType {
         return client.wshRpcCall("adeinspectproject", data, opts);
     }
 
+    // command "adekilldevport" [call]
+    AdeKillDevPortCommand(client: WshClient, data: AdeKillPortRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("adekilldevport", data, opts);
+    }
+
     // command "adelistports" [call]
     AdeListPortsCommand(client: WshClient, opts?: RpcOpts): Promise<AdePortData[]> {
         return client.wshRpcCall("adelistports", null, opts);
