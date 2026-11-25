@@ -123,6 +123,12 @@ func AdeMoveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeMoveTaskRequestData, o
 	return resp, err
 }
 
+// command "aderesetcost", wshserver.AdeResetCostCommand
+func AdeResetCostCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AdeCostSnapshotData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCostSnapshotData](w, "aderesetcost", nil, opts)
+	return resp, err
+}
+
 // command "adesavepromptnote", wshserver.AdeSavePromptNoteCommand
 func AdeSavePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdePromptNoteData, opts *wshrpc.RpcOpts) (*wshrpc.AdePromptNoteData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdePromptNoteData](w, "adesavepromptnote", data, opts)
@@ -138,6 +144,12 @@ func AdeSaveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeTaskData, opts *wshrpc
 // command "adesaveworkspace", wshserver.AdeSaveWorkspaceCommand
 func AdeSaveWorkspaceCommand(w *wshutil.WshRpc, data wshrpc.AdeWorkspaceData, opts *wshrpc.RpcOpts) (*wshrpc.AdeWorkspaceData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeWorkspaceData](w, "adesaveworkspace", data, opts)
+	return resp, err
+}
+
+// command "adesetcostbudget", wshserver.AdeSetCostBudgetCommand
+func AdeSetCostBudgetCommand(w *wshutil.WshRpc, data wshrpc.AdeCostBudgetRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeCostSnapshotData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCostSnapshotData](w, "adesetcostbudget", data, opts)
 	return resp, err
 }
 

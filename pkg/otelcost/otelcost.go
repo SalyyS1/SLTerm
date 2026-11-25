@@ -35,12 +35,17 @@ type Snapshot struct {
 	TotalInputTokens  int64        `json:"totalInputTokens"`
 	TotalOutputTokens int64        `json:"totalOutputTokens"`
 	TotalCacheTokens  int64        `json:"totalCacheTokens"`
+	BudgetUSD         float64      `json:"budgetUsd"`
+	BudgetExceeded    bool         `json:"budgetExceeded"`
 	Blocks            []BlockUsage `json:"blocks"`
 }
 
 type Collector struct {
-	mu     sync.RWMutex
-	blocks map[string]*BlockUsage
+	mu               sync.RWMutex
+	blocks           map[string]*BlockUsage
+	budgetUSD        float64
+	budgetAlertFired bool
+	onBudgetExceeded func(totalUSD, budgetUSD float64)
 }
 
 var defaultCollector = NewCollector()
@@ -135,9 +140,10 @@ func (c *Collector) IngestJSON(raw []byte) error {
 		return err
 	}
 	now := time.Now().UnixMilli()
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	var notifyFn func(float64, float64)
+	var notifyTotal, notifyBudget float64
 
+	c.mu.Lock()
 	for _, rm := range p.ResourceMetrics {
 		resAttrs := attrMap(rm.Resource.Attributes)
 		blockID := resAttrs["terminal.id"]
@@ -195,14 +201,66 @@ func (c *Collector) IngestJSON(raw []byte) error {
 			}
 		}
 	}
+	if c.budgetUSD > 0 && !c.budgetAlertFired {
+		total := 0.0
+		for _, b := range c.blocks {
+			total += b.CostUSD
+		}
+		if total > c.budgetUSD {
+			c.budgetAlertFired = true
+			notifyFn = c.onBudgetExceeded
+			notifyTotal = total
+			notifyBudget = c.budgetUSD
+		}
+	}
+	c.mu.Unlock()
+
+	if notifyFn != nil {
+		notifyFn(notifyTotal, notifyBudget)
+	}
 	return nil
+}
+
+// SetBudget configures a session USD cost guard (<= 0 disables the guard).
+func (c *Collector) SetBudget(usd float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if usd <= 0 {
+		c.budgetUSD = 0
+		c.budgetAlertFired = false
+		return
+	}
+	c.budgetUSD = usd
+	total := 0.0
+	for _, b := range c.blocks {
+		total += b.CostUSD
+	}
+	c.budgetAlertFired = total > usd
+}
+
+// SetOnBudgetExceeded registers a callback invoked once when session spend crosses BudgetUSD.
+func (c *Collector) SetOnBudgetExceeded(fn func(totalUSD, budgetUSD float64)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onBudgetExceeded = fn
+}
+
+// Reset clears accumulated cost and token counters while keeping the configured budget.
+func (c *Collector) Reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.blocks = make(map[string]*BlockUsage)
+	c.budgetAlertFired = false
 }
 
 // Snapshot returns a point-in-time copy of accumulated costs and tokens.
 func (c *Collector) Snapshot() Snapshot {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	snap := Snapshot{Blocks: make([]BlockUsage, 0, len(c.blocks))}
+	snap := Snapshot{
+		BudgetUSD: c.budgetUSD,
+		Blocks:    make([]BlockUsage, 0, len(c.blocks)),
+	}
 	for _, b := range c.blocks {
 		snap.TotalCostUSD += b.CostUSD
 		snap.TotalInputTokens += b.InputTokens
@@ -210,5 +268,6 @@ func (c *Collector) Snapshot() Snapshot {
 		snap.TotalCacheTokens += b.CacheTokens
 		snap.Blocks = append(snap.Blocks, *b)
 	}
+	snap.BudgetExceeded = snap.BudgetUSD > 0 && snap.TotalCostUSD > snap.BudgetUSD
 	return snap
 }

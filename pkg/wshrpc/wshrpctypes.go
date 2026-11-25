@@ -256,6 +256,8 @@ type WshRpcInterface interface {
 	AdeEnsureWorktreeIncludeCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
 	AdeGetActivityCommand(ctx context.Context) (*AdeActivityFeedData, error)
 	AdeMarkActivityReadCommand(ctx context.Context) error
+	AdeSetCostBudgetCommand(ctx context.Context, data AdeCostBudgetRequestData) (*AdeCostSnapshotData, error)
+	AdeResetCostCommand(ctx context.Context) (*AdeCostSnapshotData, error)
 }
 
 // for frontend
@@ -1282,7 +1284,13 @@ type AdeCostSnapshotData struct {
 	TotalInputTokens  int64              `json:"totalInputTokens"`
 	TotalOutputTokens int64              `json:"totalOutputTokens"`
 	TotalCacheTokens  int64              `json:"totalCacheTokens"`
+	BudgetUSD         float64            `json:"budgetUsd"`
+	BudgetExceeded    bool               `json:"budgetExceeded"`
 	Blocks            []AdeBlockCostData `json:"blocks"`
+}
+
+type AdeCostBudgetRequestData struct {
+	BudgetUSD float64 `json:"budgetUsd"`
 }
 
 type AdeHubSnapshotData struct {

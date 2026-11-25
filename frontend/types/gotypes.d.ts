@@ -198,12 +198,19 @@ declare global {
         remediation: string;
     };
 
+    // wshrpc.AdeCostBudgetRequestData
+    type AdeCostBudgetRequestData = {
+        budgetUsd: number;
+    };
+
     // wshrpc.AdeCostSnapshotData
     type AdeCostSnapshotData = {
         totalCostUsd: number;
         totalInputTokens: number;
         totalOutputTokens: number;
         totalCacheTokens: number;
+        budgetUsd: number;
+        budgetExceeded: boolean;
         blocks: AdeBlockCostData[];
     };
 

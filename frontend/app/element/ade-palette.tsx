@@ -143,6 +143,24 @@ export const AdeCommandPalette: React.FC = () => {
                 },
             },
             {
+                id: "cost-guard-5",
+                icon: "💰",
+                label: "Set AI OTLP Cost Guard Budget to $5.00",
+                hint: "otelcost",
+                run: async () => {
+                    await RpcApi.AdeSetCostBudgetCommand(TabRpcClient, { budgetUsd: 5.0 });
+                },
+            },
+            {
+                id: "cost-reset",
+                icon: "↺",
+                label: "Reset AI OTLP Session Cost & Token Counters",
+                hint: "otelcost",
+                run: async () => {
+                    await RpcApi.AdeResetCostCommand(TabRpcClient);
+                },
+            },
+            {
                 id: "check-updates",
                 icon: "⬆",
                 label: "Check for New SLTerm Updates (GitHub Releases)",

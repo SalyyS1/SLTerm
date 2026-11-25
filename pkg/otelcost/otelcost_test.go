@@ -54,3 +54,35 @@ func TestCollectorAccumulatesDeltaMetrics(t *testing.T) {
 		t.Fatalf("unexpected blocks: %+v", snap.Blocks)
 	}
 }
+
+func TestBudgetAlertAndReset(t *testing.T) {
+	c := NewCollector()
+	alerts := 0
+	c.SetBudget(0.20)
+	c.SetOnBudgetExceeded(func(total, budget float64) {
+		alerts++
+	})
+
+	payload := []byte(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"terminal.id","value":{"stringValue":"blk-budget"}}]},"scopeMetrics":[{"metrics":[{"name":"claude_code.cost.usage","sum":{"dataPoints":[{"asDouble":0.15}]}}]}]}]}`)
+
+	if err := c.IngestJSON(payload); err != nil {
+		t.Fatal(err)
+	}
+	if snap := c.Snapshot(); snap.BudgetExceeded || alerts != 0 {
+		t.Fatalf("expected under budget, got %+v alerts=%d", snap, alerts)
+	}
+	if err := c.IngestJSON(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.IngestJSON(payload); err != nil {
+		t.Fatal(err)
+	}
+	if snap := c.Snapshot(); !snap.BudgetExceeded || alerts != 1 {
+		t.Fatalf("expected budget exceeded once, got %+v alerts=%d", snap, alerts)
+	}
+
+	c.Reset()
+	if snap := c.Snapshot(); snap.TotalCostUSD != 0 || snap.BudgetExceeded || snap.BudgetUSD != 0.20 {
+		t.Fatalf("expected reset counters keeping budget, got %+v", snap)
+	}
+}

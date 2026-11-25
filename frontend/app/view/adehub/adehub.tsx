@@ -28,6 +28,29 @@ const KANBAN_COLS: { id: string; label: string }[] = [
     { id: "done", label: "Done" },
 ];
 
+const WORKFLOW_PACKS: { title: string; agent: string; body: string }[] = [
+    {
+        title: "Windows Port & Dev Server Inspector",
+        agent: "shell",
+        body: "Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 3000,5173,8080,8000 } | Select-Object LocalPort,OwningProcess",
+    },
+    {
+        title: "TDD Bug Fix & Verification",
+        agent: "claude",
+        body: "1. Reproduce the bug with a minimal failing unit test first.\n2. Run the test suite to confirm failure.\n3. Implement the smallest clean fix.\n4. Re-run tests + build and summarize root cause & diff.",
+    },
+    {
+        title: "Git Conflict Safe Resolver",
+        agent: "codex",
+        body: "Inspect `git status` and all conflict markers (`<<<<<<<`). Preserve both feature intents, never drop security checks, run project tests, and stage resolved files.",
+    },
+    {
+        title: "Security & Secret Diff Audit",
+        agent: "any",
+        body: "Review `git diff --cached` for hardcoded tokens, command injection, path traversal (`..`), unsafe shell invocation, and missing error checks. Report exact line numbers and fixes.",
+    },
+];
+
 export class AdeHubViewModel implements ViewModel {
     viewType: string;
     blockId: string;
@@ -103,6 +126,29 @@ export class AdeHubViewModel implements ViewModel {
         try {
             await RpcApi.AdeMarkActivityReadCommand(TabRpcClient);
             globalStore.set(this.noticeAtom, "Marked all activity notifications as read");
+            await this.refresh();
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async setCostBudget(budgetUsd: number): Promise<void> {
+        try {
+            await RpcApi.AdeSetCostBudgetCommand(TabRpcClient, { budgetUsd });
+            globalStore.set(
+                this.noticeAtom,
+                budgetUsd > 0 ? `AI Cost Guard set to $${budgetUsd.toFixed(2)}` : "AI Cost Guard disabled"
+            );
+            await this.refresh();
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async resetCost(): Promise<void> {
+        try {
+            await RpcApi.AdeResetCostCommand(TabRpcClient);
+            globalStore.set(this.noticeAtom, "Reset session OTLP cost & token counters");
             await this.refresh();
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
@@ -467,8 +513,9 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                     {waitingCount > 0 && <span className="adehub-pill waiting">{waitingCount} waiting on you</span>}
                 </div>
                 <div className="adehub-hud-metrics">
-                    <span>
+                    <span className={cost?.budgetExceeded ? "adehub-pill waiting" : ""}>
                         Cost: <strong>${(cost?.totalCostUsd ?? 0).toFixed(4)}</strong>
+                        {cost?.budgetUsd ? ` / $${cost.budgetUsd.toFixed(2)}` : ""}
                     </span>
                     <span>
                         In: <strong>{fmtTokens(cost?.totalInputTokens ?? 0)}</strong>
@@ -1050,6 +1097,25 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                     ))}
                                 </div>
                             )}
+                            <div className="adehub-task-actions" style={{ marginTop: 6 }}>
+                                <span className="adehub-card-meta" style={{ marginRight: 4 }}>
+                                    Quick Packs:
+                                </span>
+                                {WORKFLOW_PACKS.map((pk) => (
+                                    <button
+                                        key={pk.title}
+                                        className="adehub-btn"
+                                        title="Load curated workflow pack into editor"
+                                        onClick={() => {
+                                            setNoteTitle(pk.title);
+                                            setNoteAgent(pk.agent);
+                                            setNoteBody(pk.body);
+                                        }}
+                                    >
+                                        ✦ {pk.title}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="adehub-list">
@@ -1134,6 +1200,58 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                 ))}
                             </div>
                         )}
+
+                        <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                            <div className="adehub-card-head" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+                                <div className="adehub-card-head">
+                                    <strong>💰 AI OTLP Cost Guard &amp; Breakdown</strong>
+                                    <span className={`adehub-pill ${cost?.budgetExceeded ? "waiting" : "ready"}`}>
+                                        ${(cost?.totalCostUsd ?? 0).toFixed(4)}
+                                        {cost?.budgetUsd ? ` / $${cost.budgetUsd.toFixed(2)}` : " (no cap)"}
+                                    </span>
+                                </div>
+                                <div className="adehub-card-actions">
+                                    {[0, 1, 5, 10, 25].map((cap) => (
+                                        <button
+                                            key={cap}
+                                            className={`adehub-btn ${
+                                                Math.abs((cost?.budgetUsd ?? 0) - cap) < 0.01 ? "primary" : ""
+                                            }`}
+                                            onClick={() => model.setCostBudget(cap)}
+                                        >
+                                            {cap === 0 ? "Off" : `$${cap}`}
+                                        </button>
+                                    ))}
+                                    <button className="adehub-btn danger" onClick={() => model.resetCost()}>
+                                        ↺ Reset
+                                    </button>
+                                </div>
+                            </div>
+                            {(cost?.blocks ?? []).length === 0 ? (
+                                <div className="adehub-card-meta">
+                                    Configure Claude Code or Codex OTLP endpoint to track per-block token &amp; USD spend
+                                    with automatic budget alerts.
+                                </div>
+                            ) : (
+                                <div className="adehub-list" style={{ marginTop: 6 }}>
+                                    {(cost?.blocks ?? []).map((b) => (
+                                        <div key={b.blockId} className="adehub-card">
+                                            <div className="adehub-card-main">
+                                                <div className="adehub-card-head">
+                                                    <span className="adehub-agent-tag">{b.blockId.slice(0, 12)}</span>
+                                                    <strong>${b.costUsd.toFixed(4)}</strong>
+                                                </div>
+                                                <div className="adehub-card-meta">
+                                                    In {fmtTokens(b.inputTokens)} · Out {fmtTokens(b.outputTokens)} ·
+                                                    Cache {fmtTokens(b.cacheTokens)}
+                                                    {b.sessionId ? ` · session ${b.sessionId.slice(0, 8)}` : ""}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
                             <div className="adehub-card-head" style={{ justifyContent: "space-between" }}>

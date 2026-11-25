@@ -97,6 +97,11 @@ class RpcApiType {
         return client.wshRpcCall("ademovetask", data, opts);
     }
 
+    // command "aderesetcost" [call]
+    AdeResetCostCommand(client: WshClient, opts?: RpcOpts): Promise<AdeCostSnapshotData> {
+        return client.wshRpcCall("aderesetcost", null, opts);
+    }
+
     // command "adesavepromptnote" [call]
     AdeSavePromptNoteCommand(client: WshClient, data: AdePromptNoteData, opts?: RpcOpts): Promise<AdePromptNoteData> {
         return client.wshRpcCall("adesavepromptnote", data, opts);
@@ -110,6 +115,11 @@ class RpcApiType {
     // command "adesaveworkspace" [call]
     AdeSaveWorkspaceCommand(client: WshClient, data: AdeWorkspaceData, opts?: RpcOpts): Promise<AdeWorkspaceData> {
         return client.wshRpcCall("adesaveworkspace", data, opts);
+    }
+
+    // command "adesetcostbudget" [call]
+    AdeSetCostBudgetCommand(client: WshClient, data: AdeCostBudgetRequestData, opts?: RpcOpts): Promise<AdeCostSnapshotData> {
+        return client.wshRpcCall("adesetcostbudget", data, opts);
     }
 
     // command "agentteamsgetsnapshot" [call]

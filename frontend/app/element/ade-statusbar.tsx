@@ -32,6 +32,8 @@ export const AdeStatusBar: React.FC = () => {
     const [devPorts, setDevPorts] = React.useState(0);
     const [activeTasks, setActiveTasks] = React.useState(0);
     const [costUsd, setCostUsd] = React.useState(0);
+    const [budgetExceeded, setBudgetExceeded] = React.useState(false);
+    const [showKeys, setShowKeys] = React.useState(false);
     const [sidecarMb, setSidecarMb] = React.useState<number | null>(null);
     const [liveAgents, setLiveAgents] = React.useState(0);
     const [unreadEvents, setUnreadEvents] = React.useState(0);
@@ -54,6 +56,7 @@ export const AdeStatusBar: React.FC = () => {
                 setDevPorts((ports ?? []).filter((p) => p.isDevLikely).length);
                 setActiveTasks((tasks ?? []).filter((t) => t.status === "in_progress").length);
                 setCostUsd(hub?.cost?.totalCostUsd ?? 0);
+                setBudgetExceeded(Boolean(hub?.cost?.budgetExceeded));
                 setUpdateVer(upd?.updateAvailable ? upd.latestVersion : null);
                 if (rt) {
                     setSidecarMb(rt.sidecarHeapMb);
@@ -128,8 +131,15 @@ export const AdeStatusBar: React.FC = () => {
                         {sidecarMb.toFixed(1)} MB{liveAgents > 0 ? ` · ${liveAgents} AI` : ""}
                     </span>
                 )}
-                <span className="ade-sb-metric" title="Embedded local OTLP session cost">
-                    ${costUsd.toFixed(4)}
+                <span
+                    className={`ade-sb-metric ${budgetExceeded ? "warn" : ""}`}
+                    title={
+                        budgetExceeded
+                            ? "AI OTLP session cost exceeded configured Cost Guard budget!"
+                            : "Embedded local OTLP session cost"
+                    }
+                >
+                    {budgetExceeded ? "⚠ " : ""}${costUsd.toFixed(4)}
                 </span>
                 <button
                     className="ade-sb-pill aqua"
@@ -152,10 +162,45 @@ export const AdeStatusBar: React.FC = () => {
                 >
                     {updateVer ? `⬆ v${updateVer}` : "↻ Updates"}
                 </button>
+                <button
+                    className="ade-sb-pill"
+                    onClick={() => setShowKeys((v) => !v)}
+                    title="Keyboard shortcuts cheatsheet"
+                >
+                    ⌨ Keys
+                </button>
                 <span className="ade-sb-kbd" title="Open Global ADE Command Palette">
                     Ctrl+Shift+P
                 </span>
             </div>
+            {showKeys && (
+                <div className="ade-keys-popover" onClick={() => setShowKeys(false)}>
+                    <div className="ade-keys-head">
+                        <strong>❄ SLTerm ADE Shortcuts</strong>
+                        <span>Click anywhere to close</span>
+                    </div>
+                    <div className="ade-keys-row">
+                        <kbd>Ctrl+Shift+P</kbd>
+                        <span>Global ADE Command Palette (Views, Agents, Ports, Workspaces)</span>
+                    </div>
+                    <div className="ade-keys-row">
+                        <kbd>Ctrl+T</kbd>
+                        <span>New Tab</span>
+                    </div>
+                    <div className="ade-keys-row">
+                        <kbd>Ctrl+D / Ctrl+Shift+D</kbd>
+                        <span>Split Pane Right / Down</span>
+                    </div>
+                    <div className="ade-keys-row">
+                        <kbd>Ctrl+W</kbd>
+                        <span>Close Active Block</span>
+                    </div>
+                    <div className="ade-keys-row">
+                        <kbd>Ctrl+Shift+F</kbd>
+                        <span>Find in Terminal</span>
+                    </div>
+                </div>
+            )}
         </footer>
     );
 };

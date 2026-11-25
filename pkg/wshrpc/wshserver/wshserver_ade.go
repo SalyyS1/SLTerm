@@ -10,6 +10,7 @@ package wshserver
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,19 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/wavebase"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc"
 )
+
+func init() {
+	otelcost.DefaultCollector().SetOnBudgetExceeded(func(totalUSD, budgetUSD float64) {
+		agentwatch.DefaultHub().Record(
+			"security",
+			"attention",
+			fmt.Sprintf("AI Cost Guard exceeded ($%.2f / $%.2f)", totalUSD, budgetUSD),
+			"Open ADE Hub → Activity & Runtime to inspect per-block token usage or adjust budget.",
+			"",
+			"",
+		)
+	})
+}
 
 func (ws *WshServer) VcsGetStatusCommand(ctx context.Context, data wshrpc.VcsDirRequestData) (*wshrpc.VcsStatusData, error) {
 	st, err := vcs.GetStatus(ctx, data.Dir)
@@ -318,6 +332,18 @@ func (ws *WshServer) AdeGetHubSnapshotCommand(ctx context.Context, data wshrpc.A
 	}
 
 	costSnap := otelcost.DefaultCollector().Snapshot()
+	costRpc := costToRpc(costSnap)
+
+	return &wshrpc.AdeHubSnapshotData{
+		Sessions: sessions,
+		Agents:   agents,
+		Notes:    notes,
+		Cost:     costRpc,
+		Warnings: idx.Warnings,
+	}, nil
+}
+
+func costToRpc(costSnap otelcost.Snapshot) wshrpc.AdeCostSnapshotData {
 	blocks := make([]wshrpc.AdeBlockCostData, 0, len(costSnap.Blocks))
 	for _, b := range costSnap.Blocks {
 		blocks = append(blocks, wshrpc.AdeBlockCostData{
@@ -330,20 +356,15 @@ func (ws *WshServer) AdeGetHubSnapshotCommand(ctx context.Context, data wshrpc.A
 			UpdatedAtMs:  b.UpdatedAtMs,
 		})
 	}
-
-	return &wshrpc.AdeHubSnapshotData{
-		Sessions: sessions,
-		Agents:   agents,
-		Notes:    notes,
-		Cost: wshrpc.AdeCostSnapshotData{
-			TotalCostUSD:      costSnap.TotalCostUSD,
-			TotalInputTokens:  costSnap.TotalInputTokens,
-			TotalOutputTokens: costSnap.TotalOutputTokens,
-			TotalCacheTokens:  costSnap.TotalCacheTokens,
-			Blocks:            blocks,
-		},
-		Warnings: idx.Warnings,
-	}, nil
+	return wshrpc.AdeCostSnapshotData{
+		TotalCostUSD:      costSnap.TotalCostUSD,
+		TotalInputTokens:  costSnap.TotalInputTokens,
+		TotalOutputTokens: costSnap.TotalOutputTokens,
+		TotalCacheTokens:  costSnap.TotalCacheTokens,
+		BudgetUSD:         costSnap.BudgetUSD,
+		BudgetExceeded:    costSnap.BudgetExceeded,
+		Blocks:            blocks,
+	}
 }
 
 func (ws *WshServer) AdeSavePromptNoteCommand(ctx context.Context, data wshrpc.AdePromptNoteData) (*wshrpc.AdePromptNoteData, error) {
@@ -542,7 +563,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.35.0"
+		cur = "0.36.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -695,4 +716,16 @@ func (ws *WshServer) AdeGetActivityCommand(ctx context.Context) (*wshrpc.AdeActi
 func (ws *WshServer) AdeMarkActivityReadCommand(ctx context.Context) error {
 	agentwatch.DefaultHub().MarkAllRead()
 	return nil
+}
+
+func (ws *WshServer) AdeSetCostBudgetCommand(ctx context.Context, data wshrpc.AdeCostBudgetRequestData) (*wshrpc.AdeCostSnapshotData, error) {
+	otelcost.DefaultCollector().SetBudget(data.BudgetUSD)
+	snap := costToRpc(otelcost.DefaultCollector().Snapshot())
+	return &snap, nil
+}
+
+func (ws *WshServer) AdeResetCostCommand(ctx context.Context) (*wshrpc.AdeCostSnapshotData, error) {
+	otelcost.DefaultCollector().Reset()
+	snap := costToRpc(otelcost.DefaultCollector().Snapshot())
+	return &snap, nil
 }
