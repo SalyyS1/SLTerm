@@ -998,3 +998,51 @@ func PruneWorktrees(ctx context.Context, dir string) (string, error) {
 	}
 	return runGit(ctx, root, "worktree", "prune", "-v")
 }
+
+func isProtectedBranch(name string) bool {
+	low := strings.ToLower(strings.TrimSpace(name))
+	return low == "main" || low == "master" || low == "develop" || low == "head"
+}
+
+// ListMergedBranches returns local branches already merged into HEAD, excluding protected and current branches.
+func ListMergedBranches(ctx context.Context, dir string) ([]string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	cur, _ := runGit(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
+	curBranch := strings.TrimSpace(cur)
+	out, err := runGit(ctx, root, "branch", "--format=%(refname:short)", "--merged", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	res := make([]string, 0)
+	for _, ln := range strings.Split(out, "\n") {
+		b := strings.TrimSpace(ln)
+		if b == "" || b == curBranch || isProtectedBranch(b) {
+			continue
+		}
+		res = append(res, b)
+	}
+	return res, nil
+}
+
+// DeleteBranch deletes a validated non-protected local branch (-d by default, -D when force=true).
+func DeleteBranch(ctx context.Context, dir, branch string, force bool) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	b, err := ValidateBranchName(branch)
+	if err != nil {
+		return "", err
+	}
+	if isProtectedBranch(b) {
+		return "", fmt.Errorf("refusing to delete protected branch %q", b)
+	}
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	return runGit(ctx, root, "branch", flag, b)
+}

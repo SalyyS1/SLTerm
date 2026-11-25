@@ -236,6 +236,8 @@ type WshRpcInterface interface {
 	VcsStashPushCommand(ctx context.Context, data VcsStashPushRequestData) (*VcsActionResultData, error)
 	VcsStashPopCommand(ctx context.Context, data VcsStashPopRequestData) (*VcsActionResultData, error)
 	VcsPruneWorktreesCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
+	VcsListMergedBranchesCommand(ctx context.Context, data VcsDirRequestData) ([]string, error)
+	VcsDeleteBranchCommand(ctx context.Context, data VcsDeleteBranchRequestData) (*VcsActionResultData, error)
 	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes, OTLP cost HUD, port radar & mini-kanban)
 	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)
 	AdeSavePromptNoteCommand(ctx context.Context, data AdePromptNoteData) (*AdePromptNoteData, error)
@@ -1586,4 +1588,10 @@ type VcsStashPushRequestData struct {
 type VcsStashPopRequestData struct {
 	Dir string `json:"dir"`
 	Ref string `json:"ref,omitempty"`
+}
+
+type VcsDeleteBranchRequestData struct {
+	Dir    string `json:"dir"`
+	Branch string `json:"branch"`
+	Force  bool   `json:"force,omitempty"`
 }

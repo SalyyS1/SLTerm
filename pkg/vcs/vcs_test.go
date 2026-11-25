@@ -247,4 +247,28 @@ func TestBranchesStashAndPruneWorktrees(t *testing.T) {
 	if _, err := PruneWorktrees(ctx, repo); err != nil {
 		t.Fatalf("PruneWorktrees failed: %v", err)
 	}
+
+	// Switch back to initial branch, verify ListMergedBranches & safe DeleteBranch (and protected refusal).
+	var defaultBranch string
+	for _, b := range branches {
+		if b.Name != "feat/rem-aqua-ui" {
+			defaultBranch = b.Name
+			break
+		}
+	}
+	if defaultBranch != "" {
+		if _, err := CheckoutBranch(ctx, repo, defaultBranch, false); err != nil {
+			t.Fatalf("switch back to %s failed: %v", defaultBranch, err)
+		}
+		merged, err := ListMergedBranches(ctx, repo)
+		if err != nil || len(merged) != 1 || merged[0] != "feat/rem-aqua-ui" {
+			t.Fatalf("expected feat/rem-aqua-ui in merged list, got %+v err=%v", merged, err)
+		}
+		if _, err := DeleteBranch(ctx, repo, "main", true); err == nil {
+			t.Fatal("expected deleting protected branch main to be refused")
+		}
+		if _, err := DeleteBranch(ctx, repo, "feat/rem-aqua-ui", false); err != nil {
+			t.Fatalf("DeleteBranch failed: %v", err)
+		}
+	}
 }

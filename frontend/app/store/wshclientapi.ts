@@ -897,6 +897,11 @@ class RpcApiType {
         return client.wshRpcCall("vcscreateworktree", data, opts);
     }
 
+    // command "vcsdeletebranch" [call]
+    VcsDeleteBranchCommand(client: WshClient, data: VcsDeleteBranchRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcsdeletebranch", data, opts);
+    }
+
     // command "vcsdiscard" [call]
     VcsDiscardCommand(client: WshClient, data: VcsFileRequestData, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("vcsdiscard", data, opts);
@@ -930,6 +935,11 @@ class RpcApiType {
     // command "vcslistbranches" [call]
     VcsListBranchesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsBranchData[]> {
         return client.wshRpcCall("vcslistbranches", data, opts);
+    }
+
+    // command "vcslistmergedbranches" [call]
+    VcsListMergedBranchesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<string[]> {
+        return client.wshRpcCall("vcslistmergedbranches", data, opts);
     }
 
     // command "vcsliststashes" [call]

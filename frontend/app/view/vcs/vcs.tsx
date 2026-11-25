@@ -30,6 +30,7 @@ export class VcsViewModel implements ViewModel {
     statusAtom: PrimitiveAtom<VcsStatusData | null>;
     worktreesAtom: PrimitiveAtom<VcsWorktreeData[]>;
     branchesAtom: PrimitiveAtom<VcsBranchData[]>;
+    mergedBranchesAtom: PrimitiveAtom<string[]>;
     stashesAtom: PrimitiveAtom<VcsStashEntryData[]>;
     logAtom: PrimitiveAtom<VcsCommitEntryData[]>;
     fileLogPathAtom: PrimitiveAtom<string | null>;
@@ -54,6 +55,7 @@ export class VcsViewModel implements ViewModel {
         this.statusAtom = atom(null) as PrimitiveAtom<VcsStatusData | null>;
         this.worktreesAtom = atom<VcsWorktreeData[]>([]);
         this.branchesAtom = atom<VcsBranchData[]>([]);
+        this.mergedBranchesAtom = atom<string[]>([]);
         this.stashesAtom = atom<VcsStashEntryData[]>([]);
         this.logAtom = atom<VcsCommitEntryData[]>([]);
         this.fileLogPathAtom = atom(null) as PrimitiveAtom<string | null>;
@@ -74,18 +76,20 @@ export class VcsViewModel implements ViewModel {
         const dir = (dirOverride ?? globalStore.get(this.dirAtom)).trim() || ".";
         globalStore.set(this.loadingAtom, true);
         try {
-            const [st, wts, commits, branches, stashes] = await Promise.all([
+            const [st, wts, commits, branches, stashes, merged] = await Promise.all([
                 RpcApi.VcsGetStatusCommand(TabRpcClient, { dir }),
                 RpcApi.VcsListWorktreesCommand(TabRpcClient, { dir }),
                 RpcApi.VcsGetLogCommand(TabRpcClient, { dir, limit: 30 }).catch(() => [] as VcsCommitEntryData[]),
                 RpcApi.VcsListBranchesCommand(TabRpcClient, { dir }).catch(() => [] as VcsBranchData[]),
                 RpcApi.VcsListStashesCommand(TabRpcClient, { dir }).catch(() => [] as VcsStashEntryData[]),
+                RpcApi.VcsListMergedBranchesCommand(TabRpcClient, { dir }).catch(() => [] as string[]),
             ]);
             globalStore.set(this.statusAtom, st);
             globalStore.set(this.worktreesAtom, wts ?? []);
             globalStore.set(this.logAtom, commits ?? []);
             globalStore.set(this.branchesAtom, branches ?? []);
             globalStore.set(this.stashesAtom, stashes ?? []);
+            globalStore.set(this.mergedBranchesAtom, merged ?? []);
             if (st?.repoRoot) {
                 globalStore.set(this.dirAtom, st.repoRoot);
             }
@@ -141,6 +145,17 @@ export class VcsViewModel implements ViewModel {
         try {
             const res = await RpcApi.VcsPruneWorktreesCommand(TabRpcClient, { dir });
             globalStore.set(this.noticeAtom, res?.output?.trim() || "Pruned stale worktree metadata");
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async deleteMergedBranch(branch: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const res = await RpcApi.VcsDeleteBranchCommand(TabRpcClient, { dir, branch, force: false });
+            globalStore.set(this.noticeAtom, res?.output?.trim() || `Deleted merged branch ${branch}`);
             await this.refresh(dir);
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
@@ -374,6 +389,7 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const status = useAtomValue(model.statusAtom);
     const worktrees = useAtomValue(model.worktreesAtom);
     const branches = useAtomValue(model.branchesAtom);
+    const mergedBranches = useAtomValue(model.mergedBranchesAtom);
     const stashes = useAtomValue(model.stashesAtom);
     const commits = useAtomValue(model.logAtom);
     const fileLogPath = useAtomValue(model.fileLogPathAtom);
@@ -855,6 +871,27 @@ function VcsView({ model }: { model: VcsViewModel }) {
                             </div>
                         ))}
                     </div>
+                    {mergedBranches.length > 0 && (
+                        <div className="vcs-wt-card" style={{ marginTop: 10 }}>
+                            <div className="vcs-wt-info">
+                                <div className="vcs-wt-title">
+                                    <strong>🧹 Merged Agent Branches Ready to Clean ({mergedBranches.length})</strong>
+                                </div>
+                                <div className="vcs-prefixes" style={{ marginTop: 4 }}>
+                                    {mergedBranches.map((mb) => (
+                                        <button
+                                            key={mb}
+                                            className="vcs-chip"
+                                            title={`Safely delete merged branch ${mb} (git branch -d)`}
+                                            onClick={() => model.deleteMergedBranch(mb)}
+                                        >
+                                            🗑 {mb}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

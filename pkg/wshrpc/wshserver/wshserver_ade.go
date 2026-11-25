@@ -296,6 +296,18 @@ func (ws *WshServer) VcsPruneWorktreesCommand(ctx context.Context, data wshrpc.V
 	return &wshrpc.VcsActionResultData{Output: out}, nil
 }
 
+func (ws *WshServer) VcsListMergedBranchesCommand(ctx context.Context, data wshrpc.VcsDirRequestData) ([]string, error) {
+	return vcs.ListMergedBranches(ctx, data.Dir)
+}
+
+func (ws *WshServer) VcsDeleteBranchCommand(ctx context.Context, data wshrpc.VcsDeleteBranchRequestData) (*wshrpc.VcsActionResultData, error) {
+	out, err := vcs.DeleteBranch(ctx, data.Dir, data.Branch, data.Force)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: out}, nil
+}
+
 func (ws *WshServer) AdeGetHubSnapshotCommand(ctx context.Context, data wshrpc.AdeHubRequestData) (*wshrpc.AdeHubSnapshotData, error) {
 	idx, err := agentsessions.ListSessions(data.Query, data.AgentFilter, data.Limit)
 	if err != nil {
@@ -598,7 +610,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.42.0"
+		cur = "0.43.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {

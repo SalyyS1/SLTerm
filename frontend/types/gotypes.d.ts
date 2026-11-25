@@ -2180,6 +2180,13 @@ declare global {
         targetPath?: string;
     };
 
+    // wshrpc.VcsDeleteBranchRequestData
+    type VcsDeleteBranchRequestData = {
+        dir: string;
+        branch: string;
+        force?: boolean;
+    };
+
     // wshrpc.VcsDiffData
     type VcsDiffData = {
         diff: string;

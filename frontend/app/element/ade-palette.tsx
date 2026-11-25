@@ -27,6 +27,8 @@ export const AdeCommandPalette: React.FC = () => {
     const [activeIdx, setActiveIdx] = React.useState(0);
     const [devPorts, setDevPorts] = React.useState<AdePortData[]>([]);
     const [workspaces, setWorkspaces] = React.useState<AdeWorkspaceData[]>([]);
+    const [sessions, setSessions] = React.useState<AdeSessionData[]>([]);
+    const [nltCmds, setNltCmds] = React.useState<AdeNltSuggestionData[]>([]);
     const inputRef = React.useRef<HTMLInputElement | null>(null);
 
     React.useEffect(() => {
@@ -53,7 +55,23 @@ export const AdeCommandPalette: React.FC = () => {
         RpcApi.AdeListWorkspacesCommand(TabRpcClient)
             .then((list) => setWorkspaces((list ?? []).slice(0, 6)))
             .catch(() => setWorkspaces([]));
+        RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, { limit: 8 })
+            .then((snap) => setSessions(snap?.sessions ?? []))
+            .catch(() => setSessions([]));
     }, [open]);
+
+    React.useEffect(() => {
+        if (!open) return;
+        const trimmed = query.trim();
+        if (!trimmed.startsWith("?")) {
+            setNltCmds([]);
+            return;
+        }
+        const q = trimmed.slice(1).trim();
+        RpcApi.AdeSuggestCommandsCommand(TabRpcClient, { query: q, limit: 5 })
+            .then((list) => setNltCmds(list ?? []))
+            .catch(() => setNltCmds([]));
+    }, [open, query]);
 
     const actions = React.useMemo<PaletteAction[]>(() => {
         const base: PaletteAction[] = [
@@ -202,14 +220,45 @@ export const AdeCommandPalette: React.FC = () => {
                 run: () => createBlock({ meta: { view: "web", url: p.url } }),
             });
         }
+        for (const s of sessions) {
+            base.push({
+                id: `sess-${s.agent}-${s.id}`,
+                icon: s.status === "waiting_approval" ? "🔔" : "💬",
+                label: `Resume ${s.agent}: ${s.title}`,
+                hint: s.cwd || s.id.slice(0, 8),
+                run: () =>
+                    createBlock({
+                        meta: {
+                            view: "term",
+                            controller: "cmd",
+                            cmd: s.agent === "claude" ? "claude" : "codex",
+                            "cmd:args": s.agent === "claude" ? [`--resume=${s.id}`] : ["resume", s.id],
+                            "cmd:cwd": s.cwd || undefined,
+                            "cmd:interactive": true,
+                            "cmd:login": true,
+                        },
+                    }),
+            });
+        }
         return base;
-    }, [devPorts, workspaces]);
+    }, [devPorts, workspaces, sessions]);
 
     const filtered = React.useMemo(() => {
         const q = query.trim().toLowerCase();
+        if (q.startsWith("?")) {
+            return nltCmds.map((c) => ({
+                id: `nlt-${c.id}`,
+                icon: "✨",
+                label: `${c.title} → ${c.recommended}`,
+                hint: `${c.verdict.toUpperCase()} · Copy`,
+                run: () => {
+                    navigator.clipboard?.writeText(c.recommended);
+                },
+            }));
+        }
         if (!q) return actions;
         return actions.filter((a) => a.label.toLowerCase().includes(q) || a.hint.toLowerCase().includes(q));
-    }, [actions, query]);
+    }, [actions, query, nltCmds]);
 
     if (!open) {
         return null;
@@ -246,7 +295,7 @@ export const AdeCommandPalette: React.FC = () => {
                                 execute(filtered[activeIdx]);
                             }
                         }}
-                        placeholder="SLTerm ADE Command Palette — search views, agents, Rem FX, or dev ports..."
+                        placeholder="SLTerm ADE Command Palette — search views, sessions, ports, or type ?port 5173 for offline shell assist..."
                     />
                     <kbd className="ade-palette-kbd">ESC</kbd>
                 </div>

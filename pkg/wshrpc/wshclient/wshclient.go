@@ -1075,6 +1075,12 @@ func VcsCreateWorktreeCommand(w *wshutil.WshRpc, data wshrpc.VcsCreateWorktreeRe
 	return resp, err
 }
 
+// command "vcsdeletebranch", wshserver.VcsDeleteBranchCommand
+func VcsDeleteBranchCommand(w *wshutil.WshRpc, data wshrpc.VcsDeleteBranchRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcsdeletebranch", data, opts)
+	return resp, err
+}
+
 // command "vcsdiscard", wshserver.VcsDiscardCommand
 func VcsDiscardCommand(w *wshutil.WshRpc, data wshrpc.VcsFileRequestData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "vcsdiscard", data, opts)
@@ -1114,6 +1120,12 @@ func VcsGetStatusCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts 
 // command "vcslistbranches", wshserver.VcsListBranchesCommand
 func VcsListBranchesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsBranchData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsBranchData](w, "vcslistbranches", data, opts)
+	return resp, err
+}
+
+// command "vcslistmergedbranches", wshserver.VcsListMergedBranchesCommand
+func VcsListMergedBranchesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) ([]string, error) {
+	resp, err := sendRpcRequestCallHelper[[]string](w, "vcslistmergedbranches", data, opts)
 	return resp, err
 }
 
