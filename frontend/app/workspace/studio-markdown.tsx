@@ -12,6 +12,34 @@ export interface ParsedSegment {
     content: string;
 }
 
+export interface ChangelogCommitLike {
+    shortHash: string;
+    subject: string;
+    author?: string;
+    relDate?: string;
+}
+
+/** Groups Git commits into crisp, release-ready Markdown Changelogs by Conventional Commit prefix. */
+export function formatChangelogMarkdown(commits: ChangelogCommitLike[], title = "Release Changelog"): string {
+    const feats: string[] = [];
+    const fixes: string[] = [];
+    const others: string[] = [];
+    for (const c of commits) {
+        const subj = (c.subject || "").trim();
+        if (!subj) continue;
+        const bullet = `- ${subj} (\`${c.shortHash}\`${c.author ? ` · ${c.author}` : ""})`;
+        const low = subj.toLowerCase();
+        if (low.startsWith("feat")) feats.push(bullet);
+        else if (low.startsWith("fix")) fixes.push(bullet);
+        else others.push(bullet);
+    }
+    const sections: string[] = [`## ${title}`];
+    if (feats.length > 0) sections.push(`### ✨ Features\n${feats.join("\n")}`);
+    if (fixes.length > 0) sections.push(`### 🐛 Fixes\n${fixes.join("\n")}`);
+    if (others.length > 0) sections.push(`### 🔧 Improvements & Chores\n${others.join("\n")}`);
+    return sections.join("\n\n");
+}
+
 /** Splits a conversational message into alternating text and fenced code blocks. */
 export function parseMessageSegments(raw: string): ParsedSegment[] {
     if (!raw) return [];

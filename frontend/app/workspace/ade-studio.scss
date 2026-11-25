@@ -1264,3 +1264,110 @@
         }
     }
 }
+
+/* Draggable Resizer & Thin Rem Aqua Scrollbars */
+.studio-resizer {
+    width: 5px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    background: transparent;
+    transition: background-color 140ms;
+
+    &:hover {
+        background: rgba(95, 212, 244, 0.35);
+    }
+}
+
+.studio-session-list,
+.studio-chat-scroll,
+.studio-insp-scroll,
+.studio-code-pre,
+.studio-diff-mini {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(95, 212, 244, 0.28) transparent;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(95, 212, 244, 0.26);
+        border-radius: 999px;
+    }
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}
+
+/* Rem Twilight & Glacier Mist Light Theme Overrides for AI Studio */
+:root[data-rem-theme="rem-twilight"] .ade-studio-shell {
+    background:
+        radial-gradient(circle at 14% 12%, rgba(167, 139, 250, 0.16), transparent 42%),
+        radial-gradient(circle at 86% 14%, rgba(244, 143, 177, 0.14), transparent 40%),
+        #0d0f1d;
+}
+
+:root[data-rem-theme="glacier-mist"] .ade-studio-shell {
+    background:
+        radial-gradient(circle at 14% 12%, rgba(56, 189, 248, 0.16), transparent 42%),
+        radial-gradient(circle at 86% 14%, rgba(244, 143, 177, 0.14), transparent 40%),
+        #eef7fc;
+    color: #0f2537;
+
+    .studio-sidebar,
+    .studio-inspector,
+    .studio-topbar,
+    .studio-term-drawer {
+        background: rgba(255, 255, 255, 0.78);
+        border-color: rgba(14, 116, 144, 0.16);
+        color: #0f2537;
+    }
+
+    .studio-starter-card,
+    .studio-composer-card,
+    .studio-session-banner,
+    .studio-insp-card,
+    .studio-changelog-item,
+    .studio-doctor-ribbon,
+    .studio-search,
+    .studio-url-input,
+    .studio-top-btn,
+    .studio-icon-btn,
+    .studio-mini-btn,
+    .studio-foot-pill,
+    .studio-ws-chip,
+    .studio-toggle-pill,
+    .studio-nlt-chip {
+        background: rgba(255, 255, 255, 0.86);
+        border-color: rgba(14, 116, 144, 0.22);
+        color: #0f2537;
+    }
+
+    .studio-msg.assistant .studio-msg-bubble {
+        background: rgba(255, 255, 255, 0.9);
+        border-color: rgba(14, 116, 144, 0.18);
+        color: #0f2537;
+    }
+
+    .studio-msg.user .studio-msg-bubble {
+        background: rgba(14, 165, 233, 0.14);
+        border-color: rgba(14, 165, 233, 0.32);
+        color: #0c2233;
+    }
+
+    .studio-welcome-title {
+        background: linear-gradient(120deg, #0c4a6e 15%, #0284c7 65%, #db2777 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .studio-brand-sub,
+    .studio-welcome-sub,
+    .studio-side-label,
+    .studio-session-meta,
+    .studio-cl-date,
+    .studio-cl-author,
+    .studio-empty-sm {
+        color: #4b6b84;
+    }
+}

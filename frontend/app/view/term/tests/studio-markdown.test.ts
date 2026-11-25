@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { parseMessageSegments } from "../../../workspace/studio-markdown";
+import { formatChangelogMarkdown, parseMessageSegments } from "../../../workspace/studio-markdown";
 
 describe("parseMessageSegments (Rem Aqua Studio chat renderer)", () => {
     it("splits prose, fenced code blocks, and diff blocks cleanly", () => {
@@ -32,5 +32,21 @@ describe("parseMessageSegments (Rem Aqua Studio chat renderer)", () => {
 
     it("returns empty array for blank input", () => {
         expect(parseMessageSegments("")).toEqual([]);
+    });
+
+    it("formats categorized Release Changelog Markdown from commits", () => {
+        const md = formatChangelogMarkdown(
+            [
+                { shortHash: "abc1234", subject: "feat(studio): add live web preview", author: "Saly" },
+                { shortHash: "def5678", subject: "fix(vcs): handle branch format flag", author: "Saly" },
+                { shortHash: "999aaaa", subject: "chore: bump version", author: "Saly" },
+            ],
+            "SLTerm v0.48.0"
+        );
+        expect(md).toContain("## SLTerm v0.48.0");
+        expect(md).toContain("### ✨ Features");
+        expect(md).toContain("feat(studio): add live web preview (`abc1234` · Saly)");
+        expect(md).toContain("### 🐛 Fixes");
+        expect(md).toContain("### 🔧 Improvements & Chores");
     });
 });

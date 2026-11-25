@@ -24,7 +24,7 @@ import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock, globalStore } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
-import { StudioMessageBody } from "@/app/workspace/studio-markdown";
+import { formatChangelogMarkdown, StudioMessageBody } from "@/app/workspace/studio-markdown";
 import { atom, useAtom } from "jotai";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
@@ -201,6 +201,8 @@ export const AdeStudio: React.FC = () => {
 
     // Right inspector & secondary drawer state
     const [rightOpen, setRightOpen] = React.useState(true);
+    const [inspectorWidth, setInspectorWidth] = React.useState(420);
+    const draggingRef = React.useRef(false);
     const [rightTab, setRightTab] = React.useState<RightTab>("preview");
     const [previewUrl, setPreviewUrl] = React.useState("");
     const [previewFrameKey, setPreviewFrameKey] = React.useState(0);
@@ -291,8 +293,22 @@ export const AdeStudio: React.FC = () => {
                 toggleAdeStudioMode();
             }
         };
+        const onMouseMove = (e: MouseEvent) => {
+            if (!draggingRef.current) return;
+            const next = Math.max(300, Math.min(760, window.innerWidth - e.clientX));
+            setInspectorWidth(next);
+        };
+        const onMouseUp = () => {
+            draggingRef.current = false;
+        };
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+        };
     }, []);
 
     const selectSession = async (s: AdeSessionData) => {
@@ -1107,7 +1123,15 @@ export const AdeStudio: React.FC = () => {
 
             {/* ===== RIGHT DOCKABLE STAGE: Live Web Product Preview + Changelogs & Diffs + Tasks ===== */}
             {rightOpen && (
-                <aside className="studio-inspector">
+                <>
+                    <div
+                        className="studio-resizer"
+                        title="Drag to resize Preview & Changelogs pane"
+                        onMouseDown={() => {
+                            draggingRef.current = true;
+                        }}
+                    />
+                    <aside className="studio-inspector" style={{ width: inspectorWidth }}>
                     <div className="studio-insp-tabs">
                         <button
                             className={`studio-insp-tab ${rightTab === "preview" ? "active" : ""}`}
@@ -1330,7 +1354,24 @@ export const AdeStudio: React.FC = () => {
 
                             <div className="studio-side-label" style={{ marginTop: 8 }}>
                                 <span>{isVi ? "Lịch sử Changelogs & Commits" : "Changelogs & Commit Timeline"}</span>
-                                <span className="studio-count">{commits.length}</span>
+                                <div className="studio-banner-actions">
+                                    <button
+                                        className="studio-mini-btn"
+                                        disabled={commits.length === 0}
+                                        title="Copy categorized Release Changelog Markdown to clipboard"
+                                        onClick={() => {
+                                            const md = formatChangelogMarkdown(
+                                                commits,
+                                                `${project?.name || "Project"} Changelog (${vcsStatus?.branch || "HEAD"})`
+                                            );
+                                            navigator.clipboard?.writeText(md);
+                                            showToast(`📋 Copied Release Changelog (${commits.length} commits)`);
+                                        }}
+                                    >
+                                        📋 Copy MD
+                                    </button>
+                                    <span className="studio-count">{commits.length}</span>
+                                </div>
                             </div>
                             <div className="studio-changelog-list">
                                 {commits.map((cm) => (
@@ -1507,6 +1548,7 @@ export const AdeStudio: React.FC = () => {
                         </div>
                     )}
                 </aside>
+                </>
             )}
         </div>
     );
