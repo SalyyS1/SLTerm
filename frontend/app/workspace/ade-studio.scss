@@ -304,6 +304,7 @@
 }
 
 .studio-topbar {
+    position: relative;
     height: 48px;
     flex-shrink: 0;
     display: flex;
@@ -314,6 +315,17 @@
     border-bottom: 1px solid rgba(114, 211, 244, 0.14);
     background: rgba(9, 19, 30, 0.66);
     backdrop-filter: blur(12px);
+
+    &::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(95, 212, 244, 0.45), rgba(244, 143, 177, 0.35), transparent);
+        pointer-events: none;
+    }
 }
 
 .studio-topbar-left,
@@ -1042,5 +1054,206 @@
     .studio-sidebar {
         width: 220px;
         min-width: 200px;
+    }
+}
+
+/* Rich Chat Markdown, Code & Diff Cards */
+.studio-md-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.studio-md-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    p {
+        margin: 0;
+    }
+}
+
+.studio-md-spacer {
+    height: 4px;
+}
+
+.studio-md-h {
+    margin: 4px 0 2px;
+    color: var(--rem-aqua, #5fd4f4);
+    font-size: 13.5px;
+    font-weight: 700;
+}
+
+.studio-md-bullet {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+}
+
+.studio-md-dot {
+    color: var(--rem-pink, #f48fb1);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.studio-inline-code {
+    font-family: var(--fixed-font);
+    font-size: 12px;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: rgba(95, 212, 244, 0.14);
+    border: 1px solid rgba(95, 212, 244, 0.24);
+    color: #bae6fd;
+}
+
+.studio-code-card {
+    border-radius: 10px;
+    border: 1px solid rgba(114, 211, 244, 0.22);
+    background: rgba(6, 13, 22, 0.88);
+    overflow: hidden;
+}
+
+.studio-code-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    border-bottom: 1px solid rgba(114, 211, 244, 0.14);
+    font-family: var(--fixed-font);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    color: var(--secondary-text-color);
+}
+
+.studio-code-copy {
+    border: 1px solid rgba(114, 211, 244, 0.24);
+    background: rgba(95, 212, 244, 0.1);
+    color: var(--rem-aqua, #5fd4f4);
+    border-radius: 5px;
+    padding: 1px 7px;
+    font-size: 10.5px;
+    cursor: pointer;
+}
+
+.studio-code-pre {
+    margin: 0;
+    padding: 9px 11px;
+    font-family: var(--fixed-font);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    color: #e0f2fe;
+
+    .diff-add {
+        background: rgba(94, 234, 212, 0.12);
+        color: #5eead4;
+    }
+    .diff-del {
+        background: rgba(251, 113, 133, 0.12);
+        color: #fda4af;
+    }
+    .diff-hunk {
+        color: #5fd4f4;
+        font-weight: 700;
+    }
+}
+
+/* Stella-Style Prompt Queue */
+.studio-queue-strip {
+    max-width: 820px;
+    margin: 0 auto 7px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.studio-queue-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--rem-pink, #f48fb1);
+}
+
+.studio-queue-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(244, 143, 177, 0.34);
+    background: rgba(244, 143, 177, 0.12);
+    font-size: 11px;
+
+    button {
+        border: none;
+        background: transparent;
+        color: var(--rem-aqua, #5fd4f4);
+        cursor: pointer;
+        padding: 0 2px;
+        font-size: 11px;
+    }
+}
+
+/* Stella-Style Spec / Plan Line Annotations */
+.studio-review-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: var(--fixed-font);
+    font-size: 11px;
+}
+
+.studio-review-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: 6px;
+
+    &:hover {
+        background: rgba(95, 212, 244, 0.08);
+
+        .studio-review-btns {
+            opacity: 1;
+        }
+    }
+}
+
+.studio-review-num {
+    width: 24px;
+    text-align: right;
+    color: var(--secondary-text-color);
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+
+.studio-review-txt {
+    flex: 1;
+    min-width: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.studio-review-btns {
+    display: inline-flex;
+    gap: 3px;
+    opacity: 0.25;
+    transition: opacity 120ms;
+    flex-shrink: 0;
+
+    button {
+        border: 1px solid rgba(114, 211, 244, 0.25);
+        background: rgba(15, 30, 46, 0.8);
+        color: var(--main-text-color);
+        border-radius: 4px;
+        padding: 0 4px;
+        font-size: 10px;
+        cursor: pointer;
+
+        &:hover {
+            border-color: var(--rem-aqua, #5fd4f4);
+            color: var(--rem-aqua, #5fd4f4);
+        }
     }
 }

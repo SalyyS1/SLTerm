@@ -24,6 +24,7 @@ import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock, globalStore } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { StudioMessageBody } from "@/app/workspace/studio-markdown";
 import { atom, useAtom } from "jotai";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
@@ -56,8 +57,18 @@ export function toggleAdeStudioMode(): void {
     setAdeStudioMode(!globalStore.get(adeStudioModeAtom));
 }
 
-type RightTab = "preview" | "changelogs" | "tasks";
+type RightTab = "preview" | "changelogs" | "review" | "tasks";
 type ComposerAgent = "claude" | "codex" | "gemini" | "dual";
+type ReviewTag = "looks_good" | "clarify" | "needs_tests";
+
+interface ReviewAnnotation {
+    id: string;
+    file: string;
+    lineNum: number;
+    excerpt: string;
+    tag: ReviewTag;
+    comment: string;
+}
 
 interface LocalChatMsg {
     id: string;
@@ -155,10 +166,16 @@ export const AdeStudio: React.FC = () => {
 
     // Composer state
     const [composerText, setComposerText] = React.useState("");
+    const [promptQueue, setPromptQueue] = React.useState<string[]>([]);
     const [composerAgent, setComposerAgent] = React.useState<ComposerAgent>("claude");
     const [useWorktree, setUseWorktree] = React.useState(false);
     const [riskPreview, setRiskPreview] = React.useState<AdeCommandRiskData | null>(null);
     const [notice, setNotice] = React.useState<string | null>(null);
+
+    // Stella-style Plan / Spec Review Annotations state
+    const [reviewFileName, setReviewFileName] = React.useState("CLAUDE.md");
+    const [reviewContent, setReviewContent] = React.useState("");
+    const [annotations, setAnnotations] = React.useState<ReviewAnnotation[]>([]);
 
     // Right inspector & secondary drawer state
     const [rightOpen, setRightOpen] = React.useState(true);
@@ -301,8 +318,58 @@ export const AdeStudio: React.FC = () => {
         setStudioMode(false);
     };
 
-    const handleSendPrompt = async () => {
-        const prompt = composerText.trim();
+    const loadReviewFile = React.useCallback(
+        async (fname: string, dirArg?: string) => {
+            setReviewFileName(fname);
+            try {
+                const res = await RpcApi.AdeReadContextFileCommand(TabRpcClient, {
+                    dir: (dirArg ?? activeRepoDir).trim() || ".",
+                    name: fname,
+                });
+                setReviewContent(res?.content || "");
+            } catch {
+                setReviewContent("");
+            }
+        },
+        [activeRepoDir]
+    );
+
+    React.useEffect(() => {
+        if (rightTab === "review" && !reviewContent) {
+            void loadReviewFile(reviewFileName);
+        }
+    }, [rightTab, reviewContent, reviewFileName, loadReviewFile]);
+
+    const addAnnotation = (lineNum: number, excerpt: string, tag: ReviewTag) => {
+        const note = window.prompt(`Optional note for line ${lineNum} (${tag.replace("_", " ")}):`) ?? "";
+        setAnnotations((prev) => [
+            ...prev,
+            {
+                id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                file: reviewFileName,
+                lineNum,
+                excerpt: excerpt.slice(0, 90),
+                tag,
+                comment: note.trim(),
+            },
+        ]);
+        showToast(`✨ Annotated ${reviewFileName}:${lineNum} (${tag.replace("_", " ")})`);
+    };
+
+    const sendAnnotationsToComposer = () => {
+        if (annotations.length === 0) return;
+        const lines = annotations.map((a, i) => {
+            const label = a.tag === "looks_good" ? "Looks good" : a.tag === "clarify" ? "Clarify" : "Needs tests";
+            return `${i + 1}. [${label}] ${a.file}:${a.lineNum} — "${a.excerpt}"${a.comment ? ` -> ${a.comment}` : ""}`;
+        });
+        const compiled = `Please address these review annotations:\n${lines.join("\n")}`;
+        setComposerText((cur) => (cur.trim() ? `${cur.trim()}\n\n${compiled}` : compiled));
+        setAnnotations([]);
+        showToast(`✦ Sent ${lines.length} numbered feedback annotation(s) into Composer`);
+    };
+
+    const handleSendPrompt = async (overridePrompt?: string) => {
+        const prompt = (overridePrompt ?? composerText).trim();
         if (!prompt) return;
 
         // Command Firewall check before dispatching
@@ -711,7 +778,12 @@ export const AdeStudio: React.FC = () => {
                                                         : `${activeSession?.agent || "AI"} · Redacted`}
                                                 </span>
                                             </div>
-                                            <div className="studio-msg-text">{m.text}</div>
+                                            <div className="studio-msg-text">
+                                                <StudioMessageBody
+                                                    text={m.text}
+                                                    onCopy={() => showToast("Copied code block to clipboard")}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -733,7 +805,12 @@ export const AdeStudio: React.FC = () => {
                                                         : `SLTerm · ${m.agent || "AI"}`}
                                                 </span>
                                             </div>
-                                            <div className="studio-msg-text">{m.text}</div>
+                                            <div className="studio-msg-text">
+                                                <StudioMessageBody
+                                                    text={m.text}
+                                                    onCopy={() => showToast("Copied code block to clipboard")}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -742,8 +819,33 @@ export const AdeStudio: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Stella-Style Floating Composer */}
+                {/* Stella-Style Floating Composer + Prompt Queue */}
                 <div className="studio-composer-dock">
+                    {promptQueue.length > 0 && (
+                        <div className="studio-queue-strip">
+                            <span className="studio-queue-lbl">⏳ Queued ({promptQueue.length}):</span>
+                            {promptQueue.map((qp, qi) => (
+                                <span key={qi} className="studio-queue-pill">
+                                    <span title={qp}>{qp.slice(0, 42)}{qp.length > 42 ? "…" : ""}</span>
+                                    <button
+                                        title="Send now"
+                                        onClick={() => {
+                                            setPromptQueue((prev) => prev.filter((_, idx) => idx !== qi));
+                                            void handleSendPrompt(qp);
+                                        }}
+                                    >
+                                        ▶
+                                    </button>
+                                    <button
+                                        title="Remove from queue"
+                                        onClick={() => setPromptQueue((prev) => prev.filter((_, idx) => idx !== qi))}
+                                    >
+                                        ×
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                     <div className="studio-composer-card">
                         {riskPreview && (
                             <div className="studio-risk-strip">
@@ -803,13 +905,28 @@ export const AdeStudio: React.FC = () => {
                                     🛡 Audit
                                 </button>
                             </div>
-                            <button
-                                className="studio-send-btn"
-                                disabled={!composerText.trim()}
-                                onClick={() => void handleSendPrompt()}
-                            >
-                                {isVi ? "Gửi AI ↵" : "Send ↵"}
-                            </button>
+                            <div className="studio-banner-actions">
+                                <button
+                                    className="studio-mini-btn"
+                                    disabled={!composerText.trim()}
+                                    title="Queue this prompt to run next without interrupting current work"
+                                    onClick={() => {
+                                        if (!composerText.trim()) return;
+                                        setPromptQueue((prev) => [...prev, composerText.trim()]);
+                                        setComposerText("");
+                                        showToast("⏳ Added prompt to follow-up queue");
+                                    }}
+                                >
+                                    + Queue
+                                </button>
+                                <button
+                                    className="studio-send-btn"
+                                    disabled={!composerText.trim()}
+                                    onClick={() => void handleSendPrompt()}
+                                >
+                                    {isVi ? "Gửi AI ↵" : "Send ↵"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -929,6 +1046,12 @@ export const AdeStudio: React.FC = () => {
                             onClick={() => setRightTab("changelogs")}
                         >
                             📝 {isVi ? "Changelogs" : "Changelogs"}
+                        </button>
+                        <button
+                            className={`studio-insp-tab ${rightTab === "review" ? "active" : ""}`}
+                            onClick={() => setRightTab("review")}
+                        >
+                            ✨ {isVi ? "Review" : "Review"}{annotations.length > 0 ? ` (${annotations.length})` : ""}
                         </button>
                         <button
                             className={`studio-insp-tab ${rightTab === "tasks" ? "active" : ""}`}
@@ -1097,6 +1220,73 @@ export const AdeStudio: React.FC = () => {
                             {selectedCommitDiff && (
                                 <pre className="studio-diff-mini">{selectedCommitDiff}</pre>
                             )}
+                        </div>
+                    )}
+
+                    {rightTab === "review" && (
+                        <div className="studio-insp-scroll">
+                            <div className="studio-ws-chips">
+                                {["CLAUDE.md", "AGENTS.md", ".worktreeinclude", ".gitignore"].map((fn) => (
+                                    <button
+                                        key={fn}
+                                        className={`studio-ws-chip ${reviewFileName === fn ? "active" : ""}`}
+                                        onClick={() => void loadReviewFile(fn)}
+                                    >
+                                        {fn}
+                                    </button>
+                                ))}
+                            </div>
+                            {annotations.length > 0 && (
+                                <div className="studio-insp-card">
+                                    <div className="studio-insp-head">
+                                        <strong>✨ {annotations.length} Annotation(s)</strong>
+                                        <button className="studio-mini-btn primary" onClick={sendAnnotationsToComposer}>
+                                            ⚡ Send to Composer
+                                        </button>
+                                    </div>
+                                    <div className="studio-changelog-list" style={{ marginTop: 6 }}>
+                                        {annotations.map((a) => (
+                                            <div key={a.id} className="studio-cl-author">
+                                                <strong>[{a.tag.replace("_", " ")}]</strong> L{a.lineNum}: {a.excerpt}
+                                                {a.comment ? ` — ${a.comment}` : ""}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="studio-review-lines">
+                                {(reviewContent || "(File is empty — choose another or edit in Project Doctor)")
+                                    .split("\n")
+                                    .slice(0, 60)
+                                    .map((ln, idx) => (
+                                        <div key={idx} className="studio-review-line">
+                                            <span className="studio-review-num">{idx + 1}</span>
+                                            <span className="studio-review-txt">{ln || " "}</span>
+                                            {ln.trim() && (
+                                                <span className="studio-review-btns">
+                                                    <button
+                                                        title="Mark Looks good"
+                                                        onClick={() => addAnnotation(idx + 1, ln.trim(), "looks_good")}
+                                                    >
+                                                        ✓
+                                                    </button>
+                                                    <button
+                                                        title="Mark Clarify"
+                                                        onClick={() => addAnnotation(idx + 1, ln.trim(), "clarify")}
+                                                    >
+                                                        ?
+                                                    </button>
+                                                    <button
+                                                        title="Mark Needs tests"
+                                                        onClick={() => addAnnotation(idx + 1, ln.trim(), "needs_tests")}
+                                                    >
+                                                        🧪
+                                                    </button>
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                            </div>
                         </div>
                     )}
 
