@@ -503,6 +503,28 @@ func (ws *WshServer) AdeForkSessionCommand(ctx context.Context, data wshrpc.AdeF
 	}, nil
 }
 
+func (ws *WshServer) AdePreviewSessionCommand(ctx context.Context, data wshrpc.AdeForkSessionRequestData) (*wshrpc.AdeSessionPreviewData, error) {
+	prev, err := agentsessions.ReadSessionPreview(data.Agent, data.SessionID, 12)
+	if err != nil {
+		return nil, err
+	}
+	msgs := make([]wshrpc.AdeTranscriptMessageData, 0, len(prev.Messages))
+	for _, m := range prev.Messages {
+		msgs = append(msgs, wshrpc.AdeTranscriptMessageData{
+			Role: m.Role,
+			Text: m.Text,
+		})
+	}
+	return &wshrpc.AdeSessionPreviewData{
+		ID:              prev.ID,
+		Agent:           prev.Agent,
+		Cwd:             prev.Cwd,
+		Title:           prev.Title,
+		Messages:        msgs,
+		HandoffMarkdown: prev.HandoffMarkdown,
+	}, nil
+}
+
 func (ws *WshServer) AdeCheckCommandRiskCommand(ctx context.Context, data wshrpc.AdeCheckCommandRiskRequestData) (*wshrpc.AdeCommandRiskData, error) {
 	rep := cmdguard.AnalyzeCommand(data.Command, cmdguard.AnalyzeOptions{
 		Policy: cmdguard.PolicyMode(data.Policy),
@@ -576,7 +598,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.41.0"
+		cur = "0.42.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {

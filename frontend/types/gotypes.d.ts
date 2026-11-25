@@ -393,6 +393,16 @@ declare global {
         resumeCommand: string;
     };
 
+    // wshrpc.AdeSessionPreviewData
+    type AdeSessionPreviewData = {
+        id: string;
+        agent: string;
+        cwd: string;
+        title: string;
+        messages: AdeTranscriptMessageData[];
+        handoffMarkdown: string;
+    };
+
     // wshrpc.AdeTaskData
     type AdeTaskData = {
         id?: string;
@@ -419,6 +429,12 @@ declare global {
         name: string;
         role: string;
         rssMb: number;
+    };
+
+    // wshrpc.AdeTranscriptMessageData
+    type AdeTranscriptMessageData = {
+        role: string;
+        text: string;
     };
 
     // wshrpc.AdeUpdateInfoData

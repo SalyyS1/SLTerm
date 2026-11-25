@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -666,4 +667,164 @@ func ForkSession(agent, sessionID string) (*SessionSummary, error) {
 		FilePath:      dst,
 		ResumeCommand: resumeCmd,
 	}, nil
+}
+
+// TranscriptMessage represents one scrubbed conversational turn from a JSONL transcript.
+type TranscriptMessage struct {
+	Role string `json:"role"` // user | assistant | system
+	Text string `json:"text"`
+}
+
+// SessionPreview contains the last N scrubbed turns + a ready-to-paste cross-agent handoff prompt.
+type SessionPreview struct {
+	ID              string              `json:"id"`
+	Agent           string              `json:"agent"`
+	Cwd             string              `json:"cwd"`
+	Title           string              `json:"title"`
+	Messages        []TranscriptMessage `json:"messages"`
+	HandoffMarkdown string              `json:"handoffMarkdown"`
+}
+
+var previewSecretPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`sk-[A-Za-z0-9_-]{16,}`),
+	regexp.MustCompile(`gh[pousr]_[A-Za-z0-9]{20,}`),
+	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
+	regexp.MustCompile(`AIza[0-9A-Za-z_-]{30,}`),
+	regexp.MustCompile(`(?i)Bearer\s+[A-Za-z0-9._-]{16,}`),
+	regexp.MustCompile(`-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----`),
+}
+
+func scrubPreviewText(s string) string {
+	out := s
+	for _, re := range previewSecretPatterns {
+		out = re.ReplaceAllString(out, "[REDACTED]")
+	}
+	out = strings.Join(strings.Fields(strings.TrimSpace(out)), " ")
+	if len(out) > 420 {
+		out = out[:417] + "..."
+	}
+	return out
+}
+
+// ReadSessionPreview returns the last `maxMessages` user/assistant turns of a Claude or Codex
+// transcript with inline API keys/tokens automatically redacted, plus a cross-agent handoff brief.
+func ReadSessionPreview(agent, sessionID string, maxMessages int) (*SessionPreview, error) {
+	sid := strings.TrimSpace(sessionID)
+	if sid == "" || strings.ContainsAny(sid, `/\..`) || strings.ContainsRune(sid, '\x00') {
+		return nil, errors.New("invalid session id")
+	}
+	if maxMessages <= 0 || maxMessages > 30 {
+		maxMessages = 12
+	}
+	wantAgent := strings.ToLower(strings.TrimSpace(agent))
+	idx, err := ListSessions("", wantAgent, 200)
+	if err != nil {
+		return nil, err
+	}
+	var src *SessionSummary
+	for i := range idx.Sessions {
+		if idx.Sessions[i].ID == sid && (wantAgent == "" || idx.Sessions[i].Agent == wantAgent) {
+			cp := idx.Sessions[i]
+			src = &cp
+			break
+		}
+	}
+	if src == nil || src.FilePath == "" {
+		return nil, fmt.Errorf("session %q not found", sid)
+	}
+	allowedRoot := filepath.Clean(homeDir())
+	cleanSrc := filepath.Clean(src.FilePath)
+	if !strings.HasPrefix(strings.ToLower(cleanSrc), strings.ToLower(allowedRoot)) {
+		return nil, errors.New("refusing to preview session outside agent home directory")
+	}
+
+	f, err := os.Open(cleanSrc)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	msgs := make([]TranscriptMessage, 0, maxMessages)
+	linesRead := 0
+	for sc.Scan() && linesRead < 400 {
+		linesRead++
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(line), &obj) != nil {
+			continue
+		}
+		role, _ := obj["type"].(string)
+		if r2, ok := obj["role"].(string); ok && r2 != "" {
+			role = r2
+		}
+		role = strings.ToLower(strings.TrimSpace(role))
+		if role == "human" {
+			role = "user"
+		}
+		if role != "user" && role != "assistant" {
+			continue
+		}
+		rawText := extractFullText(obj)
+		cleaned := scrubPreviewText(rawText)
+		if cleaned == "" {
+			continue
+		}
+		msgs = append(msgs, TranscriptMessage{Role: role, Text: cleaned})
+	}
+	if len(msgs) > maxMessages {
+		msgs = msgs[len(msgs)-maxMessages:]
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Cross-Agent Context Handoff (%s · %s)\n", src.Agent, shortID(src.ID))
+	if src.Cwd != "" {
+		fmt.Fprintf(&b, "- Working directory: `%s`\n", src.Cwd)
+	}
+	fmt.Fprintf(&b, "- Original topic: %s\n\n### Recent Turns (Secrets Redacted)\n", scrubPreviewText(src.Title))
+	for _, m := range msgs {
+		fmt.Fprintf(&b, "- **%s**: %s\n", m.Role, m.Text)
+	}
+	fmt.Fprintf(&b, "\nContinue cleanly from this context, verify the current repo state first, and avoid repeating completed steps.")
+
+	return &SessionPreview{
+		ID:              src.ID,
+		Agent:           src.Agent,
+		Cwd:             src.Cwd,
+		Title:           scrubPreviewText(src.Title),
+		Messages:        msgs,
+		HandoffMarkdown: b.String(),
+	}, nil
+}
+
+func extractFullText(obj map[string]any) string {
+	candidates := []any{obj["content"], obj["text"], obj["prompt"]}
+	if msg, ok := obj["message"].(map[string]any); ok {
+		candidates = append(candidates, msg["content"], msg["text"])
+	}
+	for _, c := range candidates {
+		switch v := c.(type) {
+		case string:
+			if strings.TrimSpace(v) != "" {
+				return v
+			}
+		case []any:
+			var parts []string
+			for _, elem := range v {
+				if m, ok := elem.(map[string]any); ok {
+					if s, ok := m["text"].(string); ok && strings.TrimSpace(s) != "" {
+						parts = append(parts, s)
+					}
+				}
+			}
+			if len(parts) > 0 {
+				return strings.Join(parts, " ")
+			}
+		}
+	}
+	return ""
 }

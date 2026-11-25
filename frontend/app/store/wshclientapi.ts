@@ -102,6 +102,11 @@ class RpcApiType {
         return client.wshRpcCall("ademovetask", data, opts);
     }
 
+    // command "adepreviewsession" [call]
+    AdePreviewSessionCommand(client: WshClient, data: AdeForkSessionRequestData, opts?: RpcOpts): Promise<AdeSessionPreviewData> {
+        return client.wshRpcCall("adepreviewsession", data, opts);
+    }
+
     // command "adereadcontextfile" [call]
     AdeReadContextFileCommand(client: WshClient, data: AdeContextFileRequestData, opts?: RpcOpts): Promise<AdeContextFileData> {
         return client.wshRpcCall("adereadcontextfile", data, opts);

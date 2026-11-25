@@ -129,6 +129,12 @@ func AdeMoveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeMoveTaskRequestData, o
 	return resp, err
 }
 
+// command "adepreviewsession", wshserver.AdePreviewSessionCommand
+func AdePreviewSessionCommand(w *wshutil.WshRpc, data wshrpc.AdeForkSessionRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeSessionPreviewData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeSessionPreviewData](w, "adepreviewsession", data, opts)
+	return resp, err
+}
+
 // command "adereadcontextfile", wshserver.AdeReadContextFileCommand
 func AdeReadContextFileCommand(w *wshutil.WshRpc, data wshrpc.AdeContextFileRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeContextFileData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeContextFileData](w, "adereadcontextfile", data, opts)

@@ -246,6 +246,7 @@ type WshRpcInterface interface {
 	AdeMoveTaskCommand(ctx context.Context, data AdeMoveTaskRequestData) (*AdeTaskData, error)
 	AdeDeleteTaskCommand(ctx context.Context, data AdeTaskDeleteRequestData) error
 	AdeForkSessionCommand(ctx context.Context, data AdeForkSessionRequestData) (*AdeSessionData, error)
+	AdePreviewSessionCommand(ctx context.Context, data AdeForkSessionRequestData) (*AdeSessionPreviewData, error)
 	AdeCheckCommandRiskCommand(ctx context.Context, data AdeCheckCommandRiskRequestData) (*AdeCommandRiskData, error)
 	AdeListWorkspacesCommand(ctx context.Context) ([]AdeWorkspaceData, error)
 	AdeSaveWorkspaceCommand(ctx context.Context, data AdeWorkspaceData) (*AdeWorkspaceData, error)
@@ -1343,6 +1344,20 @@ type AdeTaskDeleteRequestData struct {
 type AdeForkSessionRequestData struct {
 	Agent     string `json:"agent"`
 	SessionID string `json:"sessionId"`
+}
+
+type AdeTranscriptMessageData struct {
+	Role string `json:"role"`
+	Text string `json:"text"`
+}
+
+type AdeSessionPreviewData struct {
+	ID              string                     `json:"id"`
+	Agent           string                     `json:"agent"`
+	Cwd             string                     `json:"cwd"`
+	Title           string                     `json:"title"`
+	Messages        []AdeTranscriptMessageData `json:"messages"`
+	HandoffMarkdown string                     `json:"handoffMarkdown"`
 }
 
 type AdeCheckCommandRiskRequestData struct {

@@ -456,6 +456,18 @@ export class AdeHubViewModel implements ViewModel {
         }
     }
 
+    async previewSession(session: AdeSessionData): Promise<AdeSessionPreviewData | null> {
+        try {
+            return await RpcApi.AdePreviewSessionCommand(TabRpcClient, {
+                agent: session.agent,
+                sessionId: session.id,
+            });
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return null;
+        }
+    }
+
     async checkCommandRisk(command: string): Promise<AdeCommandRiskData | null> {
         try {
             return await RpcApi.AdeCheckCommandRiskCommand(TabRpcClient, {
@@ -585,6 +597,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const [ctxDraft, setCtxDraft] = React.useState("");
     const [nltQuery, setNltQuery] = React.useState("");
     const [nltResults, setNltResults] = React.useState<AdeNltSuggestionData[]>([]);
+    const [sessionPreview, setSessionPreview] = React.useState<AdeSessionPreviewData | null>(null);
 
     React.useEffect(() => {
         model.refresh(query, agentFilter);
@@ -739,6 +752,15 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                             </button>
                                             <button
                                                 className="adehub-btn"
+                                                onClick={async () => {
+                                                    setSessionPreview(await model.previewSession(s));
+                                                }}
+                                                title="Preview recent turns (secrets redacted) & copy cross-agent handoff prompt"
+                                            >
+                                                👁 Preview
+                                            </button>
+                                            <button
+                                                className="adehub-btn"
                                                 onClick={() => model.forkSession(s)}
                                                 title="Clone transcript into a new branch session without mutating the original"
                                             >
@@ -756,6 +778,44 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                        {sessionPreview && (
+                            <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                                <div className="adehub-card-head" style={{ justifyContent: "space-between" }}>
+                                    <div className="adehub-card-head">
+                                        <span className="adehub-agent-tag">{sessionPreview.agent}</span>
+                                        <strong>👁 Transcript Preview ({sessionPreview.id.slice(0, 8)})</strong>
+                                        <span className="adehub-pill ready">Secrets Redacted</span>
+                                    </div>
+                                    <div className="adehub-card-actions">
+                                        <button
+                                            className="adehub-btn primary"
+                                            onClick={() => {
+                                                navigator.clipboard?.writeText(sessionPreview.handoffMarkdown);
+                                                globalStore.set(
+                                                    model.noticeAtom,
+                                                    `Copied redacted cross-agent handoff prompt (${sessionPreview.messages.length} turns)`
+                                                );
+                                            }}
+                                        >
+                                            📋 Copy Handoff (Claude ↔ Codex)
+                                        </button>
+                                        <button className="adehub-btn" onClick={() => setSessionPreview(null)}>
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="adehub-list" style={{ marginTop: 6 }}>
+                                    {(sessionPreview.messages ?? []).map((m, i) => (
+                                        <div key={i} className="adehub-card-meta" style={{ whiteSpace: "normal" }}>
+                                            <strong style={{ color: m.role === "user" ? "var(--rem-aqua)" : "var(--rem-pink)" }}>
+                                                {m.role}:
+                                            </strong>{" "}
+                                            {m.text}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </>

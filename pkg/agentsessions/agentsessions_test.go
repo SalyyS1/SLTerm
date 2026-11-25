@@ -6,6 +6,7 @@ package agentsessions
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +99,26 @@ func TestListSessionsAndPromptNotesCRUD(t *testing.T) {
 	}
 	if _, err := ForkSession("claude", "../../etc/passwd"); err == nil {
 		t.Fatal("expected traversal session id to be rejected")
+	}
+
+	// Verify ReadSessionPreview redacts inline API keys & generates HandoffMarkdown
+	secretTok := "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz123456"
+	secTranscript := `{"type":"user","cwd":"C:\\work\\slterm","message":{"content":"Use token ` + secretTok + ` to check API"}}` + "\n" +
+		`{"type":"assistant","message":{"content":"Checking safely without leaking keys."}}` + "\n"
+	if err := os.WriteFile(filepath.Join(claudeProj, "sec99999.jsonl"), []byte(secTranscript), 0644); err != nil {
+		t.Fatal(err)
+	}
+	prev, err := ReadSessionPreview("claude", "sec99999", 10)
+	if err != nil {
+		t.Fatalf("ReadSessionPreview failed: %v", err)
+	}
+	if len(prev.Messages) != 2 {
+		t.Fatalf("expected 2 preview messages, got %+v", prev.Messages)
+	}
+	if strings.Contains(prev.HandoffMarkdown, secretTok) || strings.Contains(prev.Messages[0].Text, secretTok) {
+		t.Fatalf("secret token leaked into session preview: %+v", prev)
+	}
+	if !strings.Contains(prev.Messages[0].Text, "[REDACTED]") {
+		t.Fatalf("expected [REDACTED] placeholder in preview: %+v", prev.Messages[0])
 	}
 }
