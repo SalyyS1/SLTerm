@@ -177,8 +177,11 @@
     font-size: 11px;
     padding: 1px 6px;
 
-    &:hover {
+    &:hover,
+    &.active {
         background: var(--highlight-bg-color);
+        border-color: var(--rem-aqua, #5fd4f4);
+        color: var(--rem-aqua, #5fd4f4);
     }
 }
 

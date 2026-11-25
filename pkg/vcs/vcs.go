@@ -601,6 +601,124 @@ func MergeWorktree(ctx context.Context, dir, branchName, worktreePath string, re
 	return out, nil
 }
 
+// DraftCommitMessage inspects staged files and diff stats to produce a fast, deterministic
+// Conventional Commit message draft locally with zero API calls or token cost.
+func DraftCommitMessage(ctx context.Context, dir string) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	ns, err := runGit(ctx, root, "diff", "--cached", "--name-status")
+	if err != nil {
+		return "", err
+	}
+	lines := make([]string, 0)
+	for _, ln := range strings.Split(ns, "\n") {
+		if t := strings.TrimSpace(ln); t != "" {
+			lines = append(lines, t)
+		}
+	}
+	if len(lines) == 0 {
+		return "", errors.New("no staged files to draft commit message from")
+	}
+
+	added, modified, deleted := 0, 0, 0
+	allDocs, allTests, allConfig := true, true, true
+	scopes := make(map[string]struct{})
+	var firstFile string
+	for _, ln := range lines {
+		parts := strings.Fields(ln)
+		if len(parts) < 2 {
+			continue
+		}
+		st := parts[0]
+		p := filepath.ToSlash(parts[len(parts)-1])
+		if firstFile == "" {
+			firstFile = filepath.Base(p)
+		}
+		switch {
+		case strings.HasPrefix(st, "A"):
+			added++
+		case strings.HasPrefix(st, "D"):
+			deleted++
+		default:
+			modified++
+		}
+		low := strings.ToLower(p)
+		if !strings.HasSuffix(low, ".md") && !strings.HasPrefix(low, "docs/") {
+			allDocs = false
+		}
+		if !strings.Contains(low, "_test.") && !strings.Contains(low, ".test.") && !strings.Contains(low, "/tests/") {
+			allTests = false
+		}
+		if !strings.HasSuffix(low, ".json") && !strings.HasSuffix(low, ".yml") && !strings.HasSuffix(low, ".yaml") && !strings.HasSuffix(low, ".toml") {
+			allConfig = false
+		}
+		segs := strings.Split(p, "/")
+		if len(segs) >= 2 {
+			sc := segs[0]
+			if (sc == "pkg" || sc == "cmd" || sc == "src" || sc == "frontend") && len(segs) >= 3 {
+				sc = segs[1]
+			}
+			scopes[sc] = struct{}{}
+		}
+	}
+
+	kind := "feat"
+	switch {
+	case allDocs:
+		kind = "docs"
+	case allTests:
+		kind = "test"
+	case allConfig:
+		kind = "chore"
+	case added == 0 && deleted > 0 && modified == 0:
+		kind = "refactor"
+	case added == 0 && modified > 0:
+		kind = "fix"
+	}
+
+	scopeList := make([]string, 0, len(scopes))
+	for s := range scopes {
+		scopeList = append(scopeList, s)
+	}
+	// Deterministic ordering
+	for i := 0; i < len(scopeList); i++ {
+		for j := i + 1; j < len(scopeList); j++ {
+			if scopeList[j] < scopeList[i] {
+				scopeList[i], scopeList[j] = scopeList[j], scopeList[i]
+			}
+		}
+	}
+	scopePart := ""
+	if len(scopeList) > 0 {
+		if len(scopeList) > 2 {
+			scopeList = scopeList[:2]
+		}
+		scopePart = "(" + strings.Join(scopeList, ",") + ")"
+	}
+
+	summary := fmt.Sprintf("update %d files", len(lines))
+	if len(lines) == 1 && firstFile != "" {
+		verb := "update"
+		if added == 1 {
+			verb = "add"
+		} else if deleted == 1 {
+			verb = "remove"
+		}
+		summary = fmt.Sprintf("%s %s", verb, firstFile)
+	} else if added > 0 && modified == 0 && deleted == 0 {
+		summary = fmt.Sprintf("add %d files", added)
+	}
+
+	statOut, _ := runGit(ctx, root, "diff", "--cached", "--shortstat")
+	stat := strings.TrimSpace(statOut)
+	if stat != "" {
+		return fmt.Sprintf("%s%s: %s\n\n%s", kind, scopePart, summary, stat), nil
+	}
+	return fmt.Sprintf("%s%s: %s", kind, scopePart, summary), nil
+}
+
 // RemoveWorktree removes a linked worktree (refuses to remove the main checkout).
 func RemoveWorktree(ctx context.Context, dir, worktreePath string, force bool) error {
 	root, err := ResolveRepoRoot(ctx, dir)

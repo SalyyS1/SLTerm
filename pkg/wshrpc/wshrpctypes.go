@@ -225,6 +225,7 @@ type WshRpcInterface interface {
 	VcsCreateWorktreeCommand(ctx context.Context, data VcsCreateWorktreeRequestData) (*VcsWorktreeData, error)
 	VcsRemoveWorktreeCommand(ctx context.Context, data VcsRemoveWorktreeRequestData) error
 	VcsMergeWorktreeCommand(ctx context.Context, data VcsMergeWorktreeRequestData) (*VcsActionResultData, error)
+	VcsDraftCommitCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
 	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
 	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes, OTLP cost HUD, port radar & mini-kanban)
 	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)

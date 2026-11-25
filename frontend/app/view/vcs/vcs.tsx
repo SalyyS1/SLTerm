@@ -110,6 +110,39 @@ export class VcsViewModel implements ViewModel {
         }
     }
 
+    async discard(path: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            await RpcApi.VcsDiscardCommand(TabRpcClient, { dir, path });
+            globalStore.set(this.noticeAtom, `Discarded unstaged changes in ${path}`);
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async assignChangelist(path: string, changelist: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            await RpcApi.VcsAssignChangelistCommand(TabRpcClient, { dir, path, changelist });
+            globalStore.set(this.noticeAtom, `Moved ${path} → changelist "${changelist}"`);
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async draftCommit(): Promise<string | null> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const res = await RpcApi.VcsDraftCommitCommand(TabRpcClient, { dir });
+            return res?.output || null;
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return null;
+        }
+    }
+
     async commit(message: string): Promise<boolean> {
         const dir = globalStore.get(this.dirAtom);
         try {
@@ -241,6 +274,8 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const [commitMsg, setCommitMsg] = React.useState("");
     const [wtBranch, setWtBranch] = React.useState("");
     const [wtPath, setWtPath] = React.useState("");
+    const [clFilter, setClFilter] = React.useState("ALL");
+    const [newClName, setNewClName] = React.useState("");
 
     React.useEffect(() => {
         setDirInput(dir);
@@ -251,7 +286,9 @@ function VcsView({ model }: { model: VcsViewModel }) {
     }, [model]);
 
     const staged = (status?.changes ?? []).filter((c) => c.staged);
-    const unstaged = (status?.changes ?? []).filter((c) => c.unstaged || c.untracked);
+    const allUnstaged = (status?.changes ?? []).filter((c) => c.unstaged || c.untracked);
+    const unstaged = clFilter === "ALL" ? allUnstaged : allUnstaged.filter((c) => (c.changelist || "Default") === clFilter);
+    const changelists = status?.changelists && status.changelists.length > 0 ? status.changelists : ["Default"];
 
     return (
         <div className="vcs-view">
@@ -345,10 +382,27 @@ function VcsView({ model }: { model: VcsViewModel }) {
                         <div className="vcs-section-head">
                             <span>Unstaged ({unstaged.length})</span>
                             {unstaged.length > 0 && (
-                                <button className="vcs-link" onClick={() => model.stage()}>
-                                    Stage all
+                                <button className="vcs-link" onClick={() => model.stage(unstaged.map((u) => u.path))}>
+                                    Stage shown
                                 </button>
                             )}
+                        </div>
+                        <div className="vcs-prefixes" style={{ marginBottom: 4 }}>
+                            <button
+                                className={`vcs-chip ${clFilter === "ALL" ? "active" : ""}`}
+                                onClick={() => setClFilter("ALL")}
+                            >
+                                All
+                            </button>
+                            {changelists.map((cl) => (
+                                <button
+                                    key={cl}
+                                    className={`vcs-chip ${clFilter === cl ? "active" : ""}`}
+                                    onClick={() => setClFilter(cl)}
+                                >
+                                    {cl}
+                                </button>
+                            ))}
                         </div>
                         {unstaged.length === 0 ? (
                             <div className="vcs-empty-sm">Working tree clean</div>
@@ -370,6 +424,31 @@ function VcsView({ model }: { model: VcsViewModel }) {
                                     )}
                                     <button
                                         className="vcs-mini"
+                                        title="Assign file to changelist"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const targetCl = newClName.trim() || "AI-Review";
+                                            void model.assignChangelist(c.path, targetCl);
+                                        }}
+                                    >
+                                        CL
+                                    </button>
+                                    {!c.untracked && (
+                                        <button
+                                            className="vcs-mini"
+                                            title="Discard unstaged edits"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (window.confirm(`Discard unstaged edits in ${c.path}?`)) {
+                                                    void model.discard(c.path);
+                                                }
+                                            }}
+                                        >
+                                            ↩
+                                        </button>
+                                    )}
+                                    <button
+                                        className="vcs-mini"
                                         title="Stage"
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -383,6 +462,12 @@ function VcsView({ model }: { model: VcsViewModel }) {
                         )}
 
                         <div className="vcs-commit-box">
+                            <input
+                                className="vcs-dir-input"
+                                value={newClName}
+                                onChange={(e) => setNewClName(e.target.value)}
+                                placeholder="Target changelist name for CL button (default: AI-Review)"
+                            />
                             <div className="vcs-prefixes">
                                 {["feat:", "fix:", "refactor:", "chore:"].map((p) => (
                                     <button
@@ -393,6 +478,17 @@ function VcsView({ model }: { model: VcsViewModel }) {
                                         {p}
                                     </button>
                                 ))}
+                                <button
+                                    className="vcs-chip"
+                                    disabled={staged.length === 0}
+                                    title="Generate Conventional Commit draft locally from staged files"
+                                    onClick={async () => {
+                                        const draft = await model.draftCommit();
+                                        if (draft) setCommitMsg(draft);
+                                    }}
+                                >
+                                    ✨ Auto-Draft
+                                </button>
                             </div>
                             <textarea
                                 className="vcs-commit-input"

@@ -129,6 +129,23 @@
             "acknowledgements": "Lời cảm ơn"
         }
     },
+    "ade": {
+        "hubTitle": "Trung tâm ADE SLTerm",
+        "sessions": "Phiên AI",
+        "tasks": "Bảng việc",
+        "workspaces": "Không gian làm việc",
+        "portsRadar": "Radar Cổng Dev",
+        "agentsShells": "Agent & Shell",
+        "promptNotes": "Ghi chú Prompt",
+        "checkUpdates": "Kiểm tra cập nhật",
+        "updateAvailable": "Có bản phát hành SLTerm mới trên GitHub!",
+        "downloadUpdate": "Tải bản mới",
+        "viewRelease": "Xem Release",
+        "autoDraftCommit": "Tự tạo Commit",
+        "dualLaunch": "Chạy song song (Claude + Codex)",
+        "forkSession": "Nhân bản phiên",
+        "mergeToMain": "Gộp -> Main"
+    },
     "common": {
         "save": "Lưu",
         "cancel": "Hủy",

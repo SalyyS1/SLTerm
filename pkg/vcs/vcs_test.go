@@ -89,9 +89,13 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 		t.Fatalf("expected AI-Refactor changelist, got %q", st2.Changes[0].Changelist)
 	}
 
-	// Stage, diff, and commit.
+	// Stage, diff, auto-draft commit message, and commit.
 	if err := StageFiles(ctx, repo, []string{"sub/app.go"}); err != nil {
 		t.Fatalf("StageFiles failed: %v", err)
+	}
+	draft, err := DraftCommitMessage(ctx, repo)
+	if err != nil || !strings.HasPrefix(draft, "feat(sub): add app.go") {
+		t.Fatalf("unexpected commit draft: %q err=%v", draft, err)
 	}
 	diff, err := GetDiff(ctx, repo, "sub/app.go", true)
 	if err != nil || !strings.Contains(diff, "package sub") {

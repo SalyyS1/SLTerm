@@ -997,6 +997,12 @@ func VcsDiscardCommand(w *wshutil.WshRpc, data wshrpc.VcsFileRequestData, opts *
 	return err
 }
 
+// command "vcsdraftcommit", wshserver.VcsDraftCommitCommand
+func VcsDraftCommitCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcsdraftcommit", data, opts)
+	return resp, err
+}
+
 // command "vcsgetdiff", wshserver.VcsGetDiffCommand
 func VcsGetDiffCommand(w *wshutil.WshRpc, data wshrpc.VcsDiffRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsDiffData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsDiffData](w, "vcsgetdiff", data, opts)

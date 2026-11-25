@@ -152,6 +152,14 @@ func (ws *WshServer) VcsMergeWorktreeCommand(ctx context.Context, data wshrpc.Vc
 	return &wshrpc.VcsActionResultData{Output: out}, nil
 }
 
+func (ws *WshServer) VcsDraftCommitCommand(ctx context.Context, data wshrpc.VcsDirRequestData) (*wshrpc.VcsActionResultData, error) {
+	draft, err := vcs.DraftCommitMessage(ctx, data.Dir)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: draft}, nil
+}
+
 func (ws *WshServer) VcsAssignChangelistCommand(ctx context.Context, data wshrpc.VcsChangelistAssignData) error {
 	root, err := vcs.ResolveRepoRoot(ctx, data.Dir)
 	if err != nil {
@@ -432,7 +440,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.29.0"
+		cur = "0.30.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {

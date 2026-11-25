@@ -129,6 +129,23 @@
             "acknowledgements": "Acknowledgements"
         }
     },
+    "ade": {
+        "hubTitle": "SLTerm ADE Hub",
+        "sessions": "Sessions",
+        "tasks": "Tasks",
+        "workspaces": "Workspaces",
+        "portsRadar": "Ports Radar",
+        "agentsShells": "Agents & Shells",
+        "promptNotes": "Prompt Notes",
+        "checkUpdates": "Check Updates",
+        "updateAvailable": "New SLTerm release available on GitHub!",
+        "downloadUpdate": "Download Update",
+        "viewRelease": "View Release",
+        "autoDraftCommit": "Auto-Draft Commit",
+        "dualLaunch": "Dual Launch (Claude + Codex)",
+        "forkSession": "Fork Session",
+        "mergeToMain": "Merge -> Main"
+    },
     "common": {
         "save": "Save",
         "cancel": "Cancel",

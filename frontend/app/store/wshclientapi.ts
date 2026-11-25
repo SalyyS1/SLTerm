@@ -832,6 +832,11 @@ class RpcApiType {
         return client.wshRpcCall("vcsdiscard", data, opts);
     }
 
+    // command "vcsdraftcommit" [call]
+    VcsDraftCommitCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcsdraftcommit", data, opts);
+    }
+
     // command "vcsgetdiff" [call]
     VcsGetDiffCommand(client: WshClient, data: VcsDiffRequestData, opts?: RpcOpts): Promise<VcsDiffData> {
         return client.wshRpcCall("vcsgetdiff", data, opts);

@@ -294,6 +294,33 @@ export class AdeHubViewModel implements ViewModel {
         });
     }
 
+    async launchParallelAgents(agents: string[], cwd: string, promptText: string): Promise<void> {
+        const cleanCwd = cwd.trim() || undefined;
+        if (promptText.trim()) {
+            try {
+                await navigator.clipboard?.writeText(promptText.trim());
+            } catch {
+                // ignore clipboard failure
+            }
+        }
+        for (const ag of agents) {
+            await createBlock({
+                meta: {
+                    view: "term",
+                    controller: "cmd",
+                    cmd: ag,
+                    "cmd:cwd": cleanCwd,
+                    "cmd:interactive": true,
+                    "cmd:login": true,
+                },
+            });
+        }
+        globalStore.set(
+            this.noticeAtom,
+            `Launched ${agents.join(" + ")} in parallel${promptText.trim() ? " (prompt copied to clipboard)" : ""}`
+        );
+    }
+
     async saveNote(title: string, agent: string, body: string): Promise<boolean> {
         try {
             await RpcApi.AdeSavePromptNoteCommand(TabRpcClient, { title, agent, body });
@@ -840,6 +867,14 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                     <option value="codex">Codex</option>
                                     <option value="shell">Shell</option>
                                 </select>
+                                <button
+                                    className="adehub-btn"
+                                    disabled={!noteBody.trim()}
+                                    title="Launch Claude + Codex side-by-side in launch directory and copy this prompt to clipboard"
+                                    onClick={() => model.launchParallelAgents(["claude", "codex"], launchCwd, noteBody)}
+                                >
+                                    🚀 Dual Launch
+                                </button>
                                 <button
                                     className="adehub-btn"
                                     disabled={!noteBody.trim()}
