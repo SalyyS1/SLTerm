@@ -43,6 +43,7 @@ export class AdeHubViewModel implements ViewModel {
     workspacesAtom: PrimitiveAtom<AdeWorkspaceData[]>;
     runtimeAtom: PrimitiveAtom<AdeRuntimeStatsData | null>;
     sshAuditAtom: PrimitiveAtom<AdeSSHAuditReportData | null>;
+    projectAtom: PrimitiveAtom<AdeProjectReportData | null>;
     errorAtom: PrimitiveAtom<string | null>;
     noticeAtom: PrimitiveAtom<string | null>;
 
@@ -61,6 +62,7 @@ export class AdeHubViewModel implements ViewModel {
         this.workspacesAtom = atom<AdeWorkspaceData[]>([]);
         this.runtimeAtom = atom(null) as PrimitiveAtom<AdeRuntimeStatsData | null>;
         this.sshAuditAtom = atom(null) as PrimitiveAtom<AdeSSHAuditReportData | null>;
+        this.projectAtom = atom(null) as PrimitiveAtom<AdeProjectReportData | null>;
         this.errorAtom = atom(null) as PrimitiveAtom<string | null>;
         this.noticeAtom = atom(null) as PrimitiveAtom<string | null>;
     }
@@ -91,6 +93,41 @@ export class AdeHubViewModel implements ViewModel {
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
         }
+    }
+
+    async inspectProject(dir: string): Promise<void> {
+        try {
+            const rep = await RpcApi.AdeInspectProjectCommand(TabRpcClient, { dir });
+            globalStore.set(this.projectAtom, rep);
+            globalStore.set(this.noticeAtom, `Detected ${rep.stacks.join(", ") || "project"} in ${rep.name}`);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async generateWorktreeInclude(dir: string): Promise<void> {
+        try {
+            const res = await RpcApi.AdeEnsureWorktreeIncludeCommand(TabRpcClient, { dir });
+            globalStore.set(this.noticeAtom, res?.output || "Updated .worktreeinclude");
+            await this.inspectProject(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async runProjectCommand(cwd: string, command: string): Promise<void> {
+        const parts = command.trim().split(/\s+/);
+        await createBlock({
+            meta: {
+                view: "term",
+                controller: "cmd",
+                cmd: parts[0],
+                "cmd:args": parts.slice(1),
+                "cmd:cwd": cwd,
+                "cmd:interactive": true,
+                "cmd:login": true,
+            },
+        });
     }
 
     async runSSHAudit(content = ""): Promise<void> {
@@ -376,6 +413,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const runtime = useAtomValue(model.runtimeAtom);
     const sshAudit = useAtomValue(model.sshAuditAtom);
+    const project = useAtomValue(model.projectAtom);
     const error = useAtomValue(model.errorAtom);
     const notice = useAtomValue(model.noticeAtom);
 
@@ -765,6 +803,9 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                             <div className="adehub-card-meta">{w.repoDir}</div>
                                         </div>
                                         <div className="adehub-card-actions">
+                                            <button className="adehub-btn" onClick={() => model.inspectProject(w.repoDir)}>
+                                                🔍 Doctor
+                                            </button>
                                             <button className="adehub-btn primary" onClick={() => model.launchWorkspace(w)}>
                                                 ⚡ Launch Layout
                                             </button>
@@ -774,6 +815,50 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+
+                        {project && (
+                            <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                                <div className="adehub-card-head" style={{ justifyContent: "space-between" }}>
+                                    <div className="adehub-card-head">
+                                        <strong>🩺 Project Doctor: {project.name}</strong>
+                                        {(project.stacks ?? []).map((st) => (
+                                            <span key={st} className="adehub-agent-tag">
+                                                {st}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    {!project.hasWorktreeInclude && (
+                                        <button
+                                            className="adehub-btn primary"
+                                            onClick={() => model.generateWorktreeInclude(project.dir)}
+                                        >
+                                            + Create .worktreeinclude
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="adehub-card-meta">
+                                    ADE Readiness: {project.hasGit ? "✓ .git" : "✗ .git"} ·{" "}
+                                    {project.hasClaudeMd ? "✓ CLAUDE.md" : "· CLAUDE.md"} ·{" "}
+                                    {project.hasAgentsMd ? "✓ AGENTS.md" : "· AGENTS.md"} ·{" "}
+                                    {project.hasMcpJson ? "✓ .mcp.json" : "· .mcp.json"} ·{" "}
+                                    {project.hasWorktreeInclude ? "✓ .worktreeinclude" : "⚠ no .worktreeinclude"}
+                                </div>
+                                {(project.commands ?? []).length > 0 && (
+                                    <div className="adehub-task-actions">
+                                        {(project.commands ?? []).map((c) => (
+                                            <button
+                                                key={`${c.source}:${c.label}`}
+                                                className="adehub-btn"
+                                                title={`Run "${c.command}" in ${project.dir}`}
+                                                onClick={() => model.runProjectCommand(project.dir, c.command)}
+                                            >
+                                                ▶ {c.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>

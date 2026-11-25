@@ -243,6 +243,27 @@ declare global {
         isDevLikely: boolean;
     };
 
+    // wshrpc.AdeProjectCommandData
+    type AdeProjectCommandData = {
+        label: string;
+        command: string;
+        source: string;
+    };
+
+    // wshrpc.AdeProjectReportData
+    type AdeProjectReportData = {
+        dir: string;
+        name: string;
+        stacks: string[];
+        commands: AdeProjectCommandData[];
+        hasGit: boolean;
+        hasClaudeMd: boolean;
+        hasAgentsMd: boolean;
+        hasMcpJson: boolean;
+        hasWorktreeInclude: boolean;
+        hasDotEnv: boolean;
+    };
+
     // wshrpc.AdePromptNoteData
     type AdePromptNoteData = {
         id?: string;

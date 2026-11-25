@@ -57,6 +57,12 @@ func AdeDeleteWorkspaceCommand(w *wshutil.WshRpc, data wshrpc.AdeWorkspaceDelete
 	return err
 }
 
+// command "adeensureworktreeinclude", wshserver.AdeEnsureWorktreeIncludeCommand
+func AdeEnsureWorktreeIncludeCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "adeensureworktreeinclude", data, opts)
+	return resp, err
+}
+
 // command "adeforksession", wshserver.AdeForkSessionCommand
 func AdeForkSessionCommand(w *wshutil.WshRpc, data wshrpc.AdeForkSessionRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeSessionData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeSessionData](w, "adeforksession", data, opts)
@@ -72,6 +78,12 @@ func AdeGetHubSnapshotCommand(w *wshutil.WshRpc, data wshrpc.AdeHubRequestData, 
 // command "adegetruntimestats", wshserver.AdeGetRuntimeStatsCommand
 func AdeGetRuntimeStatsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AdeRuntimeStatsData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeRuntimeStatsData](w, "adegetruntimestats", nil, opts)
+	return resp, err
+}
+
+// command "adeinspectproject", wshserver.AdeInspectProjectCommand
+func AdeInspectProjectCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeProjectReportData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeProjectReportData](w, "adeinspectproject", data, opts)
 	return resp, err
 }
 

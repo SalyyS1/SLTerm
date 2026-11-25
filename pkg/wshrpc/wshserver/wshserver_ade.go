@@ -20,6 +20,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/portwatch"
+	"github.com/SalyyS1/SLTerm/pkg/projectdetect"
 	"github.com/SalyyS1/SLTerm/pkg/sshaudit"
 	"github.com/SalyyS1/SLTerm/pkg/taskboard"
 	"github.com/SalyyS1/SLTerm/pkg/updatecheck"
@@ -472,7 +473,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.32.0"
+		cur = "0.33.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -556,4 +557,42 @@ func (ws *WshServer) AdeAuditSSHConfigCommand(ctx context.Context, data wshrpc.A
 		WarningCount: rep.WarningCount,
 		Findings:     findings,
 	}, nil
+}
+
+func (ws *WshServer) AdeInspectProjectCommand(ctx context.Context, data wshrpc.VcsDirRequestData) (*wshrpc.AdeProjectReportData, error) {
+	rep, err := projectdetect.Inspect(data.Dir)
+	if err != nil {
+		return nil, err
+	}
+	cmds := make([]wshrpc.AdeProjectCommandData, 0, len(rep.Commands))
+	for _, c := range rep.Commands {
+		cmds = append(cmds, wshrpc.AdeProjectCommandData{
+			Label:   c.Label,
+			Command: c.Command,
+			Source:  c.Source,
+		})
+	}
+	return &wshrpc.AdeProjectReportData{
+		Dir:                rep.Dir,
+		Name:               rep.Name,
+		Stacks:             rep.Stacks,
+		Commands:           cmds,
+		HasGit:             rep.HasGit,
+		HasClaudeMD:        rep.HasClaudeMD,
+		HasAgentsMD:        rep.HasAgentsMD,
+		HasMcpJSON:         rep.HasMcpJSON,
+		HasWorktreeInclude: rep.HasWorktreeInclude,
+		HasDotEnv:          rep.HasDotEnv,
+	}, nil
+}
+
+func (ws *WshServer) AdeEnsureWorktreeIncludeCommand(ctx context.Context, data wshrpc.VcsDirRequestData) (*wshrpc.VcsActionResultData, error) {
+	p, created, err := projectdetect.EnsureWorktreeInclude(data.Dir)
+	if err != nil {
+		return nil, err
+	}
+	if created {
+		return &wshrpc.VcsActionResultData{Output: "Created " + p}, nil
+	}
+	return &wshrpc.VcsActionResultData{Output: "Already exists: " + p}, nil
 }

@@ -246,6 +246,8 @@ type WshRpcInterface interface {
 	AdeCheckUpdateCommand(ctx context.Context, data AdeCheckUpdateRequestData) (*AdeUpdateInfoData, error)
 	AdeGetRuntimeStatsCommand(ctx context.Context) (*AdeRuntimeStatsData, error)
 	AdeAuditSSHConfigCommand(ctx context.Context, data AdeSSHAuditRequestData) (*AdeSSHAuditReportData, error)
+	AdeInspectProjectCommand(ctx context.Context, data VcsDirRequestData) (*AdeProjectReportData, error)
+	AdeEnsureWorktreeIncludeCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
 }
 
 // for frontend
@@ -1433,4 +1435,23 @@ type AdeSSHAuditReportData struct {
 	ErrorCount   int                      `json:"errorCount"`
 	WarningCount int                      `json:"warningCount"`
 	Findings     []AdeSSHAuditFindingData `json:"findings"`
+}
+
+type AdeProjectCommandData struct {
+	Label   string `json:"label"`
+	Command string `json:"command"`
+	Source  string `json:"source"`
+}
+
+type AdeProjectReportData struct {
+	Dir                string                  `json:"dir"`
+	Name               string                  `json:"name"`
+	Stacks             []string                `json:"stacks"`
+	Commands           []AdeProjectCommandData `json:"commands"`
+	HasGit             bool                    `json:"hasGit"`
+	HasClaudeMD        bool                    `json:"hasClaudeMd"`
+	HasAgentsMD        bool                    `json:"hasAgentsMd"`
+	HasMcpJSON         bool                    `json:"hasMcpJson"`
+	HasWorktreeInclude bool                    `json:"hasWorktreeInclude"`
+	HasDotEnv          bool                    `json:"hasDotEnv"`
 }

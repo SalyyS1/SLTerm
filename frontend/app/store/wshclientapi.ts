@@ -42,6 +42,11 @@ class RpcApiType {
         return client.wshRpcCall("adedeleteworkspace", data, opts);
     }
 
+    // command "adeensureworktreeinclude" [call]
+    AdeEnsureWorktreeIncludeCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("adeensureworktreeinclude", data, opts);
+    }
+
     // command "adeforksession" [call]
     AdeForkSessionCommand(client: WshClient, data: AdeForkSessionRequestData, opts?: RpcOpts): Promise<AdeSessionData> {
         return client.wshRpcCall("adeforksession", data, opts);
@@ -55,6 +60,11 @@ class RpcApiType {
     // command "adegetruntimestats" [call]
     AdeGetRuntimeStatsCommand(client: WshClient, opts?: RpcOpts): Promise<AdeRuntimeStatsData> {
         return client.wshRpcCall("adegetruntimestats", null, opts);
+    }
+
+    // command "adeinspectproject" [call]
+    AdeInspectProjectCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<AdeProjectReportData> {
+        return client.wshRpcCall("adeinspectproject", data, opts);
     }
 
     // command "adelistports" [call]
