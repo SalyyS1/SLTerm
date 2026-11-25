@@ -31,8 +31,10 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { AppBackground } from "./app-bg";
 import { AdeCommandPalette } from "./element/ade-palette";
+import { AdeStatusBar } from "./element/ade-statusbar";
 import { CenteredDiv } from "./element/quickelems";
 import { RemAmbientBackdrop } from "./element/rem-ambient";
+import { UpdateBanner } from "./element/update-banner";
 import { NotificationBubbles } from "./notification/notificationbubbles";
 import { PetHUD } from "./view/pet/pet-hud";
 import { PetOverlay } from "./view/pet/pet-overlay";
@@ -370,6 +372,7 @@ const AppInner = () => {
             <DndProvider backend={HTML5Backend}>
                 <Workspace />
             </DndProvider>
+            <AdeStatusBar />
             {/* One pet per window. These were previously rendered inside the
                 terminal block, so every open terminal spawned its own
                 independent pet. Both components take no props and already scan
@@ -377,6 +380,7 @@ const AppInner = () => {
                 they belong. */}
             <PetOverlay />
             <PetHUD />
+            <UpdateBanner />
             <AdeCommandPalette />
             <FlashError />
             {isDev() ? <NotificationBubbles></NotificationBubbles> : null}

@@ -27,6 +27,12 @@ func AdeCheckCommandRiskCommand(w *wshutil.WshRpc, data wshrpc.AdeCheckCommandRi
 	return resp, err
 }
 
+// command "adecheckupdate", wshserver.AdeCheckUpdateCommand
+func AdeCheckUpdateCommand(w *wshutil.WshRpc, data wshrpc.AdeCheckUpdateRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeUpdateInfoData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeUpdateInfoData](w, "adecheckupdate", data, opts)
+	return resp, err
+}
+
 // command "adedeletepromptnote", wshserver.AdeDeletePromptNoteCommand
 func AdeDeletePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdeNoteDeleteRequestData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "adedeletepromptnote", data, opts)

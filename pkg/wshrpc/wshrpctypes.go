@@ -240,6 +240,7 @@ type WshRpcInterface interface {
 	AdeListWorkspacesCommand(ctx context.Context) ([]AdeWorkspaceData, error)
 	AdeSaveWorkspaceCommand(ctx context.Context, data AdeWorkspaceData) (*AdeWorkspaceData, error)
 	AdeDeleteWorkspaceCommand(ctx context.Context, data AdeWorkspaceDeleteRequestData) error
+	AdeCheckUpdateCommand(ctx context.Context, data AdeCheckUpdateRequestData) (*AdeUpdateInfoData, error)
 }
 
 // for frontend
@@ -1351,4 +1352,20 @@ type AdeWorkspaceData struct {
 
 type AdeWorkspaceDeleteRequestData struct {
 	ID string `json:"id"`
+}
+
+type AdeCheckUpdateRequestData struct {
+	Force bool `json:"force,omitempty"`
+}
+
+type AdeUpdateInfoData struct {
+	CurrentVersion  string `json:"currentVersion"`
+	LatestVersion   string `json:"latestVersion"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	ReleaseName     string `json:"releaseName"`
+	ReleaseURL      string `json:"releaseUrl"`
+	DownloadURL     string `json:"downloadUrl,omitempty"`
+	PublishedAt     string `json:"publishedAt,omitempty"`
+	NotesPreview    string `json:"notesPreview,omitempty"`
+	CheckedAtMs     int64  `json:"checkedAtMs"`
 }

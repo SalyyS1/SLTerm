@@ -1,0 +1,120 @@
+// Copyright 2026, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+// Global Rem Aqua In-App GitHub Release Update Banner for SLTerm.
+// Automatically checks `SalyyS1/SLTerm` GitHub Releases 3s after launch and responds
+// to manual `slterm:check-update` events from ADE Hub, Status Bar, or Ctrl+Shift+P.
+
+import { createBlock } from "@/app/store/global";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { TabRpcClient } from "@/app/store/wshrpcutil";
+import * as React from "react";
+import "./update-banner.scss";
+
+const DISMISS_KEY = "slterm-dismissed-update-ver";
+export const CHECK_UPDATE_EVENT = "slterm:check-update";
+
+export function triggerManualUpdateCheck(): void {
+    window.dispatchEvent(new CustomEvent(CHECK_UPDATE_EVENT));
+}
+
+export const UpdateBanner: React.FC = () => {
+    const [info, setInfo] = React.useState<AdeUpdateInfoData | null>(null);
+    const [visible, setVisible] = React.useState(false);
+    const [statusNote, setStatusNote] = React.useState<string | null>(null);
+
+    const runCheck = React.useCallback(async (force: boolean) => {
+        try {
+            const res = await RpcApi.AdeCheckUpdateCommand(TabRpcClient, { force });
+            setInfo(res);
+            if (res?.updateAvailable) {
+                const dismissed = localStorage.getItem(DISMISS_KEY);
+                if (force || dismissed !== res.latestVersion) {
+                    setVisible(true);
+                }
+                setStatusNote(null);
+            } else if (force && res) {
+                setStatusNote(`✓ SLTerm v${res.currentVersion} is up to date!`);
+                setVisible(true);
+                setTimeout(() => setVisible(false), 4200);
+            }
+        } catch (err) {
+            if (force) {
+                setStatusNote(`Update check failed: ${String(err)}`);
+                setVisible(true);
+                setTimeout(() => setVisible(false), 4500);
+            }
+        }
+    }, []);
+
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            void runCheck(false);
+        }, 3000);
+        const onManual = () => {
+            void runCheck(true);
+        };
+        window.addEventListener(CHECK_UPDATE_EVENT, onManual);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener(CHECK_UPDATE_EVENT, onManual);
+        };
+    }, [runCheck]);
+
+    if (!visible) {
+        return null;
+    }
+
+    const openUrl = (url: string) => {
+        if (!url) return;
+        try {
+            window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+            void createBlock({ meta: { view: "web", url } });
+        }
+    };
+
+    return (
+        <div className="rem-update-banner" role="status" aria-live="polite">
+            {info?.updateAvailable ? (
+                <>
+                    <div className="rem-update-text">
+                        <span className="rem-update-pill">v{info.latestVersion}</span>
+                        <strong>New SLTerm release available on GitHub!</strong>
+                        <span className="rem-update-meta">
+                            (installed v{info.currentVersion})
+                        </span>
+                    </div>
+                    <div className="rem-update-actions">
+                        <button
+                            className="rem-update-btn primary"
+                            onClick={() => openUrl(info.downloadUrl || info.releaseUrl)}
+                        >
+                            ⬇ Download Update
+                        </button>
+                        <button className="rem-update-btn" onClick={() => openUrl(info.releaseUrl)}>
+                            View Release
+                        </button>
+                        <button
+                            className="rem-update-btn"
+                            title="Dismiss until next version"
+                            onClick={() => {
+                                setVisible(false);
+                                if (info.latestVersion) {
+                                    localStorage.setItem(DISMISS_KEY, info.latestVersion);
+                                }
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                </>
+            ) : (
+                <div className="rem-update-text">
+                    <span className="rem-update-pill ok">UP TO DATE</span>
+                    <span>{statusNote}</span>
+                </div>
+            )}
+        </div>
+    );
+};

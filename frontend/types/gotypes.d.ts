@@ -155,6 +155,11 @@ declare global {
         policy?: string;
     };
 
+    // wshrpc.AdeCheckUpdateRequestData
+    type AdeCheckUpdateRequestData = {
+        force?: boolean;
+    };
+
     // wshrpc.AdeCommandRiskData
     type AdeCommandRiskData = {
         verdict: string;
@@ -279,6 +284,19 @@ declare global {
     // wshrpc.AdeTaskDeleteRequestData
     type AdeTaskDeleteRequestData = {
         id: string;
+    };
+
+    // wshrpc.AdeUpdateInfoData
+    type AdeUpdateInfoData = {
+        currentVersion: string;
+        latestVersion: string;
+        updateAvailable: boolean;
+        releaseName: string;
+        releaseUrl: string;
+        downloadUrl?: string;
+        publishedAt?: string;
+        notesPreview?: string;
+        checkedAtMs: number;
     };
 
     // wshrpc.AdeWorkspaceData

@@ -17,7 +17,9 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/portwatch"
 	"github.com/SalyyS1/SLTerm/pkg/taskboard"
+	"github.com/SalyyS1/SLTerm/pkg/updatecheck"
 	"github.com/SalyyS1/SLTerm/pkg/vcs"
+	"github.com/SalyyS1/SLTerm/pkg/wavebase"
 	"github.com/SalyyS1/SLTerm/pkg/wshrpc"
 )
 
@@ -425,4 +427,26 @@ func (ws *WshServer) AdeSaveWorkspaceCommand(ctx context.Context, data wshrpc.Ad
 
 func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.AdeWorkspaceDeleteRequestData) error {
 	return adeworkspace.DeleteWorkspace(data.ID)
+}
+
+func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
+	cur := wavebase.WaveVersion
+	if cur == "" || cur == "0.0.0" {
+		cur = "0.29.0"
+	}
+	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.AdeUpdateInfoData{
+		CurrentVersion:  info.CurrentVersion,
+		LatestVersion:   info.LatestVersion,
+		UpdateAvailable: info.UpdateAvailable,
+		ReleaseName:     info.ReleaseName,
+		ReleaseURL:      info.ReleaseURL,
+		DownloadURL:     info.DownloadURL,
+		PublishedAt:     info.PublishedAt,
+		NotesPreview:    info.NotesPreview,
+		CheckedAtMs:     info.CheckedAtMs,
+	}, nil
 }

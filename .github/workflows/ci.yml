@@ -34,6 +34,7 @@ jobs:
             ./pkg/otelcost/... \
             ./pkg/portwatch/... \
             ./pkg/taskboard/... \
+            ./pkg/updatecheck/... \
             ./pkg/vcs/... \
             ./pkg/secretstore/... \
             ./pkg/sshaudit/... \

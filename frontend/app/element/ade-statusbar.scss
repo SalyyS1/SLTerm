@@ -1,0 +1,77 @@
+// Copyright 2026, Salyvn.
+// SPDX-License-Identifier: Apache-2.0
+
+.ade-statusbar {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    height: 26px;
+    padding: 0 10px;
+    border-top: 1px solid rgba(114, 211, 244, 0.2);
+    background: rgba(9, 19, 30, 0.88);
+    backdrop-filter: blur(10px);
+    color: var(--secondary-text-color);
+    font-size: 11px;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.ade-sb-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ade-sb-pill {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--secondary-text-color);
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+
+    &:hover {
+        background: rgba(95, 212, 244, 0.14);
+        color: var(--main-text-color);
+    }
+
+    &.aqua {
+        color: var(--rem-aqua, #5fd4f4);
+        font-weight: 600;
+    }
+
+    &.pink {
+        color: var(--rem-pink, #f48fb1);
+    }
+
+    &.update {
+        background: rgba(244, 143, 177, 0.18);
+        border-color: rgba(244, 143, 177, 0.45);
+        color: var(--rem-pink, #f48fb1);
+        font-weight: 700;
+    }
+}
+
+.ade-sb-metric {
+    font-family: var(--fixed-font);
+    font-size: 11px;
+    color: var(--rem-mint, #5eead4);
+    padding: 0 4px;
+}
+
+.ade-sb-kbd {
+    font-family: var(--fixed-font);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(114, 211, 244, 0.24);
+    color: var(--rem-aqua, #5fd4f4);
+    background: rgba(95, 212, 244, 0.08);
+}

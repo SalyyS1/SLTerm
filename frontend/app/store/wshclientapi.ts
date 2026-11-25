@@ -17,6 +17,11 @@ class RpcApiType {
         return client.wshRpcCall("adecheckcommandrisk", data, opts);
     }
 
+    // command "adecheckupdate" [call]
+    AdeCheckUpdateCommand(client: WshClient, data: AdeCheckUpdateRequestData, opts?: RpcOpts): Promise<AdeUpdateInfoData> {
+        return client.wshRpcCall("adecheckupdate", data, opts);
+    }
+
     // command "adedeletepromptnote" [call]
     AdeDeletePromptNoteCommand(client: WshClient, data: AdeNoteDeleteRequestData, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("adedeletepromptnote", data, opts);

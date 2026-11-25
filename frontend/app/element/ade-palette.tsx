@@ -6,6 +6,7 @@
 // Rem Aqua Ambient FX toggle, and live Localhost Dev-Server ports.
 
 import { cycleRemFxMode, getRemFxMode } from "@/app/element/rem-ambient";
+import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
@@ -130,6 +131,15 @@ export const AdeCommandPalette: React.FC = () => {
                 hint: "Calm / Dreamy / Off",
                 run: () => {
                     cycleRemFxMode();
+                },
+            },
+            {
+                id: "check-updates",
+                icon: "⬆",
+                label: "Check for New SLTerm Updates (GitHub Releases)",
+                hint: "GitHub",
+                run: () => {
+                    triggerManualUpdateCheck();
                 },
             },
         ];
