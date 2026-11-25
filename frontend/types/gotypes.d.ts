@@ -281,6 +281,24 @@ declare global {
         id: string;
     };
 
+    // wshrpc.AdeWorkspaceData
+    type AdeWorkspaceData = {
+        id?: string;
+        name: string;
+        repoDir: string;
+        defaultAgent?: string;
+        layoutPreset?: string;
+        devPort?: number;
+        color?: string;
+        lastOpenedMs?: number;
+        updatedAtMs?: number;
+    };
+
+    // wshrpc.AdeWorkspaceDeleteRequestData
+    type AdeWorkspaceDeleteRequestData = {
+        id: string;
+    };
+
     // wshrpc.AgentTeamsMemberData
     type AgentTeamsMemberData = {
         agentId: string;

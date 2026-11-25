@@ -237,6 +237,9 @@ type WshRpcInterface interface {
 	AdeDeleteTaskCommand(ctx context.Context, data AdeTaskDeleteRequestData) error
 	AdeForkSessionCommand(ctx context.Context, data AdeForkSessionRequestData) (*AdeSessionData, error)
 	AdeCheckCommandRiskCommand(ctx context.Context, data AdeCheckCommandRiskRequestData) (*AdeCommandRiskData, error)
+	AdeListWorkspacesCommand(ctx context.Context) ([]AdeWorkspaceData, error)
+	AdeSaveWorkspaceCommand(ctx context.Context, data AdeWorkspaceData) (*AdeWorkspaceData, error)
+	AdeDeleteWorkspaceCommand(ctx context.Context, data AdeWorkspaceDeleteRequestData) error
 }
 
 // for frontend
@@ -1332,4 +1335,20 @@ type AdeCommandRiskData struct {
 	ErrorCount   int                         `json:"errorCount"`
 	WarningCount int                         `json:"warningCount"`
 	Findings     []AdeCommandRiskFindingData `json:"findings"`
+}
+
+type AdeWorkspaceData struct {
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name"`
+	RepoDir      string `json:"repoDir"`
+	DefaultAgent string `json:"defaultAgent,omitempty"`
+	LayoutPreset string `json:"layoutPreset,omitempty"`
+	DevPort      int    `json:"devPort,omitempty"`
+	Color        string `json:"color,omitempty"`
+	LastOpenedMs int64  `json:"lastOpenedMs,omitempty"`
+	UpdatedAtMs  int64  `json:"updatedAtMs,omitempty"`
+}
+
+type AdeWorkspaceDeleteRequestData struct {
+	ID string `json:"id"`
 }

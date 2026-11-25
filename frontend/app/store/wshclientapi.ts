@@ -27,6 +27,11 @@ class RpcApiType {
         return client.wshRpcCall("adedeletetask", data, opts);
     }
 
+    // command "adedeleteworkspace" [call]
+    AdeDeleteWorkspaceCommand(client: WshClient, data: AdeWorkspaceDeleteRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("adedeleteworkspace", data, opts);
+    }
+
     // command "adeforksession" [call]
     AdeForkSessionCommand(client: WshClient, data: AdeForkSessionRequestData, opts?: RpcOpts): Promise<AdeSessionData> {
         return client.wshRpcCall("adeforksession", data, opts);
@@ -47,6 +52,11 @@ class RpcApiType {
         return client.wshRpcCall("adelisttasks", null, opts);
     }
 
+    // command "adelistworkspaces" [call]
+    AdeListWorkspacesCommand(client: WshClient, opts?: RpcOpts): Promise<AdeWorkspaceData[]> {
+        return client.wshRpcCall("adelistworkspaces", null, opts);
+    }
+
     // command "ademovetask" [call]
     AdeMoveTaskCommand(client: WshClient, data: AdeMoveTaskRequestData, opts?: RpcOpts): Promise<AdeTaskData> {
         return client.wshRpcCall("ademovetask", data, opts);
@@ -60,6 +70,11 @@ class RpcApiType {
     // command "adesavetask" [call]
     AdeSaveTaskCommand(client: WshClient, data: AdeTaskData, opts?: RpcOpts): Promise<AdeTaskData> {
         return client.wshRpcCall("adesavetask", data, opts);
+    }
+
+    // command "adesaveworkspace" [call]
+    AdeSaveWorkspaceCommand(client: WshClient, data: AdeWorkspaceData, opts?: RpcOpts): Promise<AdeWorkspaceData> {
+        return client.wshRpcCall("adesaveworkspace", data, opts);
     }
 
     // command "agentteamsgetsnapshot" [call]

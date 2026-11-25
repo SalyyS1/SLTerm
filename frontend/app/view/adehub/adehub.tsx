@@ -19,7 +19,7 @@ import { Atom, atom, PrimitiveAtom, useAtomValue } from "jotai";
 import * as React from "react";
 import "./adehub.scss";
 
-type HubTab = "sessions" | "tasks" | "ports" | "agents" | "notes";
+type HubTab = "sessions" | "tasks" | "workspaces" | "ports" | "agents" | "notes";
 
 const KANBAN_COLS: { id: string; label: string }[] = [
     { id: "todo", label: "To Do" },
@@ -40,6 +40,7 @@ export class AdeHubViewModel implements ViewModel {
     hubAtom: PrimitiveAtom<AdeHubSnapshotData | null>;
     portsAtom: PrimitiveAtom<AdePortData[]>;
     tasksAtom: PrimitiveAtom<AdeTaskData[]>;
+    workspacesAtom: PrimitiveAtom<AdeWorkspaceData[]>;
     errorAtom: PrimitiveAtom<string | null>;
     noticeAtom: PrimitiveAtom<string | null>;
 
@@ -55,6 +56,7 @@ export class AdeHubViewModel implements ViewModel {
         this.hubAtom = atom(null) as PrimitiveAtom<AdeHubSnapshotData | null>;
         this.portsAtom = atom<AdePortData[]>([]);
         this.tasksAtom = atom<AdeTaskData[]>([]);
+        this.workspacesAtom = atom<AdeWorkspaceData[]>([]);
         this.errorAtom = atom(null) as PrimitiveAtom<string | null>;
         this.noticeAtom = atom(null) as PrimitiveAtom<string | null>;
     }
@@ -65,7 +67,7 @@ export class AdeHubViewModel implements ViewModel {
 
     async refresh(query = "", agentFilter = "all"): Promise<void> {
         try {
-            const [snap, ports, tasks] = await Promise.all([
+            const [snap, ports, tasks, workspaces] = await Promise.all([
                 RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, {
                     query,
                     agentFilter,
@@ -73,14 +75,84 @@ export class AdeHubViewModel implements ViewModel {
                 }),
                 RpcApi.AdeListPortsCommand(TabRpcClient).catch(() => [] as AdePortData[]),
                 RpcApi.AdeListTasksCommand(TabRpcClient).catch(() => [] as AdeTaskData[]),
+                RpcApi.AdeListWorkspacesCommand(TabRpcClient).catch(() => [] as AdeWorkspaceData[]),
             ]);
             globalStore.set(this.hubAtom, snap);
             globalStore.set(this.portsAtom, ports ?? []);
             globalStore.set(this.tasksAtom, tasks ?? []);
+            globalStore.set(this.workspacesAtom, workspaces ?? []);
             globalStore.set(this.errorAtom, null);
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
         }
+    }
+
+    async saveWorkspace(
+        name: string,
+        repoDir: string,
+        defaultAgent: string,
+        layoutPreset: string,
+        devPort: number
+    ): Promise<boolean> {
+        try {
+            const saved = await RpcApi.AdeSaveWorkspaceCommand(TabRpcClient, {
+                name,
+                repoDir,
+                defaultAgent,
+                layoutPreset,
+                devPort: devPort > 0 ? devPort : undefined,
+                color: "aqua",
+            });
+            globalStore.set(this.noticeAtom, `Saved workspace "${saved.name}" (${saved.layoutPreset})`);
+            await this.refresh();
+            return true;
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return false;
+        }
+    }
+
+    async deleteWorkspace(id: string): Promise<void> {
+        try {
+            await RpcApi.AdeDeleteWorkspaceCommand(TabRpcClient, { id });
+            await this.refresh();
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async launchWorkspace(ws: AdeWorkspaceData): Promise<void> {
+        const cwd = ws.repoDir;
+        const primaryAgent = ws.defaultAgent === "codex" ? "codex" : ws.defaultAgent === "gemini" ? "gemini" : "claude";
+        if (ws.layoutPreset === "dual-agent") {
+            await createBlock({
+                meta: { view: "term", controller: "cmd", cmd: "claude", "cmd:cwd": cwd, "cmd:interactive": true, "cmd:login": true },
+            });
+            await createBlock({
+                meta: { view: "term", controller: "cmd", cmd: "codex", "cmd:cwd": cwd, "cmd:interactive": true, "cmd:login": true },
+            });
+            await createBlock({ meta: { view: "vcs" } });
+        } else if (ws.layoutPreset === "ship-review") {
+            await createBlock({ meta: { view: "vcs" } });
+            await createBlock({ meta: { view: "aitools" } });
+            await createBlock({ meta: { view: "term", controller: "shell", "cmd:cwd": cwd } });
+        } else {
+            await createBlock({
+                meta: {
+                    view: "term",
+                    controller: primaryAgent === "shell" ? "shell" : "cmd",
+                    cmd: primaryAgent === "shell" ? undefined : primaryAgent,
+                    "cmd:cwd": cwd,
+                    "cmd:interactive": true,
+                    "cmd:login": true,
+                },
+            });
+            await createBlock({ meta: { view: "vcs" } });
+        }
+        if (ws.devPort && ws.devPort > 0) {
+            await createBlock({ meta: { view: "web", url: `http://127.0.0.1:${ws.devPort}` } });
+        }
+        globalStore.set(this.noticeAtom, `Launched workspace "${ws.name}" (${ws.layoutPreset})`);
     }
 
     async saveTask(title: string, agent: string, priority: string, repoDir: string, description: string): Promise<boolean> {
@@ -255,6 +327,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const hub = useAtomValue(model.hubAtom);
     const ports = useAtomValue(model.portsAtom);
     const tasks = useAtomValue(model.tasksAtom);
+    const workspaces = useAtomValue(model.workspacesAtom);
     const error = useAtomValue(model.errorAtom);
     const notice = useAtomValue(model.noticeAtom);
 
@@ -271,6 +344,11 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const [taskRepo, setTaskRepo] = React.useState("");
     const [devPortsOnly, setDevPortsOnly] = React.useState(true);
     const [riskReport, setRiskReport] = React.useState<AdeCommandRiskData | null>(null);
+    const [wsName, setWsName] = React.useState("");
+    const [wsDir, setWsDir] = React.useState("");
+    const [wsAgent, setWsAgent] = React.useState("claude");
+    const [wsPreset, setWsPreset] = React.useState("full-ade");
+    const [wsPort, setWsPort] = React.useState("");
 
     React.useEffect(() => {
         model.refresh(query, agentFilter);
@@ -329,6 +407,12 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                     onClick={() => globalStore.set(model.activeTabAtom, "tasks")}
                 >
                     Tasks ({tasks.length})
+                </button>
+                <button
+                    className={`adehub-tab ${activeTab === "workspaces" ? "active" : ""}`}
+                    onClick={() => globalStore.set(model.activeTabAtom, "workspaces")}
+                >
+                    Workspaces ({workspaces.length})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "ports" ? "active" : ""}`}
@@ -552,6 +636,92 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                 );
                             })}
                         </div>
+                    </>
+                )}
+
+                {activeTab === "workspaces" && (
+                    <>
+                        <div className="adehub-bar">
+                            <input
+                                className="adehub-input"
+                                value={wsName}
+                                onChange={(e) => setWsName(e.target.value)}
+                                placeholder="Project workspace name (e.g. SLTerm, SLClean)"
+                            />
+                            <input
+                                className="adehub-input"
+                                value={wsDir}
+                                onChange={(e) => setWsDir(e.target.value)}
+                                placeholder="Folder path (e.g. C:\work\SLTerm)"
+                            />
+                            <select className="adehub-select" value={wsAgent} onChange={(e) => setWsAgent(e.target.value)}>
+                                <option value="claude">Claude</option>
+                                <option value="codex">Codex</option>
+                                <option value="gemini">Gemini</option>
+                                <option value="shell">Shell</option>
+                            </select>
+                            <select
+                                className="adehub-select"
+                                value={wsPreset}
+                                onChange={(e) => setWsPreset(e.target.value)}
+                            >
+                                <option value="full-ade">Full ADE Studio</option>
+                                <option value="dual-agent">Dual-Agent (Claude+Codex)</option>
+                                <option value="ship-review">Ship &amp; Security Review</option>
+                            </select>
+                            <input
+                                className="adehub-input"
+                                style={{ maxWidth: 96 }}
+                                value={wsPort}
+                                onChange={(e) => setWsPort(e.target.value)}
+                                placeholder="Port (opt)"
+                            />
+                            <button
+                                className="adehub-btn primary"
+                                disabled={!wsName.trim() || !wsDir.trim()}
+                                onClick={async () => {
+                                    const pNum = parseInt(wsPort, 10) || 0;
+                                    if (await model.saveWorkspace(wsName, wsDir, wsAgent, wsPreset, pNum)) {
+                                        setWsName("");
+                                        setWsDir("");
+                                        setWsPort("");
+                                    }
+                                }}
+                            >
+                                + Save Workspace
+                            </button>
+                        </div>
+
+                        {workspaces.length === 0 ? (
+                            <div className="adehub-empty">
+                                Save your favorite Windows/Unix project folders above for 1-click multi-pane ADE
+                                workspace launches (Agent + Git/Worktrees + Dev Preview).
+                            </div>
+                        ) : (
+                            <div className="adehub-list">
+                                {workspaces.map((w) => (
+                                    <div key={w.id} className="adehub-card">
+                                        <div className="adehub-card-main">
+                                            <div className="adehub-card-head">
+                                                <span className="adehub-agent-tag">{w.layoutPreset}</span>
+                                                <strong>{w.name}</strong>
+                                                <span className="adehub-pill">{w.defaultAgent}</span>
+                                                {w.devPort ? <span className="adehub-pill ready">:{w.devPort}</span> : null}
+                                            </div>
+                                            <div className="adehub-card-meta">{w.repoDir}</div>
+                                        </div>
+                                        <div className="adehub-card-actions">
+                                            <button className="adehub-btn primary" onClick={() => model.launchWorkspace(w)}>
+                                                ⚡ Launch Layout
+                                            </button>
+                                            <button className="adehub-btn danger" onClick={() => model.deleteWorkspace(w.id)}>
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </>
                 )}
 

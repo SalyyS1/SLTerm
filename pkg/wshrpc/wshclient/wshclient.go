@@ -39,6 +39,12 @@ func AdeDeleteTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeTaskDeleteRequestDat
 	return err
 }
 
+// command "adedeleteworkspace", wshserver.AdeDeleteWorkspaceCommand
+func AdeDeleteWorkspaceCommand(w *wshutil.WshRpc, data wshrpc.AdeWorkspaceDeleteRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "adedeleteworkspace", data, opts)
+	return err
+}
+
 // command "adeforksession", wshserver.AdeForkSessionCommand
 func AdeForkSessionCommand(w *wshutil.WshRpc, data wshrpc.AdeForkSessionRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeSessionData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeSessionData](w, "adeforksession", data, opts)
@@ -63,6 +69,12 @@ func AdeListTasksCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdeT
 	return resp, err
 }
 
+// command "adelistworkspaces", wshserver.AdeListWorkspacesCommand
+func AdeListWorkspacesCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdeWorkspaceData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdeWorkspaceData](w, "adelistworkspaces", nil, opts)
+	return resp, err
+}
+
 // command "ademovetask", wshserver.AdeMoveTaskCommand
 func AdeMoveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeMoveTaskRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeTaskData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeTaskData](w, "ademovetask", data, opts)
@@ -78,6 +90,12 @@ func AdeSavePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdePromptNoteData, 
 // command "adesavetask", wshserver.AdeSaveTaskCommand
 func AdeSaveTaskCommand(w *wshutil.WshRpc, data wshrpc.AdeTaskData, opts *wshrpc.RpcOpts) (*wshrpc.AdeTaskData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeTaskData](w, "adesavetask", data, opts)
+	return resp, err
+}
+
+// command "adesaveworkspace", wshserver.AdeSaveWorkspaceCommand
+func AdeSaveWorkspaceCommand(w *wshutil.WshRpc, data wshrpc.AdeWorkspaceData, opts *wshrpc.RpcOpts) (*wshrpc.AdeWorkspaceData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeWorkspaceData](w, "adesaveworkspace", data, opts)
 	return resp, err
 }
 

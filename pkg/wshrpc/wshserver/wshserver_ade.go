@@ -11,6 +11,7 @@ package wshserver
 import (
 	"context"
 
+	"github.com/SalyyS1/SLTerm/pkg/adeworkspace"
 	"github.com/SalyyS1/SLTerm/pkg/agentsessions"
 	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
@@ -377,4 +378,51 @@ func (ws *WshServer) AdeCheckCommandRiskCommand(ctx context.Context, data wshrpc
 		WarningCount: rep.WarningCount,
 		Findings:     findings,
 	}, nil
+}
+
+func wsToRpc(w adeworkspace.WorkspaceProfile) wshrpc.AdeWorkspaceData {
+	return wshrpc.AdeWorkspaceData{
+		ID:           w.ID,
+		Name:         w.Name,
+		RepoDir:      w.RepoDir,
+		DefaultAgent: w.DefaultAgent,
+		LayoutPreset: w.LayoutPreset,
+		DevPort:      w.DevPort,
+		Color:        w.Color,
+		LastOpenedMs: w.LastOpenedMs,
+		UpdatedAtMs:  w.UpdatedAtMs,
+	}
+}
+
+func (ws *WshServer) AdeListWorkspacesCommand(ctx context.Context) ([]wshrpc.AdeWorkspaceData, error) {
+	list, err := adeworkspace.ListWorkspaces()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wshrpc.AdeWorkspaceData, 0, len(list))
+	for _, w := range list {
+		out = append(out, wsToRpc(w))
+	}
+	return out, nil
+}
+
+func (ws *WshServer) AdeSaveWorkspaceCommand(ctx context.Context, data wshrpc.AdeWorkspaceData) (*wshrpc.AdeWorkspaceData, error) {
+	saved, err := adeworkspace.SaveWorkspace(adeworkspace.WorkspaceProfile{
+		ID:           data.ID,
+		Name:         data.Name,
+		RepoDir:      data.RepoDir,
+		DefaultAgent: data.DefaultAgent,
+		LayoutPreset: data.LayoutPreset,
+		DevPort:      data.DevPort,
+		Color:        data.Color,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rpcVal := wsToRpc(*saved)
+	return &rpcVal, nil
+}
+
+func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.AdeWorkspaceDeleteRequestData) error {
+	return adeworkspace.DeleteWorkspace(data.ID)
 }

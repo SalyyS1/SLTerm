@@ -25,6 +25,7 @@ export const AdeCommandPalette: React.FC = () => {
     const [query, setQuery] = React.useState("");
     const [activeIdx, setActiveIdx] = React.useState(0);
     const [devPorts, setDevPorts] = React.useState<AdePortData[]>([]);
+    const [workspaces, setWorkspaces] = React.useState<AdeWorkspaceData[]>([]);
     const inputRef = React.useRef<HTMLInputElement | null>(null);
 
     React.useEffect(() => {
@@ -48,6 +49,9 @@ export const AdeCommandPalette: React.FC = () => {
         RpcApi.AdeListPortsCommand(TabRpcClient)
             .then((list) => setDevPorts((list ?? []).filter((p) => p.isDevLikely).slice(0, 6)))
             .catch(() => setDevPorts([]));
+        RpcApi.AdeListWorkspacesCommand(TabRpcClient)
+            .then((list) => setWorkspaces((list ?? []).slice(0, 6)))
+            .catch(() => setWorkspaces([]));
     }, [open]);
 
     const actions = React.useMemo<PaletteAction[]>(() => {
@@ -130,6 +134,28 @@ export const AdeCommandPalette: React.FC = () => {
             },
         ];
 
+        for (const ws of workspaces) {
+            base.push({
+                id: `ws-${ws.id}`,
+                icon: "⚡",
+                label: `Launch Workspace: ${ws.name} (${ws.layoutPreset})`,
+                hint: ws.repoDir,
+                run: async () => {
+                    const agentCmd = ws.defaultAgent === "codex" ? "codex" : ws.defaultAgent === "gemini" ? "gemini" : "claude";
+                    await createBlock({
+                        meta: {
+                            view: "term",
+                            controller: ws.defaultAgent === "shell" ? "shell" : "cmd",
+                            cmd: ws.defaultAgent === "shell" ? undefined : agentCmd,
+                            "cmd:cwd": ws.repoDir,
+                            "cmd:interactive": true,
+                            "cmd:login": true,
+                        },
+                    });
+                    await createBlock({ meta: { view: "vcs" } });
+                },
+            });
+        }
         for (const p of devPorts) {
             base.push({
                 id: `port-${p.port}`,
@@ -140,7 +166,7 @@ export const AdeCommandPalette: React.FC = () => {
             });
         }
         return base;
-    }, [devPorts]);
+    }, [devPorts, workspaces]);
 
     const filtered = React.useMemo(() => {
         const q = query.trim().toLowerCase();
