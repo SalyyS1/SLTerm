@@ -53,6 +53,8 @@ LazyRegistry.set("launcher", () => import("@/app/view/launcher/launcher").then((
 LazyRegistry.set("waveconfig", () => import("../view/waveconfig/waveconfig-model").then((m) => m.WaveConfigViewModel));
 LazyRegistry.set("aitools", () => import("@/app/view/aitools/aitools").then((m) => m.AIToolsViewModel));
 LazyRegistry.set("agentteams", () => import("@/app/view/agentteams/agentteams").then((m) => m.AgentTeamsViewModel));
+LazyRegistry.set("vcs", () => import("@/app/view/vcs/vcs").then((m) => m.VcsViewModel));
+LazyRegistry.set("adehub", () => import("@/app/view/adehub/adehub").then((m) => m.AdeHubViewModel));
 
 function makeViewModel(blockId: string, blockView: string, nodeModel: BlockNodeModel, tabModel: TabModel): ViewModel {
     const eagerCtor = EagerRegistry.get(blockView);

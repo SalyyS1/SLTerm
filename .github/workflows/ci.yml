@@ -28,7 +28,10 @@ jobs:
         run: |
           go test -race -v \
             ./pkg/agentteams/... \
+            ./pkg/agentsessions/... \
             ./pkg/aitools/... \
+            ./pkg/otelcost/... \
+            ./pkg/vcs/... \
             ./pkg/secretstore/... \
             ./pkg/sshaudit/... \
             ./cmd/sshaudit/... \

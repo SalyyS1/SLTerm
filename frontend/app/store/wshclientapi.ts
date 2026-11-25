@@ -12,6 +12,21 @@ class RpcApiType {
         return client.wshRpcCall("activity", data, opts);
     }
 
+    // command "adedeletepromptnote" [call]
+    AdeDeletePromptNoteCommand(client: WshClient, data: AdeNoteDeleteRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("adedeletepromptnote", data, opts);
+    }
+
+    // command "adegethubsnapshot" [call]
+    AdeGetHubSnapshotCommand(client: WshClient, data: AdeHubRequestData, opts?: RpcOpts): Promise<AdeHubSnapshotData> {
+        return client.wshRpcCall("adegethubsnapshot", data, opts);
+    }
+
+    // command "adesavepromptnote" [call]
+    AdeSavePromptNoteCommand(client: WshClient, data: AdePromptNoteData, opts?: RpcOpts): Promise<AdePromptNoteData> {
+        return client.wshRpcCall("adesavepromptnote", data, opts);
+    }
+
     // command "agentteamsgetsnapshot" [call]
     AgentTeamsGetSnapshotCommand(client: WshClient, opts?: RpcOpts): Promise<AgentTeamsSnapshotData> {
         return client.wshRpcCall("agentteamsgetsnapshot", null, opts);
@@ -740,6 +755,66 @@ class RpcApiType {
     // command "test" [call]
     TestCommand(client: WshClient, data: string, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("test", data, opts);
+    }
+
+    // command "vcsassignchangelist" [call]
+    VcsAssignChangelistCommand(client: WshClient, data: VcsChangelistAssignData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("vcsassignchangelist", data, opts);
+    }
+
+    // command "vcscommit" [call]
+    VcsCommitCommand(client: WshClient, data: VcsCommitRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcscommit", data, opts);
+    }
+
+    // command "vcscreateworktree" [call]
+    VcsCreateWorktreeCommand(client: WshClient, data: VcsCreateWorktreeRequestData, opts?: RpcOpts): Promise<VcsWorktreeData> {
+        return client.wshRpcCall("vcscreateworktree", data, opts);
+    }
+
+    // command "vcsdiscard" [call]
+    VcsDiscardCommand(client: WshClient, data: VcsFileRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("vcsdiscard", data, opts);
+    }
+
+    // command "vcsgetdiff" [call]
+    VcsGetDiffCommand(client: WshClient, data: VcsDiffRequestData, opts?: RpcOpts): Promise<VcsDiffData> {
+        return client.wshRpcCall("vcsgetdiff", data, opts);
+    }
+
+    // command "vcsgetstatus" [call]
+    VcsGetStatusCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsStatusData> {
+        return client.wshRpcCall("vcsgetstatus", data, opts);
+    }
+
+    // command "vcslistworktrees" [call]
+    VcsListWorktreesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsWorktreeData[]> {
+        return client.wshRpcCall("vcslistworktrees", data, opts);
+    }
+
+    // command "vcspull" [call]
+    VcsPullCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcspull", data, opts);
+    }
+
+    // command "vcspush" [call]
+    VcsPushCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcspush", data, opts);
+    }
+
+    // command "vcsremoveworktree" [call]
+    VcsRemoveWorktreeCommand(client: WshClient, data: VcsRemoveWorktreeRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("vcsremoveworktree", data, opts);
+    }
+
+    // command "vcsstage" [call]
+    VcsStageCommand(client: WshClient, data: VcsPathsRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("vcsstage", data, opts);
+    }
+
+    // command "vcsunstage" [call]
+    VcsUnstageCommand(client: WshClient, data: VcsPathsRequestData, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("vcsunstage", data, opts);
     }
 
     // command "vdomasyncinitiation" [call]

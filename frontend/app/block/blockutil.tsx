@@ -34,6 +34,12 @@ export function blockViewToIcon(view: string): string {
     if (view == "agentteams") {
         return "users";
     }
+    if (view == "vcs") {
+        return "code-branch";
+    }
+    if (view == "adehub") {
+        return "sparkles";
+    }
     return "square";
 }
 
@@ -61,6 +67,12 @@ export function blockViewToName(view: string): string {
     }
     if (view == "agentteams") {
         return "Agent Teams";
+    }
+    if (view == "vcs") {
+        return "Git & Worktrees";
+    }
+    if (view == "adehub") {
+        return "ADE Hub";
     }
     return view;
 }

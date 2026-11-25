@@ -22,6 +22,7 @@ import (
 
 	"github.com/SalyyS1/SLTerm/pkg/authkey"
 	"github.com/SalyyS1/SLTerm/pkg/filestore"
+	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/panichandler"
 	"github.com/SalyyS1/SLTerm/pkg/remote/fileshare/wshfs"
 	"github.com/SalyyS1/SLTerm/pkg/schema"
@@ -489,7 +490,8 @@ func RunWebServer(listener net.Listener) {
 	gr.PathPrefix("/wave/").Handler(http.TimeoutHandler(waveRouter, HttpTimeoutDuration, "Timeout"))
 	gr.PathPrefix("/vdom/").Handler(http.TimeoutHandler(vdomRouter, HttpTimeoutDuration, "Timeout"))
 
-	// AI routes removed - SLTerm
+	// Embedded local OTLP/JSON metrics receiver for per-block Claude/Codex cost & token HUD
+	gr.Handle("/slterm/otlp/v1/metrics", otelcost.DefaultCollector()).Methods(http.MethodPost)
 
 	// Other routes without timeout
 	gr.PathPrefix(schemaPrefix).Handler(http.StripPrefix(schemaPrefix, schema.GetSchemaHandler()))

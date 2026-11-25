@@ -212,6 +212,23 @@ type WshRpcInterface interface {
 	// agent teams (read-only view of multi-agent sessions)
 	AgentTeamsGetSnapshotCommand(ctx context.Context) (*AgentTeamsSnapshotData, error)
 	AgentTeamsGetTasksCommand(ctx context.Context, data AgentTeamsTasksRequestData) ([]AgentTeamsTaskData, error)
+	// vcs (ADE Git status, diff, staging, commits, changelists & isolated agent worktrees)
+	VcsGetStatusCommand(ctx context.Context, data VcsDirRequestData) (*VcsStatusData, error)
+	VcsGetDiffCommand(ctx context.Context, data VcsDiffRequestData) (*VcsDiffData, error)
+	VcsStageCommand(ctx context.Context, data VcsPathsRequestData) error
+	VcsUnstageCommand(ctx context.Context, data VcsPathsRequestData) error
+	VcsDiscardCommand(ctx context.Context, data VcsFileRequestData) error
+	VcsCommitCommand(ctx context.Context, data VcsCommitRequestData) (*VcsActionResultData, error)
+	VcsPushCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
+	VcsPullCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
+	VcsListWorktreesCommand(ctx context.Context, data VcsDirRequestData) ([]VcsWorktreeData, error)
+	VcsCreateWorktreeCommand(ctx context.Context, data VcsCreateWorktreeRequestData) (*VcsWorktreeData, error)
+	VcsRemoveWorktreeCommand(ctx context.Context, data VcsRemoveWorktreeRequestData) error
+	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
+	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes & OTLP cost HUD)
+	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)
+	AdeSavePromptNoteCommand(ctx context.Context, data AdePromptNoteData) (*AdePromptNoteData, error)
+	AdeDeletePromptNoteCommand(ctx context.Context, data AdeNoteDeleteRequestData) error
 }
 
 // for frontend
@@ -1081,4 +1098,161 @@ type AgentTeamsSnapshotData struct {
 
 type AgentTeamsTasksRequestData struct {
 	TeamName string `json:"teamname"`
+}
+
+// --- VCS / Worktree ADE RPC Types ---
+
+type VcsDirRequestData struct {
+	Dir string `json:"dir"`
+}
+
+type VcsFileRequestData struct {
+	Dir  string `json:"dir"`
+	Path string `json:"path"`
+}
+
+type VcsPathsRequestData struct {
+	Dir   string   `json:"dir"`
+	Paths []string `json:"paths,omitempty"`
+}
+
+type VcsDiffRequestData struct {
+	Dir    string `json:"dir"`
+	Path   string `json:"path,omitempty"`
+	Staged bool   `json:"staged,omitempty"`
+}
+
+type VcsDiffData struct {
+	Diff string `json:"diff"`
+}
+
+type VcsCommitRequestData struct {
+	Dir     string `json:"dir"`
+	Message string `json:"message"`
+}
+
+type VcsActionResultData struct {
+	Output string `json:"output"`
+}
+
+type VcsFileChangeData struct {
+	Path        string `json:"path"`
+	OrigPath    string `json:"origPath,omitempty"`
+	IndexStatus string `json:"indexStatus"`
+	WorkStatus  string `json:"workStatus"`
+	Staged      bool   `json:"staged"`
+	Unstaged    bool   `json:"unstaged"`
+	Untracked   bool   `json:"untracked"`
+	Conflicted  bool   `json:"conflicted"`
+	Changelist  string `json:"changelist"`
+}
+
+type VcsStatusData struct {
+	RepoRoot      string              `json:"repoRoot"`
+	Branch        string              `json:"branch"`
+	HeadShort     string              `json:"headShort"`
+	Ahead         int                 `json:"ahead"`
+	Behind        int                 `json:"behind"`
+	IsWorktree    bool                `json:"isWorktree"`
+	Changes       []VcsFileChangeData `json:"changes"`
+	Changelists   []string            `json:"changelists"`
+	StagedCount   int                 `json:"stagedCount"`
+	UnstagedCount int                 `json:"unstagedCount"`
+}
+
+type VcsWorktreeData struct {
+	Path     string `json:"path"`
+	Head     string `json:"head"`
+	Branch   string `json:"branch"`
+	IsMain   bool   `json:"isMain"`
+	Detached bool   `json:"detached"`
+	Bare     bool   `json:"bare"`
+	Locked   bool   `json:"locked"`
+}
+
+type VcsCreateWorktreeRequestData struct {
+	Dir        string `json:"dir"`
+	Branch     string `json:"branch"`
+	TargetPath string `json:"targetPath,omitempty"`
+}
+
+type VcsRemoveWorktreeRequestData struct {
+	Dir          string `json:"dir"`
+	WorktreePath string `json:"worktreePath"`
+	Force        bool   `json:"force,omitempty"`
+}
+
+type VcsChangelistAssignData struct {
+	Dir        string `json:"dir"`
+	Path       string `json:"path"`
+	Changelist string `json:"changelist"`
+}
+
+// --- ADE Hub RPC Types ---
+
+type AdeHubRequestData struct {
+	Query       string `json:"query,omitempty"`
+	AgentFilter string `json:"agentFilter,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+}
+
+type AdeSessionData struct {
+	ID            string `json:"id"`
+	Agent         string `json:"agent"`
+	Cwd           string `json:"cwd"`
+	Title         string `json:"title"`
+	Status        string `json:"status"`
+	MessageCount  int    `json:"messageCount"`
+	UpdatedAtMs   int64  `json:"updatedAtMs"`
+	FilePath      string `json:"filePath"`
+	ResumeCommand string `json:"resumeCommand"`
+}
+
+type AdeDetectedAgentData struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	Command     string `json:"command"`
+	Installed   bool   `json:"installed"`
+	BinaryPath  string `json:"binaryPath,omitempty"`
+	Description string `json:"description"`
+}
+
+type AdePromptNoteData struct {
+	ID          string   `json:"id,omitempty"`
+	Title       string   `json:"title"`
+	Agent       string   `json:"agent"`
+	Body        string   `json:"body"`
+	Tags        []string `json:"tags,omitempty"`
+	UpdatedAtMs int64    `json:"updatedAtMs,omitempty"`
+}
+
+type AdeNoteDeleteRequestData struct {
+	ID string `json:"id"`
+}
+
+type AdeBlockCostData struct {
+	BlockID      string  `json:"blockId"`
+	SessionID    string  `json:"sessionId,omitempty"`
+	CostUSD      float64 `json:"costUsd"`
+	InputTokens  int64   `json:"inputTokens"`
+	OutputTokens int64   `json:"outputTokens"`
+	CacheTokens  int64   `json:"cacheTokens"`
+	UpdatedAtMs  int64   `json:"updatedAtMs"`
+}
+
+type AdeCostSnapshotData struct {
+	TotalCostUSD      float64            `json:"totalCostUsd"`
+	TotalInputTokens  int64              `json:"totalInputTokens"`
+	TotalOutputTokens int64              `json:"totalOutputTokens"`
+	TotalCacheTokens  int64              `json:"totalCacheTokens"`
+	Blocks            []AdeBlockCostData `json:"blocks"`
+}
+
+type AdeHubSnapshotData struct {
+	Sessions []AdeSessionData       `json:"sessions"`
+	Agents   []AdeDetectedAgentData `json:"agents"`
+	Notes    []AdePromptNoteData    `json:"notes"`
+	Cost     AdeCostSnapshotData    `json:"cost"`
+	Warnings []string               `json:"warnings,omitempty"`
 }

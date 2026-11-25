@@ -138,6 +138,81 @@ declare global {
         conn?: {[key: string]: number};
     };
 
+    // wshrpc.AdeBlockCostData
+    type AdeBlockCostData = {
+        blockId: string;
+        sessionId?: string;
+        costUsd: number;
+        inputTokens: number;
+        outputTokens: number;
+        cacheTokens: number;
+        updatedAtMs: number;
+    };
+
+    // wshrpc.AdeCostSnapshotData
+    type AdeCostSnapshotData = {
+        totalCostUsd: number;
+        totalInputTokens: number;
+        totalOutputTokens: number;
+        totalCacheTokens: number;
+        blocks: AdeBlockCostData[];
+    };
+
+    // wshrpc.AdeDetectedAgentData
+    type AdeDetectedAgentData = {
+        id: string;
+        name: string;
+        category: string;
+        command: string;
+        installed: boolean;
+        binaryPath?: string;
+        description: string;
+    };
+
+    // wshrpc.AdeHubRequestData
+    type AdeHubRequestData = {
+        query?: string;
+        agentFilter?: string;
+        limit?: number;
+    };
+
+    // wshrpc.AdeHubSnapshotData
+    type AdeHubSnapshotData = {
+        sessions: AdeSessionData[];
+        agents: AdeDetectedAgentData[];
+        notes: AdePromptNoteData[];
+        cost: AdeCostSnapshotData;
+        warnings?: string[];
+    };
+
+    // wshrpc.AdeNoteDeleteRequestData
+    type AdeNoteDeleteRequestData = {
+        id: string;
+    };
+
+    // wshrpc.AdePromptNoteData
+    type AdePromptNoteData = {
+        id?: string;
+        title: string;
+        agent: string;
+        body: string;
+        tags?: string[];
+        updatedAtMs?: number;
+    };
+
+    // wshrpc.AdeSessionData
+    type AdeSessionData = {
+        id: string;
+        agent: string;
+        cwd: string;
+        title: string;
+        status: string;
+        messageCount: number;
+        updatedAtMs: number;
+        filePath: string;
+        resumeCommand: string;
+    };
+
     // wshrpc.AgentTeamsMemberData
     type AgentTeamsMemberData = {
         agentId: string;
@@ -1791,6 +1866,105 @@ declare global {
         statuscode?: number;
         headers?: {[key: string]: string};
         body?: string;
+    };
+
+    // wshrpc.VcsActionResultData
+    type VcsActionResultData = {
+        output: string;
+    };
+
+    // wshrpc.VcsChangelistAssignData
+    type VcsChangelistAssignData = {
+        dir: string;
+        path: string;
+        changelist: string;
+    };
+
+    // wshrpc.VcsCommitRequestData
+    type VcsCommitRequestData = {
+        dir: string;
+        message: string;
+    };
+
+    // wshrpc.VcsCreateWorktreeRequestData
+    type VcsCreateWorktreeRequestData = {
+        dir: string;
+        branch: string;
+        targetPath?: string;
+    };
+
+    // wshrpc.VcsDiffData
+    type VcsDiffData = {
+        diff: string;
+    };
+
+    // wshrpc.VcsDiffRequestData
+    type VcsDiffRequestData = {
+        dir: string;
+        path?: string;
+        staged?: boolean;
+    };
+
+    // wshrpc.VcsDirRequestData
+    type VcsDirRequestData = {
+        dir: string;
+    };
+
+    // wshrpc.VcsFileChangeData
+    type VcsFileChangeData = {
+        path: string;
+        origPath?: string;
+        indexStatus: string;
+        workStatus: string;
+        staged: boolean;
+        unstaged: boolean;
+        untracked: boolean;
+        conflicted: boolean;
+        changelist: string;
+    };
+
+    // wshrpc.VcsFileRequestData
+    type VcsFileRequestData = {
+        dir: string;
+        path: string;
+    };
+
+    // wshrpc.VcsPathsRequestData
+    type VcsPathsRequestData = {
+        dir: string;
+        paths?: string[];
+    };
+
+    // wshrpc.VcsRemoveWorktreeRequestData
+    type VcsRemoveWorktreeRequestData = {
+        dir: string;
+        worktreePath: string;
+        force?: boolean;
+    };
+
+    // wshrpc.VcsStatusData
+    type VcsStatusData = {
+        repoRoot: string;
+        branch: string;
+        headShort: string;
+        ahead: number;
+        behind: number;
+        isWorktree: boolean;
+        changes: VcsFileChangeData[];
+        changelists: string[];
+        stagedCount: number;
+        unstagedCount: number;
+    };
+
+    // wshrpc.VcsWorktreeData
+    type VcsWorktreeData = {
+        path: string;
+        head: string;
+        branch: string;
+        isMain: boolean;
+        detached: boolean;
+        bare: boolean;
+        locked: boolean;
     };
 
     type WSCommandType = {

@@ -110,10 +110,14 @@ fn open_with_desktop(target: &str) -> Result<(), String> {
     } else {
         ("xdg-open", vec![])
     };
-    std::process::Command::new(program)
-        .args(args)
-        .arg(target)
-        .spawn()
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args).arg(target);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd.spawn()
         .map(|_| ())
         .map_err(|e| format!("cannot open {target}: {e}"))
 }

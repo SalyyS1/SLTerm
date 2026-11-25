@@ -123,8 +123,8 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(Child, Endpoints), String> {
     std::fs::create_dir_all(&config_home).map_err(|e| format!("cannot create config dir: {e}"))?;
 
     let auth_key = new_auth_key();
-    let mut child = Command::new(&exe)
-        .env("SLTERM_AUTH_KEY", &auth_key)
+    let mut cmd = Command::new(&exe);
+    cmd.env("SLTERM_AUTH_KEY", &auth_key)
         .env("SLTERM_DATA_HOME", &data_home)
         .env("SLTERM_CONFIG_HOME", &config_home)
         // Where the backend finds bin/ and schema/. It copies wsh out of bin/ for
@@ -134,7 +134,14 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(Child, Endpoints), String> {
         // gets cleaned up if this process dies without killing it.
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    // Prevent a flashing console window when launching wavesrv.x64.exe on Windows.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("cannot spawn {}: {e}", exe.display()))?;
 

@@ -21,6 +21,24 @@ func ActivityCommand(w *wshutil.WshRpc, data wshrpc.ActivityUpdate, opts *wshrpc
 	return err
 }
 
+// command "adedeletepromptnote", wshserver.AdeDeletePromptNoteCommand
+func AdeDeletePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdeNoteDeleteRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "adedeletepromptnote", data, opts)
+	return err
+}
+
+// command "adegethubsnapshot", wshserver.AdeGetHubSnapshotCommand
+func AdeGetHubSnapshotCommand(w *wshutil.WshRpc, data wshrpc.AdeHubRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeHubSnapshotData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeHubSnapshotData](w, "adegethubsnapshot", data, opts)
+	return resp, err
+}
+
+// command "adesavepromptnote", wshserver.AdeSavePromptNoteCommand
+func AdeSavePromptNoteCommand(w *wshutil.WshRpc, data wshrpc.AdePromptNoteData, opts *wshrpc.RpcOpts) (*wshrpc.AdePromptNoteData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdePromptNoteData](w, "adesavepromptnote", data, opts)
+	return resp, err
+}
+
 // command "agentteamsgetsnapshot", wshserver.AgentTeamsGetSnapshotCommand
 func AgentTeamsGetSnapshotCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AgentTeamsSnapshotData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AgentTeamsSnapshotData](w, "agentteamsgetsnapshot", nil, opts)
@@ -886,6 +904,78 @@ func TermGetScrollbackLinesCommand(w *wshutil.WshRpc, data wshrpc.CommandTermGet
 // command "test", wshserver.TestCommand
 func TestCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "test", data, opts)
+	return err
+}
+
+// command "vcsassignchangelist", wshserver.VcsAssignChangelistCommand
+func VcsAssignChangelistCommand(w *wshutil.WshRpc, data wshrpc.VcsChangelistAssignData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "vcsassignchangelist", data, opts)
+	return err
+}
+
+// command "vcscommit", wshserver.VcsCommitCommand
+func VcsCommitCommand(w *wshutil.WshRpc, data wshrpc.VcsCommitRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcscommit", data, opts)
+	return resp, err
+}
+
+// command "vcscreateworktree", wshserver.VcsCreateWorktreeCommand
+func VcsCreateWorktreeCommand(w *wshutil.WshRpc, data wshrpc.VcsCreateWorktreeRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsWorktreeData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsWorktreeData](w, "vcscreateworktree", data, opts)
+	return resp, err
+}
+
+// command "vcsdiscard", wshserver.VcsDiscardCommand
+func VcsDiscardCommand(w *wshutil.WshRpc, data wshrpc.VcsFileRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "vcsdiscard", data, opts)
+	return err
+}
+
+// command "vcsgetdiff", wshserver.VcsGetDiffCommand
+func VcsGetDiffCommand(w *wshutil.WshRpc, data wshrpc.VcsDiffRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsDiffData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsDiffData](w, "vcsgetdiff", data, opts)
+	return resp, err
+}
+
+// command "vcsgetstatus", wshserver.VcsGetStatusCommand
+func VcsGetStatusCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsStatusData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsStatusData](w, "vcsgetstatus", data, opts)
+	return resp, err
+}
+
+// command "vcslistworktrees", wshserver.VcsListWorktreesCommand
+func VcsListWorktreesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsWorktreeData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsWorktreeData](w, "vcslistworktrees", data, opts)
+	return resp, err
+}
+
+// command "vcspull", wshserver.VcsPullCommand
+func VcsPullCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcspull", data, opts)
+	return resp, err
+}
+
+// command "vcspush", wshserver.VcsPushCommand
+func VcsPushCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcspush", data, opts)
+	return resp, err
+}
+
+// command "vcsremoveworktree", wshserver.VcsRemoveWorktreeCommand
+func VcsRemoveWorktreeCommand(w *wshutil.WshRpc, data wshrpc.VcsRemoveWorktreeRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "vcsremoveworktree", data, opts)
+	return err
+}
+
+// command "vcsstage", wshserver.VcsStageCommand
+func VcsStageCommand(w *wshutil.WshRpc, data wshrpc.VcsPathsRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "vcsstage", data, opts)
+	return err
+}
+
+// command "vcsunstage", wshserver.VcsUnstageCommand
+func VcsUnstageCommand(w *wshutil.WshRpc, data wshrpc.VcsPathsRequestData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "vcsunstage", data, opts)
 	return err
 }
 
