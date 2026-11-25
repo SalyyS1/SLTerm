@@ -242,6 +242,7 @@ type WshRpcInterface interface {
 	AdeSaveWorkspaceCommand(ctx context.Context, data AdeWorkspaceData) (*AdeWorkspaceData, error)
 	AdeDeleteWorkspaceCommand(ctx context.Context, data AdeWorkspaceDeleteRequestData) error
 	AdeCheckUpdateCommand(ctx context.Context, data AdeCheckUpdateRequestData) (*AdeUpdateInfoData, error)
+	AdeGetRuntimeStatsCommand(ctx context.Context) (*AdeRuntimeStatsData, error)
 }
 
 // for frontend
@@ -1369,4 +1370,22 @@ type AdeUpdateInfoData struct {
 	PublishedAt     string `json:"publishedAt,omitempty"`
 	NotesPreview    string `json:"notesPreview,omitempty"`
 	CheckedAtMs     int64  `json:"checkedAtMs"`
+}
+
+type AdeTrackedProcessData struct {
+	PID   int     `json:"pid"`
+	Name  string  `json:"name"`
+	Role  string  `json:"role"`
+	RSSMB float64 `json:"rssMb"`
+}
+
+type AdeRuntimeStatsData struct {
+	SidecarHeapMB  float64                 `json:"sidecarHeapMb"`
+	SidecarSysMB   float64                 `json:"sidecarSysMb"`
+	Goroutines     int                     `json:"goroutines"`
+	UptimeSec      int64                   `json:"uptimeSec"`
+	Platform       string                  `json:"platform"`
+	ActiveAgents   int                     `json:"activeAgents"`
+	ActiveDevProcs int                     `json:"activeDevProcs"`
+	Processes      []AdeTrackedProcessData `json:"processes"`
 }

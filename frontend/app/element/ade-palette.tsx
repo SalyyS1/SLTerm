@@ -5,7 +5,7 @@
 // Instant fuzzy jump to ADE Hub, Git & Worktrees, AI Tools, Agent Teams, CLI agents,
 // Rem Aqua Ambient FX toggle, and live Localhost Dev-Server ports.
 
-import { cycleRemFxMode, getRemFxMode } from "@/app/element/rem-ambient";
+import { cycleRemFxMode, cycleRemTheme, getRemFxMode, getRemTheme } from "@/app/element/rem-ambient";
 import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -123,6 +123,15 @@ export const AdeCommandPalette: React.FC = () => {
                 label: "New Local Shell Terminal Block",
                 hint: "view:term",
                 run: () => createBlock({ meta: { view: "term", controller: "shell" } }),
+            },
+            {
+                id: "cycle-rem-theme",
+                icon: "🎨",
+                label: `Switch Rem Workspace Theme (Current: ${getRemTheme()})`,
+                hint: "Rem Aqua / Twilight / Glacier",
+                run: () => {
+                    cycleRemTheme();
+                },
             },
             {
                 id: "cycle-rem-fx",

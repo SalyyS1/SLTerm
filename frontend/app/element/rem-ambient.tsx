@@ -9,9 +9,44 @@
 import * as React from "react";
 
 export type RemFxMode = "calm" | "dreamy" | "off";
+export type RemThemeName = "rem-aqua" | "rem-twilight" | "glacier-mist";
 
 const STORAGE_KEY = "slterm-rem-fx";
 const EVENT_NAME = "slterm:rem-fx-change";
+const THEME_KEY = "slterm-rem-theme";
+const THEME_EVENT = "slterm:rem-theme-change";
+
+export function getRemTheme(): RemThemeName {
+    try {
+        const s = localStorage.getItem(THEME_KEY);
+        if (s === "rem-aqua" || s === "rem-twilight" || s === "glacier-mist") {
+            return s;
+        }
+    } catch {
+        // ignore storage errors
+    }
+    return "rem-aqua";
+}
+
+export function setRemTheme(theme: RemThemeName): void {
+    try {
+        localStorage.setItem(THEME_KEY, theme);
+    } catch {
+        // ignore
+    }
+    if (typeof document !== "undefined") {
+        document.documentElement.dataset.remTheme = theme;
+    }
+    window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: theme }));
+}
+
+export function cycleRemTheme(): RemThemeName {
+    const order: RemThemeName[] = ["rem-aqua", "rem-twilight", "glacier-mist"];
+    const cur = getRemTheme();
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    setRemTheme(next);
+    return next;
+}
 
 export function getRemFxMode(): RemFxMode {
     try {
@@ -78,6 +113,11 @@ function makeParticle(w: number, h: number, randomY: boolean): Particle {
 export const RemAmbientBackdrop: React.FC = () => {
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
     const [mode, setMode] = React.useState<RemFxMode>(() => getRemFxMode());
+    const [theme, setTheme] = React.useState<RemThemeName>(() => getRemTheme());
+
+    React.useEffect(() => {
+        document.documentElement.dataset.remTheme = theme;
+    }, [theme]);
 
     React.useEffect(() => {
         const handler = (e: Event) => {
@@ -86,8 +126,18 @@ export const RemAmbientBackdrop: React.FC = () => {
                 setMode(detail);
             }
         };
+        const onTheme = (e: Event) => {
+            const detail = (e as CustomEvent<RemThemeName>).detail;
+            if (detail === "rem-aqua" || detail === "rem-twilight" || detail === "glacier-mist") {
+                setTheme(detail);
+            }
+        };
         window.addEventListener(EVENT_NAME, handler);
-        return () => window.removeEventListener(EVENT_NAME, handler);
+        window.addEventListener(THEME_EVENT, onTheme);
+        return () => {
+            window.removeEventListener(EVENT_NAME, handler);
+            window.removeEventListener(THEME_EVENT, onTheme);
+        };
     }, []);
 
     React.useEffect(() => {

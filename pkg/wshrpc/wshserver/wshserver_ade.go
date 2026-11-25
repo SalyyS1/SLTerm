@@ -11,6 +11,7 @@ package wshserver
 import (
 	"context"
 
+	"github.com/SalyyS1/SLTerm/pkg/adestats"
 	"github.com/SalyyS1/SLTerm/pkg/adeworkspace"
 	"github.com/SalyyS1/SLTerm/pkg/agentsessions"
 	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
@@ -440,7 +441,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.30.0"
+		cur = "0.31.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -456,5 +457,28 @@ func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeC
 		PublishedAt:     info.PublishedAt,
 		NotesPreview:    info.NotesPreview,
 		CheckedAtMs:     info.CheckedAtMs,
+	}, nil
+}
+
+func (ws *WshServer) AdeGetRuntimeStatsCommand(ctx context.Context) (*wshrpc.AdeRuntimeStatsData, error) {
+	s := adestats.Collect(ctx)
+	procs := make([]wshrpc.AdeTrackedProcessData, 0, len(s.Processes))
+	for _, p := range s.Processes {
+		procs = append(procs, wshrpc.AdeTrackedProcessData{
+			PID:   p.PID,
+			Name:  p.Name,
+			Role:  p.Role,
+			RSSMB: p.RSSMB,
+		})
+	}
+	return &wshrpc.AdeRuntimeStatsData{
+		SidecarHeapMB:  s.SidecarHeapMB,
+		SidecarSysMB:   s.SidecarSysMB,
+		Goroutines:     s.Goroutines,
+		UptimeSec:      s.UptimeSec,
+		Platform:       s.Platform,
+		ActiveAgents:   s.ActiveAgents,
+		ActiveDevProcs: s.ActiveDevProcs,
+		Processes:      procs,
 	}, nil
 }

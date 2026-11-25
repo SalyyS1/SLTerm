@@ -253,6 +253,18 @@ declare global {
         updatedAtMs?: number;
     };
 
+    // wshrpc.AdeRuntimeStatsData
+    type AdeRuntimeStatsData = {
+        sidecarHeapMb: number;
+        sidecarSysMb: number;
+        goroutines: number;
+        uptimeSec: number;
+        platform: string;
+        activeAgents: number;
+        activeDevProcs: number;
+        processes: AdeTrackedProcessData[];
+    };
+
     // wshrpc.AdeSessionData
     type AdeSessionData = {
         id: string;
@@ -284,6 +296,14 @@ declare global {
     // wshrpc.AdeTaskDeleteRequestData
     type AdeTaskDeleteRequestData = {
         id: string;
+    };
+
+    // wshrpc.AdeTrackedProcessData
+    type AdeTrackedProcessData = {
+        pid: number;
+        name: string;
+        role: string;
+        rssMb: number;
     };
 
     // wshrpc.AdeUpdateInfoData

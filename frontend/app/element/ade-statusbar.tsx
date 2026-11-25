@@ -5,7 +5,14 @@
 // live Dev-Server Port count, active Kanban tasks, OTLP cost, Rem Anime FX,
 // Ctrl+Shift+P Command Palette, and GitHub Release update status.
 
-import { cycleRemFxMode, getRemFxMode, RemFxMode } from "@/app/element/rem-ambient";
+import {
+    cycleRemFxMode,
+    cycleRemTheme,
+    getRemFxMode,
+    getRemTheme,
+    RemFxMode,
+    RemThemeName,
+} from "@/app/element/rem-ambient";
 import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
@@ -13,28 +20,42 @@ import { TabRpcClient } from "@/app/store/wshrpcutil";
 import * as React from "react";
 import "./ade-statusbar.scss";
 
+const THEME_LABELS: Record<RemThemeName, string> = {
+    "rem-aqua": "❄ Rem Aqua",
+    "rem-twilight": "☾ Twilight",
+    "glacier-mist": "☀ Glacier",
+};
+
 export const AdeStatusBar: React.FC = () => {
     const [fx, setFx] = React.useState<RemFxMode>(() => getRemFxMode());
+    const [theme, setTheme] = React.useState<RemThemeName>(() => getRemTheme());
     const [devPorts, setDevPorts] = React.useState(0);
     const [activeTasks, setActiveTasks] = React.useState(0);
     const [costUsd, setCostUsd] = React.useState(0);
+    const [sidecarMb, setSidecarMb] = React.useState<number | null>(null);
+    const [liveAgents, setLiveAgents] = React.useState(0);
     const [updateVer, setUpdateVer] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         let mounted = true;
         const poll = async () => {
             try {
-                const [ports, tasks, hub, upd] = await Promise.all([
+                const [ports, tasks, hub, upd, rt] = await Promise.all([
                     RpcApi.AdeListPortsCommand(TabRpcClient).catch(() => [] as AdePortData[]),
                     RpcApi.AdeListTasksCommand(TabRpcClient).catch(() => [] as AdeTaskData[]),
                     RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, { limit: 1 }).catch(() => null),
                     RpcApi.AdeCheckUpdateCommand(TabRpcClient, { force: false }).catch(() => null),
+                    RpcApi.AdeGetRuntimeStatsCommand(TabRpcClient).catch(() => null),
                 ]);
                 if (!mounted) return;
                 setDevPorts((ports ?? []).filter((p) => p.isDevLikely).length);
                 setActiveTasks((tasks ?? []).filter((t) => t.status === "in_progress").length);
                 setCostUsd(hub?.cost?.totalCostUsd ?? 0);
                 setUpdateVer(upd?.updateAvailable ? upd.latestVersion : null);
+                if (rt) {
+                    setSidecarMb(rt.sidecarHeapMb);
+                    setLiveAgents(rt.activeAgents);
+                }
             } catch {
                 // ignore offline/startup hiccups
             }
@@ -77,13 +98,28 @@ export const AdeStatusBar: React.FC = () => {
                     onClick={() => createBlock({ meta: { view: "adehub" } })}
                     title="Detected localhost dev servers"
                 >
-                    🌐 Dev Ports: {devPorts}
+                    🌐 Ports: {devPorts}
                 </button>
             </div>
             <div className="ade-sb-group">
+                {sidecarMb !== null && (
+                    <span
+                        className="ade-sb-metric"
+                        title="SLTerm Go sidecar heap RAM & active local AI CLI agents"
+                    >
+                        {sidecarMb.toFixed(1)} MB{liveAgents > 0 ? ` · ${liveAgents} AI` : ""}
+                    </span>
+                )}
                 <span className="ade-sb-metric" title="Embedded local OTLP session cost">
                     ${costUsd.toFixed(4)}
                 </span>
+                <button
+                    className="ade-sb-pill aqua"
+                    onClick={() => setTheme(cycleRemTheme())}
+                    title="Switch Rem Workspace Theme (Rem Aqua / Rem Twilight / Glacier Mist)"
+                >
+                    {THEME_LABELS[theme]}
+                </button>
                 <button
                     className="ade-sb-pill pink"
                     onClick={() => setFx(cycleRemFxMode())}
@@ -96,7 +132,7 @@ export const AdeStatusBar: React.FC = () => {
                     onClick={() => triggerManualUpdateCheck()}
                     title="Check GitHub Releases for SLTerm updates"
                 >
-                    {updateVer ? `⬆ Update v${updateVer}` : "↻ Updates"}
+                    {updateVer ? `⬆ v${updateVer}` : "↻ Updates"}
                 </button>
                 <span className="ade-sb-kbd" title="Open Global ADE Command Palette">
                     Ctrl+Shift+P

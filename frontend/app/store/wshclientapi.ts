@@ -47,6 +47,11 @@ class RpcApiType {
         return client.wshRpcCall("adegethubsnapshot", data, opts);
     }
 
+    // command "adegetruntimestats" [call]
+    AdeGetRuntimeStatsCommand(client: WshClient, opts?: RpcOpts): Promise<AdeRuntimeStatsData> {
+        return client.wshRpcCall("adegetruntimestats", null, opts);
+    }
+
     // command "adelistports" [call]
     AdeListPortsCommand(client: WshClient, opts?: RpcOpts): Promise<AdePortData[]> {
         return client.wshRpcCall("adelistports", null, opts);

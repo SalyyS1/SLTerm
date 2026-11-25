@@ -63,6 +63,12 @@ func AdeGetHubSnapshotCommand(w *wshutil.WshRpc, data wshrpc.AdeHubRequestData, 
 	return resp, err
 }
 
+// command "adegetruntimestats", wshserver.AdeGetRuntimeStatsCommand
+func AdeGetRuntimeStatsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AdeRuntimeStatsData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeRuntimeStatsData](w, "adegetruntimestats", nil, opts)
+	return resp, err
+}
+
 // command "adelistports", wshserver.AdeListPortsCommand
 func AdeListPortsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdePortData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdePortData](w, "adelistports", nil, opts)

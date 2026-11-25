@@ -27,6 +27,7 @@ jobs:
       - name: Run Go core package tests
         run: |
           go test -race -v \
+            ./pkg/adestats/... \
             ./pkg/adeworkspace/... \
             ./pkg/agentteams/... \
             ./pkg/agentsessions/... \
