@@ -68,6 +68,7 @@ export class AdeHubViewModel implements ViewModel {
     workspacesAtom: PrimitiveAtom<AdeWorkspaceData[]>;
     runtimeAtom: PrimitiveAtom<AdeRuntimeStatsData | null>;
     activityAtom: PrimitiveAtom<AdeActivityFeedData | null>;
+    aiToolsAtom: PrimitiveAtom<AIToolsInventoryData | null>;
     sshAuditAtom: PrimitiveAtom<AdeSSHAuditReportData | null>;
     projectAtom: PrimitiveAtom<AdeProjectReportData | null>;
     errorAtom: PrimitiveAtom<string | null>;
@@ -88,6 +89,7 @@ export class AdeHubViewModel implements ViewModel {
         this.workspacesAtom = atom<AdeWorkspaceData[]>([]);
         this.runtimeAtom = atom(null) as PrimitiveAtom<AdeRuntimeStatsData | null>;
         this.activityAtom = atom(null) as PrimitiveAtom<AdeActivityFeedData | null>;
+        this.aiToolsAtom = atom(null) as PrimitiveAtom<AIToolsInventoryData | null>;
         this.sshAuditAtom = atom(null) as PrimitiveAtom<AdeSSHAuditReportData | null>;
         this.projectAtom = atom(null) as PrimitiveAtom<AdeProjectReportData | null>;
         this.errorAtom = atom(null) as PrimitiveAtom<string | null>;
@@ -100,7 +102,7 @@ export class AdeHubViewModel implements ViewModel {
 
     async refresh(query = "", agentFilter = "all"): Promise<void> {
         try {
-            const [snap, ports, tasks, workspaces, runtime, activity] = await Promise.all([
+            const [snap, ports, tasks, workspaces, runtime, activity, aiTools] = await Promise.all([
                 RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, {
                     query,
                     agentFilter,
@@ -111,6 +113,7 @@ export class AdeHubViewModel implements ViewModel {
                 RpcApi.AdeListWorkspacesCommand(TabRpcClient).catch(() => [] as AdeWorkspaceData[]),
                 RpcApi.AdeGetRuntimeStatsCommand(TabRpcClient).catch(() => null),
                 RpcApi.AdeGetActivityCommand(TabRpcClient).catch(() => null),
+                RpcApi.AIToolsGetInventoryCommand(TabRpcClient, {}).catch(() => null),
             ]);
             globalStore.set(this.hubAtom, snap);
             globalStore.set(this.portsAtom, ports ?? []);
@@ -118,6 +121,7 @@ export class AdeHubViewModel implements ViewModel {
             globalStore.set(this.workspacesAtom, workspaces ?? []);
             globalStore.set(this.runtimeAtom, runtime);
             globalStore.set(this.activityAtom, activity);
+            globalStore.set(this.aiToolsAtom, aiTools);
             globalStore.set(this.errorAtom, null);
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
@@ -570,6 +574,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const runtime = useAtomValue(model.runtimeAtom);
     const activity = useAtomValue(model.activityAtom);
+    const aiTools = useAtomValue(model.aiToolsAtom);
     const sshAudit = useAtomValue(model.sshAuditAtom);
     const project = useAtomValue(model.projectAtom);
     const error = useAtomValue(model.errorAtom);
@@ -1500,6 +1505,53 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                 ))}
                             </div>
                         )}
+
+                        <div className="adehub-card">
+                            <div className="adehub-card-main">
+                                <div className="adehub-card-head">
+                                    <strong>🔌 AI Tools, MCP &amp; SLClean Companion</strong>
+                                    <span className="adehub-pill ready">
+                                        {aiTools?.mcp?.length ?? 0} MCP
+                                    </span>
+                                    <span className="adehub-pill">
+                                        {aiTools?.skills?.length ?? 0} Skills
+                                    </span>
+                                    <span className="adehub-pill">
+                                        {aiTools?.agents?.length ?? 0} Agents
+                                    </span>
+                                </div>
+                                <div className="adehub-card-meta">
+                                    Inspect Claude/Codex MCP servers &amp; skills, or launch SLClean Rem Aqua to sweep
+                                    stray Codex/AI test junk in Documents &amp; caches.
+                                </div>
+                            </div>
+                            <div className="adehub-card-actions">
+                                <button
+                                    className="adehub-btn primary"
+                                    onClick={() => createBlock({ meta: { view: "aitools" } })}
+                                >
+                                    ⚙ AI Tools &amp; MCP
+                                </button>
+                                <button
+                                    className="adehub-btn"
+                                    onClick={() => createBlock({ meta: { view: "agentteams" } })}
+                                >
+                                    ◈ Agent Teams
+                                </button>
+                                <button
+                                    className="adehub-btn rem-fx"
+                                    onClick={() =>
+                                        window.open(
+                                            "https://github.com/SalyyS1/SLClean/releases",
+                                            "_blank",
+                                            "noopener,noreferrer"
+                                        )
+                                    }
+                                >
+                                    ❄ SLClean
+                                </button>
+                            </div>
+                        </div>
 
                         <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
                             <div className="adehub-card-head" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
