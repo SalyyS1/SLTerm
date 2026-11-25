@@ -132,6 +132,11 @@ class RpcApiType {
         return client.wshRpcCall("adesetcostbudget", data, opts);
     }
 
+    // command "adesuggestcommands" [call]
+    AdeSuggestCommandsCommand(client: WshClient, data: AdeNltQueryRequestData, opts?: RpcOpts): Promise<AdeNltSuggestionData[]> {
+        return client.wshRpcCall("adesuggestcommands", data, opts);
+    }
+
     // command "adewritecontextfile" [call]
     AdeWriteContextFileCommand(client: WshClient, data: AdeWriteContextFileRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
         return client.wshRpcCall("adewritecontextfile", data, opts);

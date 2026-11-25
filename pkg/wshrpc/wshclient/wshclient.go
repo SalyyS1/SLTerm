@@ -165,6 +165,12 @@ func AdeSetCostBudgetCommand(w *wshutil.WshRpc, data wshrpc.AdeCostBudgetRequest
 	return resp, err
 }
 
+// command "adesuggestcommands", wshserver.AdeSuggestCommandsCommand
+func AdeSuggestCommandsCommand(w *wshutil.WshRpc, data wshrpc.AdeNltQueryRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.AdeNltSuggestionData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdeNltSuggestionData](w, "adesuggestcommands", data, opts)
+	return resp, err
+}
+
 // command "adewritecontextfile", wshserver.AdeWriteContextFileCommand
 func AdeWriteContextFileCommand(w *wshutil.WshRpc, data wshrpc.AdeWriteContextFileRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "adewritecontextfile", data, opts)

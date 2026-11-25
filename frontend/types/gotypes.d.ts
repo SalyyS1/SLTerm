@@ -274,6 +274,25 @@ declare global {
         worktreePath?: string;
     };
 
+    // wshrpc.AdeNltQueryRequestData
+    type AdeNltQueryRequestData = {
+        query: string;
+        limit?: number;
+    };
+
+    // wshrpc.AdeNltSuggestionData
+    type AdeNltSuggestionData = {
+        id: string;
+        title: string;
+        category: string;
+        windowsCmd: string;
+        unixCmd: string;
+        recommended: string;
+        explanation: string;
+        verdict: string;
+        riskScore: number;
+    };
+
     // wshrpc.AdeNoteDeleteRequestData
     type AdeNoteDeleteRequestData = {
         id: string;

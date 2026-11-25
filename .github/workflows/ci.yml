@@ -33,6 +33,7 @@ jobs:
             ./pkg/agentsessions/... \
             ./pkg/agentwatch/... \
             ./pkg/aitools/... \
+            ./pkg/nltcmd/... \
             ./pkg/otelcost/... \
             ./pkg/portwatch/... \
             ./pkg/projectdetect/... \

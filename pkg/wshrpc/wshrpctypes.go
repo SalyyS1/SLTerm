@@ -261,6 +261,7 @@ type WshRpcInterface interface {
 	AdeKillDevPortCommand(ctx context.Context, data AdeKillPortRequestData) (*VcsActionResultData, error)
 	AdeReadContextFileCommand(ctx context.Context, data AdeContextFileRequestData) (*AdeContextFileData, error)
 	AdeWriteContextFileCommand(ctx context.Context, data AdeWriteContextFileRequestData) (*VcsActionResultData, error)
+	AdeSuggestCommandsCommand(ctx context.Context, data AdeNltQueryRequestData) ([]AdeNltSuggestionData, error)
 }
 
 // for frontend
@@ -1498,6 +1499,23 @@ type AdeWriteContextFileRequestData struct {
 	Dir     string `json:"dir"`
 	Name    string `json:"name"`
 	Content string `json:"content"`
+}
+
+type AdeNltQueryRequestData struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type AdeNltSuggestionData struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Category    string `json:"category"`
+	WindowsCmd  string `json:"windowsCmd"`
+	UnixCmd     string `json:"unixCmd"`
+	Recommended string `json:"recommended"`
+	Explanation string `json:"explanation"`
+	Verdict     string `json:"verdict"`
+	RiskScore   int    `json:"riskScore"`
 }
 
 type AdeActivityEventData struct {

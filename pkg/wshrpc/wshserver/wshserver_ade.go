@@ -20,6 +20,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/agentsessions"
 	"github.com/SalyyS1/SLTerm/pkg/agentwatch"
 	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
+	"github.com/SalyyS1/SLTerm/pkg/nltcmd"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/portwatch"
 	"github.com/SalyyS1/SLTerm/pkg/projectdetect"
@@ -563,7 +564,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.38.0"
+		cur = "0.39.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -761,4 +762,23 @@ func (ws *WshServer) AdeWriteContextFileCommand(ctx context.Context, data wshrpc
 		return nil, err
 	}
 	return &wshrpc.VcsActionResultData{Output: "Saved " + p}, nil
+}
+
+func (ws *WshServer) AdeSuggestCommandsCommand(ctx context.Context, data wshrpc.AdeNltQueryRequestData) ([]wshrpc.AdeNltSuggestionData, error) {
+	raw := nltcmd.Suggest(data.Query, data.Limit)
+	out := make([]wshrpc.AdeNltSuggestionData, 0, len(raw))
+	for _, s := range raw {
+		out = append(out, wshrpc.AdeNltSuggestionData{
+			ID:          s.ID,
+			Title:       s.Title,
+			Category:    s.Category,
+			WindowsCmd:  s.WindowsCmd,
+			UnixCmd:     s.UnixCmd,
+			Recommended: s.Recommended,
+			Explanation: s.Explanation,
+			Verdict:     s.Verdict,
+			RiskScore:   s.RiskScore,
+		})
+	}
+	return out, nil
 }

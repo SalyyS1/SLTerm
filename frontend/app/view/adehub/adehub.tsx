@@ -467,6 +467,15 @@ export class AdeHubViewModel implements ViewModel {
         }
     }
 
+    async suggestNltCommands(query: string): Promise<AdeNltSuggestionData[]> {
+        try {
+            return (await RpcApi.AdeSuggestCommandsCommand(TabRpcClient, { query, limit: 5 })) ?? [];
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return [];
+        }
+    }
+
     async launchAgent(agent: AdeDetectedAgentData, cwd: string): Promise<void> {
         const parts = agent.command.trim().split(/\s+/);
         const cmd = parts[0];
@@ -572,6 +581,8 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const [wsPort, setWsPort] = React.useState("");
     const [ctxFile, setCtxFile] = React.useState<AdeContextFileData | null>(null);
     const [ctxDraft, setCtxDraft] = React.useState("");
+    const [nltQuery, setNltQuery] = React.useState("");
+    const [nltResults, setNltResults] = React.useState<AdeNltSuggestionData[]>([]);
 
     React.useEffect(() => {
         model.refresh(query, agentFilter);
@@ -1175,6 +1186,74 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
 
                 {activeTab === "notes" && (
                     <>
+                        <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                            <div className="adehub-bar">
+                                <input
+                                    className="adehub-input"
+                                    value={nltQuery}
+                                    onChange={(e) => setNltQuery(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                        if (e.key === "Enter") {
+                                            setNltResults(await model.suggestNltCommands(nltQuery));
+                                        }
+                                    }}
+                                    placeholder="✨ Offline Shell Assist (EN/VI): e.g. 'tìm port 5173', 'git undo 2 commits', 'dọn docker'..."
+                                />
+                                <button
+                                    className="adehub-btn primary"
+                                    onClick={async () => {
+                                        setNltResults(await model.suggestNltCommands(nltQuery));
+                                    }}
+                                >
+                                    ✨ Suggest Cmd
+                                </button>
+                            </div>
+                            {nltResults.length > 0 && (
+                                <div className="adehub-list" style={{ marginTop: 6 }}>
+                                    {nltResults.map((s) => (
+                                        <div key={s.id} className="adehub-card">
+                                            <div className="adehub-card-main">
+                                                <div className="adehub-card-head">
+                                                    <span className="adehub-agent-tag">{s.category}</span>
+                                                    <strong>{s.title}</strong>
+                                                    <span
+                                                        className={`adehub-pill ${
+                                                            s.verdict === "allow" ? "ready" : "waiting"
+                                                        }`}
+                                                    >
+                                                        {s.verdict.toUpperCase()} ({s.riskScore})
+                                                    </span>
+                                                </div>
+                                                <div className="adehub-card-meta">Win: {s.windowsCmd}</div>
+                                                <div className="adehub-card-meta">Unix: {s.unixCmd}</div>
+                                            </div>
+                                            <div className="adehub-card-actions">
+                                                <button
+                                                    className="adehub-btn"
+                                                    onClick={() => {
+                                                        setNoteTitle(s.title);
+                                                        setNoteAgent("shell");
+                                                        setNoteBody(s.recommended);
+                                                    }}
+                                                >
+                                                    Use
+                                                </button>
+                                                <button
+                                                    className="adehub-btn primary"
+                                                    onClick={() => {
+                                                        navigator.clipboard?.writeText(s.recommended);
+                                                        globalStore.set(model.noticeAtom, `Copied: ${s.recommended}`);
+                                                    }}
+                                                >
+                                                    Copy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="adehub-note-form">
                             <div className="adehub-bar">
                                 <input
