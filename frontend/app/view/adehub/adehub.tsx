@@ -18,6 +18,7 @@ import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { makeIconClass, stringToBase64 } from "@/util/util";
 import { Atom, atom, PrimitiveAtom, useAtomValue } from "jotai";
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import "./adehub.scss";
 
 type HubTab = "sessions" | "tasks" | "workspaces" | "ports" | "agents" | "notes" | "runtime";
@@ -549,6 +550,7 @@ function fmtTokens(n: number): string {
 }
 
 function AdeHubView({ model }: { model: AdeHubViewModel }) {
+    const { t } = useTranslation();
     const activeTab = useAtomValue(model.activeTabAtom);
     const hub = useAtomValue(model.hubAtom);
     const ports = useAtomValue(model.portsAtom);
@@ -596,8 +598,8 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
             <div className="adehub-hud">
                 <div className="adehub-hud-title">
                     <i className={makeIconClass("sparkles", false)} />
-                    <strong>SLTerm ADE Hub</strong>
-                    {waitingCount > 0 && <span className="adehub-pill waiting">{waitingCount} waiting on you</span>}
+                    <strong>{t("ade.hubTitle", "SLTerm ADE Hub")}</strong>
+                    {waitingCount > 0 && <span className="adehub-pill waiting">{waitingCount} {t("ade.waiting", "waiting")}</span>}
                 </div>
                 <div className="adehub-hud-metrics">
                     <span className={cost?.budgetExceeded ? "adehub-pill waiting" : ""}>
@@ -635,43 +637,43 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                     className={`adehub-tab ${activeTab === "sessions" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "sessions")}
                 >
-                    Sessions ({hub?.sessions?.length ?? 0})
+                    {t("ade.sessions", "Sessions")} ({hub?.sessions?.length ?? 0})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "tasks" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "tasks")}
                 >
-                    Tasks ({tasks.length})
+                    {t("ade.tasks", "Tasks")} ({tasks.length})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "workspaces" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "workspaces")}
                 >
-                    Workspaces ({workspaces.length})
+                    {t("ade.workspaces", "Workspaces")} ({workspaces.length})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "ports" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "ports")}
                 >
-                    Ports Radar ({ports.filter((p) => p.isDevLikely).length}/{ports.length})
+                    {t("ade.portsRadar", "Ports Radar")} ({ports.filter((p) => p.isDevLikely).length}/{ports.length})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "agents" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "agents")}
                 >
-                    Agents &amp; Shells ({(hub?.agents ?? []).filter((a) => a.installed).length}/{hub?.agents?.length ?? 0})
+                    {t("ade.agentsShells", "Agents & Shells")} ({(hub?.agents ?? []).filter((a) => a.installed).length}/{hub?.agents?.length ?? 0})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "notes" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "notes")}
                 >
-                    Prompt Notes ({hub?.notes?.length ?? 0})
+                    {t("ade.promptNotes", "Prompt Notes")} ({hub?.notes?.length ?? 0})
                 </button>
                 <button
                     className={`adehub-tab ${activeTab === "runtime" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "runtime")}
                 >
-                    🛡 Activity &amp; Runtime ({runtime ? `${runtime.sidecarHeapMb.toFixed(1)} MB` : "…"}
+                    🛡 {t("ade.activityRuntime", "Activity & Runtime")} ({runtime ? `${runtime.sidecarHeapMb.toFixed(1)} MB` : "…"}
                     {(activity?.unreadCount ?? 0) > 0 ? ` · 🔔 ${activity?.unreadCount}` : ""})
                 </button>
             </div>

@@ -9,6 +9,7 @@ import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import "./update-banner.scss";
 
 const DISMISS_KEY = "slterm-dismissed-update-ver";
@@ -19,6 +20,7 @@ export function triggerManualUpdateCheck(): void {
 }
 
 export const UpdateBanner: React.FC = () => {
+    const { t } = useTranslation();
     const [info, setInfo] = React.useState<AdeUpdateInfoData | null>(null);
     const [visible, setVisible] = React.useState(false);
     const [statusNote, setStatusNote] = React.useState<string | null>(null);
@@ -34,7 +36,7 @@ export const UpdateBanner: React.FC = () => {
                 }
                 setStatusNote(null);
             } else if (force && res) {
-                setStatusNote(`✓ SLTerm v${res.currentVersion} is up to date!`);
+                setStatusNote(`✓ SLTerm v${res.currentVersion} ${t("ade.upToDate", "is up to date!")}`);
                 setVisible(true);
                 setTimeout(() => setVisible(false), 4200);
             }
@@ -80,9 +82,9 @@ export const UpdateBanner: React.FC = () => {
                 <>
                     <div className="rem-update-text">
                         <span className="rem-update-pill">v{info.latestVersion}</span>
-                        <strong>New SLTerm release available on GitHub!</strong>
+                        <strong>{t("ade.updateAvailable", "New SLTerm release available on GitHub!")}</strong>
                         <span className="rem-update-meta">
-                            (installed v{info.currentVersion})
+                            (v{info.currentVersion})
                         </span>
                     </div>
                     <div className="rem-update-actions">
@@ -90,10 +92,10 @@ export const UpdateBanner: React.FC = () => {
                             className="rem-update-btn primary"
                             onClick={() => openUrl(info.downloadUrl || info.releaseUrl)}
                         >
-                            ⬇ Download Update
+                            ⬇ {t("ade.downloadUpdate", "Download Update")}
                         </button>
                         <button className="rem-update-btn" onClick={() => openUrl(info.releaseUrl)}>
-                            View Release
+                            {t("ade.viewRelease", "View Release")}
                         </button>
                         <button
                             className="rem-update-btn"

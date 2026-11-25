@@ -144,7 +144,14 @@
         "autoDraftCommit": "Tự tạo Commit",
         "dualLaunch": "Chạy song song (Claude + Codex)",
         "forkSession": "Nhân bản phiên",
-        "mergeToMain": "Gộp -> Main"
+        "mergeToMain": "Gộp -> Main",
+        "gitWorktrees": "Git & Worktrees",
+        "activityRuntime": "Hoạt động & Runtime",
+        "updates": "Cập nhật",
+        "keys": "Phím tắt",
+        "upToDate": "đang ở bản mới nhất!",
+        "waiting": "đang chờ",
+        "ports": "Cổng"
     },
     "common": {
         "save": "Lưu",

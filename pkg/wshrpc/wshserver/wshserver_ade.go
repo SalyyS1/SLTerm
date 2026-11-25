@@ -564,7 +564,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.39.0"
+		cur = "0.40.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {

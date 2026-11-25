@@ -18,6 +18,7 @@ import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import "./ade-statusbar.scss";
 
 const THEME_LABELS: Record<RemThemeName, string> = {
@@ -27,6 +28,7 @@ const THEME_LABELS: Record<RemThemeName, string> = {
 };
 
 export const AdeStatusBar: React.FC = () => {
+    const { t } = useTranslation();
     const [fx, setFx] = React.useState<RemFxMode>(() => getRemFxMode());
     const [theme, setTheme] = React.useState<RemThemeName>(() => getRemTheme());
     const [devPorts, setDevPorts] = React.useState(0);
@@ -87,21 +89,21 @@ export const AdeStatusBar: React.FC = () => {
                     onClick={() => createBlock({ meta: { view: "adehub" } })}
                     title="Open SLTerm ADE Hub"
                 >
-                    ❄ ADE Hub
+                    ❄ {t("ade.hubTitle", "ADE Hub")}
                 </button>
                 <button
                     className="ade-sb-pill"
                     onClick={() => createBlock({ meta: { view: "vcs" } })}
                     title="Open Git, Diff & Isolated Agent Worktrees"
                 >
-                    ⎇ Git &amp; Worktrees
+                    ⎇ {t("ade.gitWorktrees", "Git & Worktrees")}
                 </button>
                 <button
                     className="ade-sb-pill"
                     onClick={() => createBlock({ meta: { view: "adehub" } })}
                     title="Active Kanban tasks in progress"
                 >
-                    ⚡ Tasks: {activeTasks}
+                    ⚡ {t("ade.tasks", "Tasks")}: {activeTasks}
                 </button>
                 <button
                     className={`ade-sb-pill ${waitingAgents > 0 ? "alert" : unreadEvents > 0 ? "pink" : ""}`}
@@ -112,14 +114,14 @@ export const AdeStatusBar: React.FC = () => {
                             : `${unreadEvents} unread ADE activity event(s)`
                     }
                 >
-                    🔔 {waitingAgents > 0 ? `${waitingAgents} waiting` : unreadEvents}
+                    🔔 {waitingAgents > 0 ? `${waitingAgents} ${t("ade.waiting", "waiting")}` : unreadEvents}
                 </button>
                 <button
                     className="ade-sb-pill"
                     onClick={() => createBlock({ meta: { view: "adehub" } })}
                     title="Detected localhost dev servers"
                 >
-                    🌐 Ports: {devPorts}
+                    🌐 {t("ade.ports", "Ports")}: {devPorts}
                 </button>
             </div>
             <div className="ade-sb-group">
@@ -160,14 +162,14 @@ export const AdeStatusBar: React.FC = () => {
                     onClick={() => triggerManualUpdateCheck()}
                     title="Check GitHub Releases for SLTerm updates"
                 >
-                    {updateVer ? `⬆ v${updateVer}` : "↻ Updates"}
+                    {updateVer ? `⬆ v${updateVer}` : `↻ ${t("ade.updates", "Updates")}`}
                 </button>
                 <button
                     className="ade-sb-pill"
                     onClick={() => setShowKeys((v) => !v)}
                     title="Keyboard shortcuts cheatsheet"
                 >
-                    ⌨ Keys
+                    ⌨ {t("ade.keys", "Keys")}
                 </button>
                 <span className="ade-sb-kbd" title="Open Global ADE Command Palette">
                     Ctrl+Shift+P

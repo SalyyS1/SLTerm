@@ -144,7 +144,14 @@
         "autoDraftCommit": "Auto-Draft Commit",
         "dualLaunch": "Dual Launch (Claude + Codex)",
         "forkSession": "Fork Session",
-        "mergeToMain": "Merge -> Main"
+        "mergeToMain": "Merge -> Main",
+        "gitWorktrees": "Git & Worktrees",
+        "activityRuntime": "Activity & Runtime",
+        "updates": "Updates",
+        "keys": "Keys",
+        "upToDate": "is up to date!",
+        "waiting": "waiting",
+        "ports": "Ports"
     },
     "common": {
         "save": "Save",
