@@ -40,6 +40,8 @@ export const AdeStatusBar: React.FC = () => {
     const [liveAgents, setLiveAgents] = React.useState(0);
     const [unreadEvents, setUnreadEvents] = React.useState(0);
     const [waitingAgents, setWaitingAgents] = React.useState(0);
+    const [attentionToast, setAttentionToast] = React.useState<AdeActivityEventData | null>(null);
+    const seenEventIdsRef = React.useRef<Set<string>>(new Set());
     const [updateVer, setUpdateVer] = React.useState<string | null>(null);
 
     React.useEffect(() => {
@@ -67,6 +69,18 @@ export const AdeStatusBar: React.FC = () => {
                 if (act) {
                     setUnreadEvents(act.unreadCount ?? 0);
                     setWaitingAgents(act.waitingCount ?? 0);
+                    const freshAttention = (act.events ?? []).find(
+                        (ev) => !ev.read && ev.severity === "attention" && !seenEventIdsRef.current.has(ev.id)
+                    );
+                    for (const ev of act.events ?? []) {
+                        seenEventIdsRef.current.add(ev.id);
+                    }
+                    if (freshAttention) {
+                        setAttentionToast(freshAttention);
+                        setTimeout(() => {
+                            setAttentionToast((cur) => (cur?.id === freshAttention.id ? null : cur));
+                        }, 8000);
+                    }
                 }
             } catch {
                 // ignore offline/startup hiccups
@@ -175,6 +189,32 @@ export const AdeStatusBar: React.FC = () => {
                     Ctrl+Shift+P
                 </span>
             </div>
+            {attentionToast && !showKeys && (
+                <div className="ade-attention-toast" role="status" aria-live="polite">
+                    <div className="ade-toast-head">
+                        <strong>🔔 {attentionToast.title}</strong>
+                        <button
+                            className="ade-sb-pill"
+                            onClick={() => setAttentionToast(null)}
+                            title="Dismiss"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    {attentionToast.detail && <div className="ade-toast-detail">{attentionToast.detail}</div>}
+                    <div className="ade-toast-actions">
+                        <button
+                            className="ade-sb-pill update"
+                            onClick={() => {
+                                setAttentionToast(null);
+                                void createBlock({ meta: { view: "adehub" } });
+                            }}
+                        >
+                            Open ADE Hub
+                        </button>
+                    </div>
+                </div>
+            )}
             {showKeys && (
                 <div className="ade-keys-popover" onClick={() => setShowKeys(false)}>
                     <div className="ade-keys-head">

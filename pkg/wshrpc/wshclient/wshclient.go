@@ -1087,6 +1087,12 @@ func VcsGetDiffCommand(w *wshutil.WshRpc, data wshrpc.VcsDiffRequestData, opts *
 	return resp, err
 }
 
+// command "vcsgetfilelog", wshserver.VcsGetFileLogCommand
+func VcsGetFileLogCommand(w *wshutil.WshRpc, data wshrpc.VcsFileLogRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsCommitEntryData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsCommitEntryData](w, "vcsgetfilelog", data, opts)
+	return resp, err
+}
+
 // command "vcsgetlog", wshserver.VcsGetLogCommand
 func VcsGetLogCommand(w *wshutil.WshRpc, data wshrpc.VcsLogRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsCommitEntryData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsCommitEntryData](w, "vcsgetlog", data, opts)

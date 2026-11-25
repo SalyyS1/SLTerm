@@ -188,6 +188,18 @@ func (ws *WshServer) VcsGetLogCommand(ctx context.Context, data wshrpc.VcsLogReq
 	if err != nil {
 		return nil, err
 	}
+	return commitEntriesToRpc(entries), nil
+}
+
+func (ws *WshServer) VcsGetFileLogCommand(ctx context.Context, data wshrpc.VcsFileLogRequestData) ([]wshrpc.VcsCommitEntryData, error) {
+	entries, err := vcs.GetFileLog(ctx, data.Dir, data.Path, data.Limit)
+	if err != nil {
+		return nil, err
+	}
+	return commitEntriesToRpc(entries), nil
+}
+
+func commitEntriesToRpc(entries []vcs.CommitEntry) []wshrpc.VcsCommitEntryData {
 	out := make([]wshrpc.VcsCommitEntryData, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, wshrpc.VcsCommitEntryData{
@@ -199,7 +211,7 @@ func (ws *WshServer) VcsGetLogCommand(ctx context.Context, data wshrpc.VcsLogReq
 			Decoration: e.Decoration,
 		})
 	}
-	return out, nil
+	return out
 }
 
 func (ws *WshServer) VcsShowCommitCommand(ctx context.Context, data wshrpc.VcsShowCommitRequestData) (*wshrpc.VcsDiffData, error) {
@@ -564,7 +576,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.40.0"
+		cur = "0.41.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {

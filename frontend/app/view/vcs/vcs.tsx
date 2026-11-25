@@ -32,6 +32,7 @@ export class VcsViewModel implements ViewModel {
     branchesAtom: PrimitiveAtom<VcsBranchData[]>;
     stashesAtom: PrimitiveAtom<VcsStashEntryData[]>;
     logAtom: PrimitiveAtom<VcsCommitEntryData[]>;
+    fileLogPathAtom: PrimitiveAtom<string | null>;
     selectedCommitAtom: PrimitiveAtom<string | null>;
     commitDiffAtom: PrimitiveAtom<string>;
     selectedFileAtom: PrimitiveAtom<{ path: string; staged: boolean } | null>;
@@ -55,6 +56,7 @@ export class VcsViewModel implements ViewModel {
         this.branchesAtom = atom<VcsBranchData[]>([]);
         this.stashesAtom = atom<VcsStashEntryData[]>([]);
         this.logAtom = atom<VcsCommitEntryData[]>([]);
+        this.fileLogPathAtom = atom(null) as PrimitiveAtom<string | null>;
         this.selectedCommitAtom = atom(null) as PrimitiveAtom<string | null>;
         this.commitDiffAtom = atom("");
         this.selectedFileAtom = atom(null) as PrimitiveAtom<{ path: string; staged: boolean } | null>;
@@ -154,6 +156,26 @@ export class VcsViewModel implements ViewModel {
         } catch (err) {
             globalStore.set(this.commitDiffAtom, `Error inspecting commit: ${String(err)}`);
         }
+    }
+
+    async inspectFileHistory(path: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const entries = await RpcApi.VcsGetFileLogCommand(TabRpcClient, { dir, path, limit: 25 });
+            globalStore.set(this.logAtom, entries ?? []);
+            globalStore.set(this.fileLogPathAtom, path);
+            globalStore.set(this.activeTabAtom, "history");
+            if (entries && entries.length > 0) {
+                await this.inspectCommit(entries[0].shortHash);
+            }
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async clearFileHistoryFilter(): Promise<void> {
+        globalStore.set(this.fileLogPathAtom, null);
+        await this.refresh();
     }
 
     async loadDiff(path: string, staged: boolean): Promise<void> {
@@ -354,6 +376,7 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const branches = useAtomValue(model.branchesAtom);
     const stashes = useAtomValue(model.stashesAtom);
     const commits = useAtomValue(model.logAtom);
+    const fileLogPath = useAtomValue(model.fileLogPathAtom);
     const selectedCommit = useAtomValue(model.selectedCommitAtom);
     const commitDiff = useAtomValue(model.commitDiffAtom);
     const selected = useAtomValue(model.selectedFileAtom);
@@ -686,11 +709,22 @@ function VcsView({ model }: { model: VcsViewModel }) {
                             <span>
                                 {selected ? `${selected.path} (${selected.staged ? "staged" : "working tree"})` : "Unified Diff"}
                             </span>
-                            {(dStats.add > 0 || dStats.del > 0) && (
-                                <span className="vcs-diff-stats">
-                                    <span className="add">+{dStats.add}</span> <span className="del">-{dStats.del}</span>
-                                </span>
-                            )}
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                {(dStats.add > 0 || dStats.del > 0) && (
+                                    <span className="vcs-diff-stats">
+                                        <span className="add">+{dStats.add}</span> <span className="del">-{dStats.del}</span>
+                                    </span>
+                                )}
+                                {selected && (
+                                    <button
+                                        className="vcs-mini"
+                                        title={`View commit history for ${selected.path}`}
+                                        onClick={() => model.inspectFileHistory(selected.path)}
+                                    >
+                                        📜 File Log
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="vcs-diff-body">{renderDiffLines(diff)}</div>
                     </div>
@@ -699,7 +733,14 @@ function VcsView({ model }: { model: VcsViewModel }) {
                 <div className="vcs-split">
                     <div className="vcs-sidebar">
                         <div className="vcs-section-head">
-                            <span>Recent Commits ({commits.length})</span>
+                            <span>
+                                {fileLogPath ? `File: ${fileLogPath}` : `Recent Commits`} ({commits.length})
+                            </span>
+                            {fileLogPath && (
+                                <button className="vcs-link" onClick={() => model.clearFileHistoryFilter()}>
+                                    All commits
+                                </button>
+                            )}
                         </div>
                         {commits.length === 0 ? (
                             <div className="vcs-empty-sm">No commits found</div>

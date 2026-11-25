@@ -769,6 +769,49 @@ func GetLog(ctx context.Context, dir string, limit int) ([]CommitEntry, error) {
 	return entries, nil
 }
 
+// GetFileLog returns recent commits touching a single validated repo-relative file path.
+func GetFileLog(ctx context.Context, dir, relPath string, limit int) ([]CommitEntry, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	clean, err := ValidateRelativePath(relPath)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	out, err := runGit(ctx, root, "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1e", "--", clean)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]CommitEntry, 0, limit)
+	for _, rec := range strings.Split(out, "\x1e") {
+		rec = strings.TrimSpace(rec)
+		if rec == "" {
+			continue
+		}
+		parts := strings.Split(rec, "\x1f")
+		if len(parts) < 5 {
+			continue
+		}
+		dec := ""
+		if len(parts) >= 6 {
+			dec = strings.TrimSpace(parts[5])
+		}
+		entries = append(entries, CommitEntry{
+			Hash:       parts[0],
+			ShortHash:  parts[1],
+			Author:     parts[2],
+			RelDate:    parts[3],
+			Subject:    parts[4],
+			Decoration: dec,
+		})
+	}
+	return entries, nil
+}
+
 var safeHashRe = regexp.MustCompile(`^[0-9a-fA-F]{4,64}$`)
 
 // ShowCommit returns the color-free `--stat` + patch summary for a validated commit hash.

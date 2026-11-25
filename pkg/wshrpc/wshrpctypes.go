@@ -227,6 +227,7 @@ type WshRpcInterface interface {
 	VcsMergeWorktreeCommand(ctx context.Context, data VcsMergeWorktreeRequestData) (*VcsActionResultData, error)
 	VcsDraftCommitCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
 	VcsGetLogCommand(ctx context.Context, data VcsLogRequestData) ([]VcsCommitEntryData, error)
+	VcsGetFileLogCommand(ctx context.Context, data VcsFileLogRequestData) ([]VcsCommitEntryData, error)
 	VcsShowCommitCommand(ctx context.Context, data VcsShowCommitRequestData) (*VcsDiffData, error)
 	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
 	VcsListBranchesCommand(ctx context.Context, data VcsDirRequestData) ([]VcsBranchData, error)
@@ -1417,6 +1418,12 @@ type AdeRuntimeStatsData struct {
 
 type VcsLogRequestData struct {
 	Dir   string `json:"dir"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type VcsFileLogRequestData struct {
+	Dir   string `json:"dir"`
+	Path  string `json:"path"`
 	Limit int    `json:"limit,omitempty"`
 }
 

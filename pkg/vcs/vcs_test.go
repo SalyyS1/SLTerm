@@ -115,6 +115,13 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 	if _, err := ShowCommit(ctx, repo, "--exec=evil"); err == nil {
 		t.Fatal("expected invalid commit hash to be rejected")
 	}
+	fileLog, err := GetFileLog(ctx, repo, "sub/app.go", 10)
+	if err != nil || len(fileLog) != 1 || fileLog[0].Subject != "feat: add sub package" {
+		t.Fatalf("unexpected GetFileLog result: %+v err=%v", fileLog, err)
+	}
+	if _, err := GetFileLog(ctx, repo, "../../etc/passwd", 10); err == nil {
+		t.Fatal("expected traversal path in GetFileLog to be rejected")
+	}
 
 	// Add untracked local .env, CLAUDE.md, and .worktreeinclude (including a malicious traversal line that must be ignored).
 	if err := os.WriteFile(filepath.Join(repo, ".env"), []byte("API_MODE=local\n"), 0600); err != nil {

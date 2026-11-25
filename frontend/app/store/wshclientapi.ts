@@ -907,6 +907,11 @@ class RpcApiType {
         return client.wshRpcCall("vcsgetdiff", data, opts);
     }
 
+    // command "vcsgetfilelog" [call]
+    VcsGetFileLogCommand(client: WshClient, data: VcsFileLogRequestData, opts?: RpcOpts): Promise<VcsCommitEntryData[]> {
+        return client.wshRpcCall("vcsgetfilelog", data, opts);
+    }
+
     // command "vcsgetlog" [call]
     VcsGetLogCommand(client: WshClient, data: VcsLogRequestData, opts?: RpcOpts): Promise<VcsCommitEntryData[]> {
         return client.wshRpcCall("vcsgetlog", data, opts);

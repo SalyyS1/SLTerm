@@ -37,7 +37,9 @@ export function setRemTheme(theme: RemThemeName): void {
     if (typeof document !== "undefined") {
         document.documentElement.dataset.remTheme = theme;
     }
-    window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: theme }));
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: theme }));
+    }
 }
 
 export function cycleRemTheme(): RemThemeName {
@@ -69,7 +71,9 @@ export function setRemFxMode(mode: RemFxMode): void {
     } catch {
         // ignore storage restrictions
     }
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: mode }));
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: mode }));
+    }
 }
 
 export function cycleRemFxMode(): RemFxMode {

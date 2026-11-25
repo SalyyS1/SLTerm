@@ -2194,6 +2194,13 @@ declare global {
         changelist: string;
     };
 
+    // wshrpc.VcsFileLogRequestData
+    type VcsFileLogRequestData = {
+        dir: string;
+        path: string;
+        limit?: number;
+    };
+
     // wshrpc.VcsFileRequestData
     type VcsFileRequestData = {
         dir: string;
