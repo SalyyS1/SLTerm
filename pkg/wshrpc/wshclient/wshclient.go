@@ -21,6 +21,12 @@ func ActivityCommand(w *wshutil.WshRpc, data wshrpc.ActivityUpdate, opts *wshrpc
 	return err
 }
 
+// command "adeauditsshconfig", wshserver.AdeAuditSSHConfigCommand
+func AdeAuditSSHConfigCommand(w *wshutil.WshRpc, data wshrpc.AdeSSHAuditRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeSSHAuditReportData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeSSHAuditReportData](w, "adeauditsshconfig", data, opts)
+	return resp, err
+}
+
 // command "adecheckcommandrisk", wshserver.AdeCheckCommandRiskCommand
 func AdeCheckCommandRiskCommand(w *wshutil.WshRpc, data wshrpc.AdeCheckCommandRiskRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeCommandRiskData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCommandRiskData](w, "adecheckcommandrisk", data, opts)
@@ -1015,6 +1021,12 @@ func VcsGetDiffCommand(w *wshutil.WshRpc, data wshrpc.VcsDiffRequestData, opts *
 	return resp, err
 }
 
+// command "vcsgetlog", wshserver.VcsGetLogCommand
+func VcsGetLogCommand(w *wshutil.WshRpc, data wshrpc.VcsLogRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsCommitEntryData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsCommitEntryData](w, "vcsgetlog", data, opts)
+	return resp, err
+}
+
 // command "vcsgetstatus", wshserver.VcsGetStatusCommand
 func VcsGetStatusCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsStatusData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsStatusData](w, "vcsgetstatus", data, opts)
@@ -1049,6 +1061,12 @@ func VcsPushCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshr
 func VcsRemoveWorktreeCommand(w *wshutil.WshRpc, data wshrpc.VcsRemoveWorktreeRequestData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "vcsremoveworktree", data, opts)
 	return err
+}
+
+// command "vcsshowcommit", wshserver.VcsShowCommitCommand
+func VcsShowCommitCommand(w *wshutil.WshRpc, data wshrpc.VcsShowCommitRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsDiffData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsDiffData](w, "vcsshowcommit", data, opts)
+	return resp, err
 }
 
 // command "vcsstage", wshserver.VcsStageCommand

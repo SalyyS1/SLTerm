@@ -265,6 +265,32 @@ declare global {
         processes: AdeTrackedProcessData[];
     };
 
+    // wshrpc.AdeSSHAuditFindingData
+    type AdeSSHAuditFindingData = {
+        ruleId: string;
+        ruleName: string;
+        severity: string;
+        cwe: string;
+        line: number;
+        hostContext: string;
+        message: string;
+        remediation: string;
+    };
+
+    // wshrpc.AdeSSHAuditReportData
+    type AdeSSHAuditReportData = {
+        file: string;
+        stanzaCount: number;
+        errorCount: number;
+        warningCount: number;
+        findings: AdeSSHAuditFindingData[];
+    };
+
+    // wshrpc.AdeSSHAuditRequestData
+    type AdeSSHAuditRequestData = {
+        content?: string;
+    };
+
     // wshrpc.AdeSessionData
     type AdeSessionData = {
         id: string;
@@ -2004,6 +2030,16 @@ declare global {
         changelist: string;
     };
 
+    // wshrpc.VcsCommitEntryData
+    type VcsCommitEntryData = {
+        hash: string;
+        shortHash: string;
+        author: string;
+        relDate: string;
+        subject: string;
+        decoration?: string;
+    };
+
     // wshrpc.VcsCommitRequestData
     type VcsCommitRequestData = {
         dir: string;
@@ -2053,6 +2089,12 @@ declare global {
         path: string;
     };
 
+    // wshrpc.VcsLogRequestData
+    type VcsLogRequestData = {
+        dir: string;
+        limit?: number;
+    };
+
     // wshrpc.VcsMergeWorktreeRequestData
     type VcsMergeWorktreeRequestData = {
         dir: string;
@@ -2072,6 +2114,12 @@ declare global {
         dir: string;
         worktreePath: string;
         force?: boolean;
+    };
+
+    // wshrpc.VcsShowCommitRequestData
+    type VcsShowCommitRequestData = {
+        dir: string;
+        hash: string;
     };
 
     // wshrpc.VcsStatusData

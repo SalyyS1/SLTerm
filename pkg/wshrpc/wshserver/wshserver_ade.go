@@ -10,6 +10,9 @@ package wshserver
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/SalyyS1/SLTerm/pkg/adestats"
 	"github.com/SalyyS1/SLTerm/pkg/adeworkspace"
@@ -17,6 +20,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/portwatch"
+	"github.com/SalyyS1/SLTerm/pkg/sshaudit"
 	"github.com/SalyyS1/SLTerm/pkg/taskboard"
 	"github.com/SalyyS1/SLTerm/pkg/updatecheck"
 	"github.com/SalyyS1/SLTerm/pkg/vcs"
@@ -159,6 +163,33 @@ func (ws *WshServer) VcsDraftCommitCommand(ctx context.Context, data wshrpc.VcsD
 		return nil, err
 	}
 	return &wshrpc.VcsActionResultData{Output: draft}, nil
+}
+
+func (ws *WshServer) VcsGetLogCommand(ctx context.Context, data wshrpc.VcsLogRequestData) ([]wshrpc.VcsCommitEntryData, error) {
+	entries, err := vcs.GetLog(ctx, data.Dir, data.Limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wshrpc.VcsCommitEntryData, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, wshrpc.VcsCommitEntryData{
+			Hash:       e.Hash,
+			ShortHash:  e.ShortHash,
+			Author:     e.Author,
+			RelDate:    e.RelDate,
+			Subject:    e.Subject,
+			Decoration: e.Decoration,
+		})
+	}
+	return out, nil
+}
+
+func (ws *WshServer) VcsShowCommitCommand(ctx context.Context, data wshrpc.VcsShowCommitRequestData) (*wshrpc.VcsDiffData, error) {
+	out, err := vcs.ShowCommit(ctx, data.Dir, data.Hash)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsDiffData{Diff: out}, nil
 }
 
 func (ws *WshServer) VcsAssignChangelistCommand(ctx context.Context, data wshrpc.VcsChangelistAssignData) error {
@@ -441,7 +472,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.31.0"
+		cur = "0.32.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -480,5 +511,49 @@ func (ws *WshServer) AdeGetRuntimeStatsCommand(ctx context.Context) (*wshrpc.Ade
 		ActiveAgents:   s.ActiveAgents,
 		ActiveDevProcs: s.ActiveDevProcs,
 		Processes:      procs,
+	}, nil
+}
+
+func (ws *WshServer) AdeAuditSSHConfigCommand(ctx context.Context, data wshrpc.AdeSSHAuditRequestData) (*wshrpc.AdeSSHAuditReportData, error) {
+	filename := "inline-ssh-config"
+	content := data.Content
+	if strings.TrimSpace(content) == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		filename = filepath.Join(home, ".ssh", "config")
+		raw, err := os.ReadFile(filename)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return &wshrpc.AdeSSHAuditReportData{
+					File:     filename + " (not found)",
+					Findings: []wshrpc.AdeSSHAuditFindingData{},
+				}, nil
+			}
+			return nil, err
+		}
+		content = string(raw)
+	}
+	rep := sshaudit.AuditConfig(filename, content)
+	findings := make([]wshrpc.AdeSSHAuditFindingData, 0, len(rep.Findings))
+	for _, f := range rep.Findings {
+		findings = append(findings, wshrpc.AdeSSHAuditFindingData{
+			RuleID:      f.RuleID,
+			RuleName:    f.RuleName,
+			Severity:    string(f.Severity),
+			CWE:         f.CWE,
+			Line:        f.Line,
+			HostContext: f.HostContext,
+			Message:     f.Message,
+			Remediation: f.Remediation,
+		})
+	}
+	return &wshrpc.AdeSSHAuditReportData{
+		File:         rep.File,
+		StanzaCount:  rep.StanzaCount,
+		ErrorCount:   rep.ErrorCount,
+		WarningCount: rep.WarningCount,
+		Findings:     findings,
 	}, nil
 }

@@ -719,6 +719,71 @@ func DraftCommitMessage(ctx context.Context, dir string) (string, error) {
 	return fmt.Sprintf("%s%s: %s", kind, scopePart, summary), nil
 }
 
+// CommitEntry represents one commit in `git log`.
+type CommitEntry struct {
+	Hash       string `json:"hash"`
+	ShortHash  string `json:"shortHash"`
+	Author     string `json:"author"`
+	RelDate    string `json:"relDate"`
+	Subject    string `json:"subject"`
+	Decoration string `json:"decoration,omitempty"`
+}
+
+// GetLog returns the most recent `limit` commits for a repository.
+func GetLog(ctx context.Context, dir string, limit int) ([]CommitEntry, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	// Use ASCII Unit Separator (0x1f) between fields and Record Separator (0x1e) between commits.
+	out, err := runGit(ctx, root, "log", fmt.Sprintf("-n%d", limit), "--pretty=format:%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1f%D%x1e")
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]CommitEntry, 0, limit)
+	for _, rec := range strings.Split(out, "\x1e") {
+		rec = strings.TrimSpace(rec)
+		if rec == "" {
+			continue
+		}
+		parts := strings.Split(rec, "\x1f")
+		if len(parts) < 5 {
+			continue
+		}
+		dec := ""
+		if len(parts) >= 6 {
+			dec = strings.TrimSpace(parts[5])
+		}
+		entries = append(entries, CommitEntry{
+			Hash:       parts[0],
+			ShortHash:  parts[1],
+			Author:     parts[2],
+			RelDate:    parts[3],
+			Subject:    parts[4],
+			Decoration: dec,
+		})
+	}
+	return entries, nil
+}
+
+var safeHashRe = regexp.MustCompile(`^[0-9a-fA-F]{4,64}$`)
+
+// ShowCommit returns the color-free `--stat` + patch summary for a validated commit hash.
+func ShowCommit(ctx context.Context, dir, hash string) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	h := strings.TrimSpace(hash)
+	if !safeHashRe.MatchString(h) {
+		return "", fmt.Errorf("invalid commit hash %q", hash)
+	}
+	return runGit(ctx, root, "show", "--stat", "--no-color", h)
+}
+
 // RemoveWorktree removes a linked worktree (refuses to remove the main checkout).
 func RemoveWorktree(ctx context.Context, dir, worktreePath string, force bool) error {
 	root, err := ResolveRepoRoot(ctx, dir)

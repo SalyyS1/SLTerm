@@ -226,6 +226,8 @@ type WshRpcInterface interface {
 	VcsRemoveWorktreeCommand(ctx context.Context, data VcsRemoveWorktreeRequestData) error
 	VcsMergeWorktreeCommand(ctx context.Context, data VcsMergeWorktreeRequestData) (*VcsActionResultData, error)
 	VcsDraftCommitCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
+	VcsGetLogCommand(ctx context.Context, data VcsLogRequestData) ([]VcsCommitEntryData, error)
+	VcsShowCommitCommand(ctx context.Context, data VcsShowCommitRequestData) (*VcsDiffData, error)
 	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
 	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes, OTLP cost HUD, port radar & mini-kanban)
 	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)
@@ -243,6 +245,7 @@ type WshRpcInterface interface {
 	AdeDeleteWorkspaceCommand(ctx context.Context, data AdeWorkspaceDeleteRequestData) error
 	AdeCheckUpdateCommand(ctx context.Context, data AdeCheckUpdateRequestData) (*AdeUpdateInfoData, error)
 	AdeGetRuntimeStatsCommand(ctx context.Context) (*AdeRuntimeStatsData, error)
+	AdeAuditSSHConfigCommand(ctx context.Context, data AdeSSHAuditRequestData) (*AdeSSHAuditReportData, error)
 }
 
 // for frontend
@@ -1388,4 +1391,46 @@ type AdeRuntimeStatsData struct {
 	ActiveAgents   int                     `json:"activeAgents"`
 	ActiveDevProcs int                     `json:"activeDevProcs"`
 	Processes      []AdeTrackedProcessData `json:"processes"`
+}
+
+type VcsLogRequestData struct {
+	Dir   string `json:"dir"`
+	Limit int    `json:"limit,omitempty"`
+}
+
+type VcsCommitEntryData struct {
+	Hash       string `json:"hash"`
+	ShortHash  string `json:"shortHash"`
+	Author     string `json:"author"`
+	RelDate    string `json:"relDate"`
+	Subject    string `json:"subject"`
+	Decoration string `json:"decoration,omitempty"`
+}
+
+type VcsShowCommitRequestData struct {
+	Dir  string `json:"dir"`
+	Hash string `json:"hash"`
+}
+
+type AdeSSHAuditRequestData struct {
+	Content string `json:"content,omitempty"`
+}
+
+type AdeSSHAuditFindingData struct {
+	RuleID      string `json:"ruleId"`
+	RuleName    string `json:"ruleName"`
+	Severity    string `json:"severity"`
+	CWE         string `json:"cwe"`
+	Line        int    `json:"line"`
+	HostContext string `json:"hostContext"`
+	Message     string `json:"message"`
+	Remediation string `json:"remediation"`
+}
+
+type AdeSSHAuditReportData struct {
+	File         string                   `json:"file"`
+	StanzaCount  int                      `json:"stanzaCount"`
+	ErrorCount   int                      `json:"errorCount"`
+	WarningCount int                      `json:"warningCount"`
+	Findings     []AdeSSHAuditFindingData `json:"findings"`
 }

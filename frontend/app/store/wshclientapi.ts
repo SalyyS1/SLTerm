@@ -12,6 +12,11 @@ class RpcApiType {
         return client.wshRpcCall("activity", data, opts);
     }
 
+    // command "adeauditsshconfig" [call]
+    AdeAuditSSHConfigCommand(client: WshClient, data: AdeSSHAuditRequestData, opts?: RpcOpts): Promise<AdeSSHAuditReportData> {
+        return client.wshRpcCall("adeauditsshconfig", data, opts);
+    }
+
     // command "adecheckcommandrisk" [call]
     AdeCheckCommandRiskCommand(client: WshClient, data: AdeCheckCommandRiskRequestData, opts?: RpcOpts): Promise<AdeCommandRiskData> {
         return client.wshRpcCall("adecheckcommandrisk", data, opts);
@@ -847,6 +852,11 @@ class RpcApiType {
         return client.wshRpcCall("vcsgetdiff", data, opts);
     }
 
+    // command "vcsgetlog" [call]
+    VcsGetLogCommand(client: WshClient, data: VcsLogRequestData, opts?: RpcOpts): Promise<VcsCommitEntryData[]> {
+        return client.wshRpcCall("vcsgetlog", data, opts);
+    }
+
     // command "vcsgetstatus" [call]
     VcsGetStatusCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsStatusData> {
         return client.wshRpcCall("vcsgetstatus", data, opts);
@@ -875,6 +885,11 @@ class RpcApiType {
     // command "vcsremoveworktree" [call]
     VcsRemoveWorktreeCommand(client: WshClient, data: VcsRemoveWorktreeRequestData, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("vcsremoveworktree", data, opts);
+    }
+
+    // command "vcsshowcommit" [call]
+    VcsShowCommitCommand(client: WshClient, data: VcsShowCommitRequestData, opts?: RpcOpts): Promise<VcsDiffData> {
+        return client.wshRpcCall("vcsshowcommit", data, opts);
     }
 
     // command "vcsstage" [call]

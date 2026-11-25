@@ -104,6 +104,17 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 	if _, err := Commit(ctx, repo, "feat: add sub package"); err != nil {
 		t.Fatalf("Commit failed: %v", err)
 	}
+	logEntries, err := GetLog(ctx, repo, 10)
+	if err != nil || len(logEntries) < 2 || logEntries[0].Subject != "feat: add sub package" {
+		t.Fatalf("unexpected GetLog result: %+v err=%v", logEntries, err)
+	}
+	showOut, err := ShowCommit(ctx, repo, logEntries[0].ShortHash)
+	if err != nil || !strings.Contains(showOut, "sub/app.go") {
+		t.Fatalf("unexpected ShowCommit output: %q err=%v", showOut, err)
+	}
+	if _, err := ShowCommit(ctx, repo, "--exec=evil"); err == nil {
+		t.Fatal("expected invalid commit hash to be rejected")
+	}
 
 	// Add untracked local .env, CLAUDE.md, and .worktreeinclude (including a malicious traversal line that must be ignored).
 	if err := os.WriteFile(filepath.Join(repo, ".env"), []byte("API_MODE=local\n"), 0600); err != nil {

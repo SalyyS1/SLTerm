@@ -15,7 +15,7 @@ import { Atom, atom, PrimitiveAtom, useAtomValue } from "jotai";
 import * as React from "react";
 import "./vcs.scss";
 
-type VcsTab = "changes" | "worktrees";
+type VcsTab = "changes" | "worktrees" | "history";
 
 export class VcsViewModel implements ViewModel {
     viewType: string;
@@ -29,6 +29,9 @@ export class VcsViewModel implements ViewModel {
     activeTabAtom: PrimitiveAtom<VcsTab>;
     statusAtom: PrimitiveAtom<VcsStatusData | null>;
     worktreesAtom: PrimitiveAtom<VcsWorktreeData[]>;
+    logAtom: PrimitiveAtom<VcsCommitEntryData[]>;
+    selectedCommitAtom: PrimitiveAtom<string | null>;
+    commitDiffAtom: PrimitiveAtom<string>;
     selectedFileAtom: PrimitiveAtom<{ path: string; staged: boolean } | null>;
     diffAtom: PrimitiveAtom<string>;
     errorAtom: PrimitiveAtom<string | null>;
@@ -47,6 +50,9 @@ export class VcsViewModel implements ViewModel {
         this.activeTabAtom = atom<VcsTab>("changes");
         this.statusAtom = atom(null) as PrimitiveAtom<VcsStatusData | null>;
         this.worktreesAtom = atom<VcsWorktreeData[]>([]);
+        this.logAtom = atom<VcsCommitEntryData[]>([]);
+        this.selectedCommitAtom = atom(null) as PrimitiveAtom<string | null>;
+        this.commitDiffAtom = atom("");
         this.selectedFileAtom = atom(null) as PrimitiveAtom<{ path: string; staged: boolean } | null>;
         this.diffAtom = atom("");
         this.errorAtom = atom(null) as PrimitiveAtom<string | null>;
@@ -62,12 +68,14 @@ export class VcsViewModel implements ViewModel {
         const dir = (dirOverride ?? globalStore.get(this.dirAtom)).trim() || ".";
         globalStore.set(this.loadingAtom, true);
         try {
-            const [st, wts] = await Promise.all([
+            const [st, wts, commits] = await Promise.all([
                 RpcApi.VcsGetStatusCommand(TabRpcClient, { dir }),
                 RpcApi.VcsListWorktreesCommand(TabRpcClient, { dir }),
+                RpcApi.VcsGetLogCommand(TabRpcClient, { dir, limit: 30 }).catch(() => [] as VcsCommitEntryData[]),
             ]);
             globalStore.set(this.statusAtom, st);
             globalStore.set(this.worktreesAtom, wts ?? []);
+            globalStore.set(this.logAtom, commits ?? []);
             if (st?.repoRoot) {
                 globalStore.set(this.dirAtom, st.repoRoot);
             }
@@ -76,6 +84,17 @@ export class VcsViewModel implements ViewModel {
             globalStore.set(this.errorAtom, String(err));
         } finally {
             globalStore.set(this.loadingAtom, false);
+        }
+    }
+
+    async inspectCommit(hash: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        globalStore.set(this.selectedCommitAtom, hash);
+        try {
+            const res = await RpcApi.VcsShowCommitCommand(TabRpcClient, { dir, hash });
+            globalStore.set(this.commitDiffAtom, res?.diff || "(empty commit)");
+        } catch (err) {
+            globalStore.set(this.commitDiffAtom, `Error inspecting commit: ${String(err)}`);
         }
     }
 
@@ -264,6 +283,9 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const activeTab = useAtomValue(model.activeTabAtom);
     const status = useAtomValue(model.statusAtom);
     const worktrees = useAtomValue(model.worktreesAtom);
+    const commits = useAtomValue(model.logAtom);
+    const selectedCommit = useAtomValue(model.selectedCommitAtom);
+    const commitDiff = useAtomValue(model.commitDiffAtom);
     const selected = useAtomValue(model.selectedFileAtom);
     const diff = useAtomValue(model.diffAtom);
     const error = useAtomValue(model.errorAtom);
@@ -335,6 +357,12 @@ function VcsView({ model }: { model: VcsViewModel }) {
                     onClick={() => globalStore.set(model.activeTabAtom, "worktrees")}
                 >
                     Agent Worktrees ({worktrees.length})
+                </button>
+                <button
+                    className={`vcs-tab ${activeTab === "history" ? "active" : ""}`}
+                    onClick={() => globalStore.set(model.activeTabAtom, "history")}
+                >
+                    History ({commits.length})
                 </button>
             </div>
 
@@ -516,6 +544,47 @@ function VcsView({ model }: { model: VcsViewModel }) {
                             {selected ? `${selected.path} (${selected.staged ? "staged" : "working tree"})` : "Unified Diff"}
                         </div>
                         <div className="vcs-diff-body">{renderDiffLines(diff)}</div>
+                    </div>
+                </div>
+            ) : activeTab === "history" ? (
+                <div className="vcs-split">
+                    <div className="vcs-sidebar">
+                        <div className="vcs-section-head">
+                            <span>Recent Commits ({commits.length})</span>
+                        </div>
+                        {commits.length === 0 ? (
+                            <div className="vcs-empty-sm">No commits found</div>
+                        ) : (
+                            commits.map((cm) => (
+                                <div
+                                    key={cm.hash}
+                                    className={`vcs-file ${selectedCommit === cm.shortHash ? "selected" : ""}`}
+                                    onClick={() => model.inspectCommit(cm.shortHash)}
+                                >
+                                    <span className="vcs-sha">{cm.shortHash}</span>
+                                    <span className="vcs-filepath" title={`${cm.subject} — ${cm.author} (${cm.relDate})`}>
+                                        {cm.subject}
+                                    </span>
+                                    <button
+                                        className="vcs-mini"
+                                        title={`Copy ${cm.shortHash}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard?.writeText(cm.shortHash);
+                                            globalStore.set(model.noticeAtom, `Copied SHA ${cm.shortHash}`);
+                                        }}
+                                    >
+                                        ⧉
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <div className="vcs-diff-pane">
+                        <div className="vcs-diff-head">
+                            {selectedCommit ? `git show --stat ${selectedCommit}` : "Select a commit to inspect"}
+                        </div>
+                        <div className="vcs-diff-body">{renderDiffLines(commitDiff)}</div>
                     </div>
                 </div>
             ) : (

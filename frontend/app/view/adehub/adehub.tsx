@@ -19,7 +19,7 @@ import { Atom, atom, PrimitiveAtom, useAtomValue } from "jotai";
 import * as React from "react";
 import "./adehub.scss";
 
-type HubTab = "sessions" | "tasks" | "workspaces" | "ports" | "agents" | "notes";
+type HubTab = "sessions" | "tasks" | "workspaces" | "ports" | "agents" | "notes" | "runtime";
 
 const KANBAN_COLS: { id: string; label: string }[] = [
     { id: "todo", label: "To Do" },
@@ -41,6 +41,8 @@ export class AdeHubViewModel implements ViewModel {
     portsAtom: PrimitiveAtom<AdePortData[]>;
     tasksAtom: PrimitiveAtom<AdeTaskData[]>;
     workspacesAtom: PrimitiveAtom<AdeWorkspaceData[]>;
+    runtimeAtom: PrimitiveAtom<AdeRuntimeStatsData | null>;
+    sshAuditAtom: PrimitiveAtom<AdeSSHAuditReportData | null>;
     errorAtom: PrimitiveAtom<string | null>;
     noticeAtom: PrimitiveAtom<string | null>;
 
@@ -57,6 +59,8 @@ export class AdeHubViewModel implements ViewModel {
         this.portsAtom = atom<AdePortData[]>([]);
         this.tasksAtom = atom<AdeTaskData[]>([]);
         this.workspacesAtom = atom<AdeWorkspaceData[]>([]);
+        this.runtimeAtom = atom(null) as PrimitiveAtom<AdeRuntimeStatsData | null>;
+        this.sshAuditAtom = atom(null) as PrimitiveAtom<AdeSSHAuditReportData | null>;
         this.errorAtom = atom(null) as PrimitiveAtom<string | null>;
         this.noticeAtom = atom(null) as PrimitiveAtom<string | null>;
     }
@@ -67,7 +71,7 @@ export class AdeHubViewModel implements ViewModel {
 
     async refresh(query = "", agentFilter = "all"): Promise<void> {
         try {
-            const [snap, ports, tasks, workspaces] = await Promise.all([
+            const [snap, ports, tasks, workspaces, runtime] = await Promise.all([
                 RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, {
                     query,
                     agentFilter,
@@ -76,12 +80,27 @@ export class AdeHubViewModel implements ViewModel {
                 RpcApi.AdeListPortsCommand(TabRpcClient).catch(() => [] as AdePortData[]),
                 RpcApi.AdeListTasksCommand(TabRpcClient).catch(() => [] as AdeTaskData[]),
                 RpcApi.AdeListWorkspacesCommand(TabRpcClient).catch(() => [] as AdeWorkspaceData[]),
+                RpcApi.AdeGetRuntimeStatsCommand(TabRpcClient).catch(() => null),
             ]);
             globalStore.set(this.hubAtom, snap);
             globalStore.set(this.portsAtom, ports ?? []);
             globalStore.set(this.tasksAtom, tasks ?? []);
             globalStore.set(this.workspacesAtom, workspaces ?? []);
+            globalStore.set(this.runtimeAtom, runtime);
             globalStore.set(this.errorAtom, null);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async runSSHAudit(content = ""): Promise<void> {
+        try {
+            const rep = await RpcApi.AdeAuditSSHConfigCommand(TabRpcClient, { content });
+            globalStore.set(this.sshAuditAtom, rep);
+            globalStore.set(
+                this.noticeAtom,
+                `Audited ${rep.file}: ${rep.errorCount} error(s), ${rep.warningCount} warning(s)`
+            );
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
         }
@@ -355,6 +374,8 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const ports = useAtomValue(model.portsAtom);
     const tasks = useAtomValue(model.tasksAtom);
     const workspaces = useAtomValue(model.workspacesAtom);
+    const runtime = useAtomValue(model.runtimeAtom);
+    const sshAudit = useAtomValue(model.sshAuditAtom);
     const error = useAtomValue(model.errorAtom);
     const notice = useAtomValue(model.noticeAtom);
 
@@ -458,6 +479,12 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                     onClick={() => globalStore.set(model.activeTabAtom, "notes")}
                 >
                     Prompt Notes ({hub?.notes?.length ?? 0})
+                </button>
+                <button
+                    className={`adehub-tab ${activeTab === "runtime" ? "active" : ""}`}
+                    onClick={() => globalStore.set(model.activeTabAtom, "runtime")}
+                >
+                    🛡 Runtime &amp; SSH ({runtime ? `${runtime.sidecarHeapMb.toFixed(1)} MB` : "…"})
                 </button>
             </div>
 
@@ -960,6 +987,82 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                 </div>
                             ))}
                         </div>
+                    </>
+                )}
+
+                {activeTab === "runtime" && (
+                    <>
+                        <div className="adehub-card">
+                            <div className="adehub-card-main">
+                                <div className="adehub-card-head">
+                                    <strong>❄ SLTerm Lean Sidecar Runtime</strong>
+                                    {runtime && <span className="adehub-pill ready">{runtime.platform}</span>}
+                                </div>
+                                <div className="adehub-card-meta">
+                                    {runtime
+                                        ? `Heap: ${runtime.sidecarHeapMb.toFixed(1)} MB · Sys: ${runtime.sidecarSysMb.toFixed(1)} MB · Goroutines: ${runtime.goroutines} · Active AI Agents: ${runtime.activeAgents} · Dev Procs: ${runtime.activeDevProcs}`
+                                        : "Loading runtime telemetry..."}
+                                </div>
+                            </div>
+                            <div className="adehub-card-actions">
+                                <button className="adehub-btn" onClick={() => model.refresh(query, agentFilter)}>
+                                    Refresh
+                                </button>
+                                <button className="adehub-btn primary" onClick={() => model.runSSHAudit("")}>
+                                    🛡 Audit ~/.ssh/config
+                                </button>
+                            </div>
+                        </div>
+
+                        {(runtime?.processes ?? []).length > 0 && (
+                            <div className="adehub-list">
+                                {(runtime?.processes ?? []).map((p) => (
+                                    <div key={`${p.pid}:${p.name}`} className="adehub-card">
+                                        <div className="adehub-card-main">
+                                            <div className="adehub-card-head">
+                                                <span className={`adehub-pill ${p.role === "agent" ? "ready" : ""}`}>
+                                                    {p.role}
+                                                </span>
+                                                <strong>{p.name}</strong>
+                                            </div>
+                                            <div className="adehub-card-meta">
+                                                PID {p.pid} · {p.rssMb.toFixed(1)} MB RSS
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {sshAudit && (
+                            <div
+                                className={`adehub-risk-box ${
+                                    sshAudit.errorCount > 0
+                                        ? "verdict-block"
+                                        : sshAudit.warningCount > 0
+                                        ? "verdict-warn"
+                                        : "verdict-allow"
+                                }`}
+                            >
+                                <div className="adehub-card-head">
+                                    <strong>OpenSSH Audit ({sshAudit.file})</strong>
+                                    <span className="adehub-pill">
+                                        {sshAudit.errorCount} err · {sshAudit.warningCount} warn
+                                    </span>
+                                </div>
+                                {(sshAudit.findings ?? []).length === 0 ? (
+                                    <div className="adehub-card-meta">
+                                        ✓ Clean! Zero SLT001–SLT010 SSH security findings detected.
+                                    </div>
+                                ) : (
+                                    (sshAudit.findings ?? []).map((f, i) => (
+                                        <div key={i} className="adehub-card-meta">
+                                            Line {f.line} [{f.ruleId}/{f.cwe}] {f.message} — {f.remediation}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </>
                 )}
             </div>
