@@ -66,6 +66,7 @@ function buildServer(stamp) {
     console.log(`build-tauri-sidecar: wavesrv -> ${out}`);
     run(env, [
         "build",
+        "-trimpath",
         "-tags",
         "osusergo,sqlite_omit_load_extension",
         "-ldflags",
@@ -91,7 +92,9 @@ function buildServer(stamp) {
  */
 function buildWsh(stamp) {
     const host = [goos(), hostArch().goarch];
-    const targets = [host, ["linux", "amd64"], ["linux", "arm64"]].filter(
+    // Keep bundle ultra-lean (~18-21 MB on Windows): ship host wsh + linux/amd64 remote wsh.
+    const rawTargets = host[0] === "windows" ? [host, ["linux", "amd64"]] : [host, ["linux", "amd64"], ["linux", "arm64"]];
+    const targets = rawTargets.filter(
         ([os, arch], i, all) => all.findIndex(([o, a]) => o === os && a === arch) === i
     );
     for (const [os, arch] of targets) {
@@ -101,6 +104,7 @@ function buildWsh(stamp) {
         console.log(`build-tauri-sidecar: wsh -> ${out}`);
         run({ CGO_ENABLED: "0", GOOS: os, GOARCH: arch }, [
             "build",
+            "-trimpath",
             "-ldflags",
             `-s -w -X main.BuildTime=${stamp} -X main.WaveVersion=${VERSION}`,
             "-o",

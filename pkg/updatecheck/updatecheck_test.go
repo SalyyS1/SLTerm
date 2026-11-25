@@ -3,7 +3,12 @@
 
 package updatecheck
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+)
 
 func TestSemVerAndReleaseParsing(t *testing.T) {
 	if !IsNewer("0.28.0", "v0.29.0") {
@@ -45,5 +50,31 @@ func TestSemVerAndReleaseParsing(t *testing.T) {
 	macInfo, err := ParseReleaseJSON("0.29.0", "darwin", payload)
 	if err != nil || macInfo.DownloadURL != "https://github.com/SalyyS1/SLTerm/releases/download/v0.30.0/SLTerm_0.30.0_aarch64.dmg" {
 		t.Fatalf("expected macOS dmg download URL, got %+v err=%v", macInfo, err)
+	}
+}
+
+func TestValidateInstallerURLAndStreamDownload(t *testing.T) {
+	if _, _, err := ValidateInstallerURL("https://evil.example/SLTerm-setup.exe"); err == nil {
+		t.Fatal("expected non-official URL to be rejected")
+	}
+	if _, _, err := ValidateInstallerURL("https://github.com/SalyyS1/SLTerm/releases/tag/v0.45.0"); err == nil {
+		t.Fatal("expected non-download tag URL to be rejected")
+	}
+	if _, ext, err := ValidateInstallerURL("https://github.com/SalyyS1/SLTerm/releases/download/v0.45.0/SLTerm_0.45.0_x64-setup.exe"); err != nil || ext != "-setup.exe" {
+		t.Fatalf("expected valid setup.exe URL, got ext=%q err=%v", ext, err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("synthetic-installer-payload-bytes"))
+	}))
+	defer srv.Close()
+
+	runSelfUpdateDownload(srv.URL, "0.45.0", ".bin", false)
+	st := GetDownloadState()
+	if st.Stage != "launched" || st.Percent != 100 || st.DownloadedBytes == 0 {
+		t.Fatalf("unexpected download state: %+v", st)
+	}
+	if st.FilePath != "" {
+		_ = os.Remove(st.FilePath)
 	}
 }

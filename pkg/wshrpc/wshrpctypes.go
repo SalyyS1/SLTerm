@@ -254,6 +254,8 @@ type WshRpcInterface interface {
 	AdeSaveWorkspaceCommand(ctx context.Context, data AdeWorkspaceData) (*AdeWorkspaceData, error)
 	AdeDeleteWorkspaceCommand(ctx context.Context, data AdeWorkspaceDeleteRequestData) error
 	AdeCheckUpdateCommand(ctx context.Context, data AdeCheckUpdateRequestData) (*AdeUpdateInfoData, error)
+	AdeStartSelfUpdateCommand(ctx context.Context, data AdeSelfUpdateRequestData) (*AdeUpdateProgressData, error)
+	AdeGetUpdateProgressCommand(ctx context.Context) (*AdeUpdateProgressData, error)
 	AdeGetRuntimeStatsCommand(ctx context.Context) (*AdeRuntimeStatsData, error)
 	AdeAuditSSHConfigCommand(ctx context.Context, data AdeSSHAuditRequestData) (*AdeSSHAuditReportData, error)
 	AdeInspectProjectCommand(ctx context.Context, data VcsDirRequestData) (*AdeProjectReportData, error)
@@ -1401,6 +1403,22 @@ type AdeWorkspaceDeleteRequestData struct {
 
 type AdeCheckUpdateRequestData struct {
 	Force bool `json:"force,omitempty"`
+}
+
+type AdeSelfUpdateRequestData struct {
+	DownloadURL string `json:"downloadUrl"`
+	Version     string `json:"version"`
+}
+
+type AdeUpdateProgressData struct {
+	Active          bool   `json:"active"`
+	Stage           string `json:"stage"`
+	Version         string `json:"version"`
+	DownloadedBytes int64  `json:"downloadedBytes"`
+	TotalBytes      int64  `json:"totalBytes"`
+	Percent         int    `json:"percent"`
+	FilePath        string `json:"filePath,omitempty"`
+	Error           string `json:"error,omitempty"`
 }
 
 type AdeUpdateInfoData struct {

@@ -10,6 +10,7 @@ import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { toggleAdeStudioMode } from "@/app/workspace/ade-studio";
 import * as React from "react";
 import "./ade-palette.scss";
 
@@ -75,6 +76,13 @@ export const AdeCommandPalette: React.FC = () => {
 
     const actions = React.useMemo<PaletteAction[]>(() => {
         const base: PaletteAction[] = [
+            {
+                id: "toggle-ai-studio",
+                icon: "❄",
+                label: "Toggle Rem Aqua AI Studio / Classic Terminal Workspace",
+                hint: "Ctrl+Shift+A",
+                run: () => toggleAdeStudioMode(),
+            },
             {
                 id: "open-adehub",
                 icon: "✦",

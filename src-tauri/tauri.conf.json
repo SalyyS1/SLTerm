@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
     "productName": "SLTerm",
-    "version": "0.44.0",
+    "version": "0.45.0",
     "identifier": "dev.salyvn.slterm",
     "build": {
         "frontendDist": "../dist/frontend-tauri",
@@ -38,6 +38,12 @@
         "resources": {
             "../dist/bin/*": "bin/",
             "../dist/schema/*": "schema/"
+        },
+        "windows": {
+            "nsis": {
+                "compression": "lzma",
+                "installMode": "currentUser"
+            }
         },
         "linux": {
             "deb": {

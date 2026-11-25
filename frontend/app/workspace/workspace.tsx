@@ -6,6 +6,7 @@ import { CenteredDiv } from "@/app/element/quickelems";
 import { ModalsRenderer } from "@/app/modals/modalsrenderer";
 import { TabBar } from "@/app/tab/tabbar";
 import { TabContent } from "@/app/tab/tabcontent";
+import { AdeStudio, adeStudioModeAtom } from "@/app/workspace/ade-studio";
 import { Widgets } from "@/app/workspace/widgets";
 import { atoms, useSettingsKeyAtom } from "@/store/global";
 import { mountedTabIdsAtom } from "@/store/tab-model";
@@ -72,13 +73,23 @@ StackedTabs.displayName = "StackedTabs";
 const WorkspaceElem = memo(() => {
     const tabId = useAtomValue(atoms.staticTabId);
     const ws = useAtomValue(atoms.workspace);
+    const studioMode = useAtomValue(adeStudioModeAtom);
     // Fixed for the life of the page: a property of the shell we loaded in.
     const inDocumentTabs = useMemo(() => hostSwitchesTabsInDocument(), []);
 
     return (
-        <div className="flex flex-col w-full flex-grow overflow-hidden">
+        <div className="relative flex flex-col w-full flex-grow overflow-hidden">
+            {studioMode && (
+                <ErrorBoundary>
+                    <AdeStudio />
+                </ErrorBoundary>
+            )}
             <TabBar key={ws.oid} workspace={ws} />
-            <div className="flex flex-row flex-grow overflow-hidden">
+            <div
+                className="flex flex-row flex-grow overflow-hidden"
+                style={studioMode ? { visibility: "hidden", pointerEvents: "none" } : undefined}
+                aria-hidden={studioMode ? true : undefined}
+            >
                 {inDocumentTabs ? (
                     <>
                         <StackedTabs tabIds={ws?.tabids ?? []} activeTabId={tabId} />

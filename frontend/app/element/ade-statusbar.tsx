@@ -17,6 +17,8 @@ import { triggerManualUpdateCheck } from "@/app/element/update-banner";
 import { createBlock } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { adeStudioModeAtom, toggleAdeStudioMode } from "@/app/workspace/ade-studio";
+import { useAtomValue } from "jotai";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import "./ade-statusbar.scss";
@@ -29,6 +31,7 @@ const THEME_LABELS: Record<RemThemeName, string> = {
 
 export const AdeStatusBar: React.FC = () => {
     const { t } = useTranslation();
+    const studioMode = useAtomValue(adeStudioModeAtom);
     const [fx, setFx] = React.useState<RemFxMode>(() => getRemFxMode());
     const [theme, setTheme] = React.useState<RemThemeName>(() => getRemTheme());
     const [devPorts, setDevPorts] = React.useState(0);
@@ -98,6 +101,13 @@ export const AdeStatusBar: React.FC = () => {
     return (
         <footer className="ade-statusbar" aria-label="SLTerm ADE Status Bar">
             <div className="ade-sb-group">
+                <button
+                    className={`ade-sb-pill ${studioMode ? "update" : "aqua"}`}
+                    onClick={() => toggleAdeStudioMode()}
+                    title="Toggle Rem Aqua AI Studio vs Classic Terminal Blocks (Ctrl+Shift+A)"
+                >
+                    {studioMode ? "⊞ Classic Term" : "✦ AI Studio"}
+                </button>
                 <button
                     className="ade-sb-pill aqua"
                     onClick={() => createBlock({ meta: { view: "adehub" } })}

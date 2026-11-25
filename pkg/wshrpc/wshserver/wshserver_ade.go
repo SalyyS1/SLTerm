@@ -610,7 +610,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.44.0"
+		cur = "0.45.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -627,6 +627,31 @@ func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeC
 		NotesPreview:    info.NotesPreview,
 		CheckedAtMs:     info.CheckedAtMs,
 	}, nil
+}
+
+func dlStateToRpc(st updatecheck.DownloadState) *wshrpc.AdeUpdateProgressData {
+	return &wshrpc.AdeUpdateProgressData{
+		Active:          st.Active,
+		Stage:           st.Stage,
+		Version:         st.Version,
+		DownloadedBytes: st.DownloadedBytes,
+		TotalBytes:      st.TotalBytes,
+		Percent:         st.Percent,
+		FilePath:        st.FilePath,
+		Error:           st.Error,
+	}
+}
+
+func (ws *WshServer) AdeStartSelfUpdateCommand(ctx context.Context, data wshrpc.AdeSelfUpdateRequestData) (*wshrpc.AdeUpdateProgressData, error) {
+	st, err := updatecheck.StartSelfUpdate(data.DownloadURL, data.Version)
+	if err != nil {
+		return nil, err
+	}
+	return dlStateToRpc(st), nil
+}
+
+func (ws *WshServer) AdeGetUpdateProgressCommand(ctx context.Context) (*wshrpc.AdeUpdateProgressData, error) {
+	return dlStateToRpc(updatecheck.GetDownloadState()), nil
 }
 
 func (ws *WshServer) AdeGetRuntimeStatsCommand(ctx context.Context) (*wshrpc.AdeRuntimeStatsData, error) {

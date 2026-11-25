@@ -14,6 +14,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -22,9 +24,10 @@ import (
 )
 
 const (
-	DefaultAPIURL    = "https://api.github.com/repos/SalyyS1/SLTerm/releases/latest"
-	AllowedURLPrefix = "https://github.com/SalyyS1/SLTerm/"
-	cacheTTL         = 10 * time.Minute
+	DefaultAPIURL         = "https://api.github.com/repos/SalyyS1/SLTerm/releases/latest"
+	AllowedURLPrefix      = "https://github.com/SalyyS1/SLTerm/"
+	AllowedDownloadPrefix = "https://github.com/SalyyS1/SLTerm/releases/download/"
+	cacheTTL              = 10 * time.Minute
 )
 
 // UpdateInfo describes the latest SLTerm GitHub Release relative to the running build.
@@ -225,4 +228,179 @@ func CheckLatest(ctx context.Context, currentVersion string, force bool) (*Updat
 	cachedAt = time.Now()
 	cacheMu.Unlock()
 	return info, nil
+}
+
+// DownloadState tracks live in-app self-update streaming progress.
+type DownloadState struct {
+	Active          bool   `json:"active"`
+	Stage           string `json:"stage"` // idle | downloading | launching | launched | error
+	Version         string `json:"version"`
+	DownloadedBytes int64  `json:"downloadedBytes"`
+	TotalBytes      int64  `json:"totalBytes"`
+	Percent         int    `json:"percent"`
+	FilePath        string `json:"filePath,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+var (
+	dlMu    sync.Mutex
+	dlState = DownloadState{Stage: "idle"}
+)
+
+// GetDownloadState returns the current in-app self-update progress snapshot.
+func GetDownloadState() DownloadState {
+	dlMu.Lock()
+	defer dlMu.Unlock()
+	return dlState
+}
+
+// ValidateInstallerURL ensures only official SalyyS1/SLTerm release installer binaries are auto-downloaded.
+func ValidateInstallerURL(rawURL string) (string, string, error) {
+	u := strings.TrimSpace(rawURL)
+	if !strings.HasPrefix(u, AllowedDownloadPrefix) {
+		return "", "", errors.New("refusing to auto-update from non-official URL")
+	}
+	if strings.ContainsAny(u, " \t\r\n\"'&|;`") {
+		return "", "", errors.New("installer URL contains disallowed characters")
+	}
+	low := strings.ToLower(u)
+	for _, ext := range []string{"-setup.exe", ".exe", ".dmg", ".deb", ".rpm", ".appimage"} {
+		if strings.HasSuffix(low, ext) {
+			return u, ext, nil
+		}
+	}
+	return "", "", errors.New("unsupported installer asset type")
+}
+
+// StartSelfUpdate downloads the official platform installer in the background and launches
+// in-place upgrade directly from inside SLTerm (no browser or manual GitHub download needed).
+func StartSelfUpdate(downloadURL, version string) (DownloadState, error) {
+	safeURL, ext, err := ValidateInstallerURL(downloadURL)
+	if err != nil {
+		return DownloadState{}, err
+	}
+	cleanVer := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(version), "v"), "V")
+	if _, _, _, ok := ParseSemVer(cleanVer); !ok {
+		cleanVer = "latest"
+	}
+
+	dlMu.Lock()
+	if dlState.Active {
+		cur := dlState
+		dlMu.Unlock()
+		return cur, nil
+	}
+	dlState = DownloadState{
+		Active:  true,
+		Stage:   "downloading",
+		Version: cleanVer,
+	}
+	cur := dlState
+	dlMu.Unlock()
+
+	go runSelfUpdateDownload(safeURL, cleanVer, ext, true)
+	return cur, nil
+}
+
+func runSelfUpdateDownload(url, cleanVer, ext string, doLaunch bool) {
+	setErr := func(msg string) {
+		dlMu.Lock()
+		dlState.Active = false
+		dlState.Stage = "error"
+		dlState.Error = msg
+		dlMu.Unlock()
+	}
+
+	client := &http.Client{Timeout: 5 * time.Minute}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		setErr(err.Error())
+		return
+	}
+	req.Header.Set("User-Agent", "SLTerm-AutoUpdater/"+cleanVer)
+	resp, err := client.Do(req)
+	if err != nil {
+		setErr("Download failed: " + err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		setErr(fmt.Sprintf("Download returned HTTP %d", resp.StatusCode))
+		return
+	}
+
+	dest := filepath.Join(os.TempDir(), fmt.Sprintf("SLTerm-update-%s%s", cleanVer, ext))
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+	if err != nil {
+		setErr(err.Error())
+		return
+	}
+
+	total := resp.ContentLength
+	dlMu.Lock()
+	dlState.TotalBytes = total
+	dlState.FilePath = dest
+	dlMu.Unlock()
+
+	buf := make([]byte, 64*1024)
+	var written int64
+	for {
+		n, rErr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, wErr := f.Write(buf[:n]); wErr != nil {
+				_ = f.Close()
+				_ = os.Remove(dest)
+				setErr(wErr.Error())
+				return
+			}
+			written += int64(n)
+			pct := 0
+			if total > 0 {
+				pct = int((written * 100) / total)
+				if pct > 100 {
+					pct = 100
+				}
+			}
+			dlMu.Lock()
+			dlState.DownloadedBytes = written
+			dlState.Percent = pct
+			dlMu.Unlock()
+		}
+		if rErr == io.EOF {
+			break
+		}
+		if rErr != nil {
+			_ = f.Close()
+			_ = os.Remove(dest)
+			setErr(rErr.Error())
+			return
+		}
+	}
+	if err := f.Close(); err != nil {
+		setErr(err.Error())
+		return
+	}
+	if doLaunch && written < 200*1024 {
+		_ = os.Remove(dest)
+		setErr("Downloaded installer appears incomplete/corrupted")
+		return
+	}
+
+	dlMu.Lock()
+	dlState.Stage = "launching"
+	dlState.Percent = 100
+	dlMu.Unlock()
+
+	if doLaunch {
+		if err := launchInstaller(dest); err != nil {
+			setErr("Failed to launch installer: " + err.Error())
+			return
+		}
+	}
+
+	dlMu.Lock()
+	dlState.Active = false
+	dlState.Stage = "launched"
+	dlState.Percent = 100
+	dlMu.Unlock()
 }

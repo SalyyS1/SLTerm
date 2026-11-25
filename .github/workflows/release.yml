@@ -12,14 +12,14 @@
 # exception is Windows, which cross-compiles with zig — the path the Taskfile
 # already used.
 
-name: Release
+name: Release (Electron Fallback)
 
-run-name: Release ${{ github.ref_name }}
+run-name: Release Electron ${{ github.ref_name }}
 
 on:
     push:
         tags:
-            - "v[0-9]+.[0-9]+.[0-9]+*"
+            - "electron-v[0-9]+.[0-9]+.[0-9]+*"
     workflow_dispatch:
 
 permissions:

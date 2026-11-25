@@ -9,13 +9,14 @@
 # Each runner builds its own platform natively, because wavesrv is a CGO build
 # (sqlite). Windows cross-compiles its C with zig, the same way release.yml does.
 
-name: Release (Tauri)
+name: Release (Tauri 2 Native)
 
 run-name: Release Tauri ${{ github.ref_name }}
 
 on:
     push:
         tags:
+            - "v[0-9]+.[0-9]+.[0-9]+*"
             - "tauri-v[0-9]+.[0-9]+.[0-9]+*"
     workflow_dispatch:
 
@@ -130,16 +131,17 @@ jobs:
                   path: staging
                   merge-multiple: true
 
-            - name: List what will be published
-              run: ls -la staging
+            - name: Generate SHA256SUMS.txt
+              run: |
+                  cd staging
+                  sha256sum * > SHA256SUMS.txt
+                  ls -lh
 
-            - name: Create or update the prerelease
+            - name: Create or update the release
               uses: softprops/action-gh-release@v2
               with:
                   files: staging/*
                   draft: false
-                  # Prerelease until the engine matrix has been checked on Windows
-                  # and macOS. Only the Linux/WebKitGTK build has been run.
-                  prerelease: true
+                  prerelease: ${{ startsWith(github.ref_name, 'tauri-v') }}
                   generate_release_notes: true
                   fail_on_unmatched_files: true

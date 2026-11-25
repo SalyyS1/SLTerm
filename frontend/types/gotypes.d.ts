@@ -380,6 +380,12 @@ declare global {
         content?: string;
     };
 
+    // wshrpc.AdeSelfUpdateRequestData
+    type AdeSelfUpdateRequestData = {
+        downloadUrl: string;
+        version: string;
+    };
+
     // wshrpc.AdeSessionData
     type AdeSessionData = {
         id: string;
@@ -448,6 +454,18 @@ declare global {
         publishedAt?: string;
         notesPreview?: string;
         checkedAtMs: number;
+    };
+
+    // wshrpc.AdeUpdateProgressData
+    type AdeUpdateProgressData = {
+        active: boolean;
+        stage: string;
+        version: string;
+        downloadedBytes: number;
+        totalBytes: number;
+        percent: number;
+        filePath?: string;
+        error?: string;
     };
 
     // wshrpc.AdeWorkspaceData

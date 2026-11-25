@@ -87,6 +87,12 @@ func AdeGetRuntimeStatsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc
 	return resp, err
 }
 
+// command "adegetupdateprogress", wshserver.AdeGetUpdateProgressCommand
+func AdeGetUpdateProgressCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AdeUpdateProgressData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeUpdateProgressData](w, "adegetupdateprogress", nil, opts)
+	return resp, err
+}
+
 // command "adeinspectproject", wshserver.AdeInspectProjectCommand
 func AdeInspectProjectCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeProjectReportData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeProjectReportData](w, "adeinspectproject", data, opts)
@@ -168,6 +174,12 @@ func AdeSaveWorkspaceCommand(w *wshutil.WshRpc, data wshrpc.AdeWorkspaceData, op
 // command "adesetcostbudget", wshserver.AdeSetCostBudgetCommand
 func AdeSetCostBudgetCommand(w *wshutil.WshRpc, data wshrpc.AdeCostBudgetRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeCostSnapshotData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeCostSnapshotData](w, "adesetcostbudget", data, opts)
+	return resp, err
+}
+
+// command "adestartselfupdate", wshserver.AdeStartSelfUpdateCommand
+func AdeStartSelfUpdateCommand(w *wshutil.WshRpc, data wshrpc.AdeSelfUpdateRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeUpdateProgressData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeUpdateProgressData](w, "adestartselfupdate", data, opts)
 	return resp, err
 }
 

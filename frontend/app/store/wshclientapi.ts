@@ -67,6 +67,11 @@ class RpcApiType {
         return client.wshRpcCall("adegetruntimestats", null, opts);
     }
 
+    // command "adegetupdateprogress" [call]
+    AdeGetUpdateProgressCommand(client: WshClient, opts?: RpcOpts): Promise<AdeUpdateProgressData> {
+        return client.wshRpcCall("adegetupdateprogress", null, opts);
+    }
+
     // command "adeinspectproject" [call]
     AdeInspectProjectCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<AdeProjectReportData> {
         return client.wshRpcCall("adeinspectproject", data, opts);
@@ -135,6 +140,11 @@ class RpcApiType {
     // command "adesetcostbudget" [call]
     AdeSetCostBudgetCommand(client: WshClient, data: AdeCostBudgetRequestData, opts?: RpcOpts): Promise<AdeCostSnapshotData> {
         return client.wshRpcCall("adesetcostbudget", data, opts);
+    }
+
+    // command "adestartselfupdate" [call]
+    AdeStartSelfUpdateCommand(client: WshClient, data: AdeSelfUpdateRequestData, opts?: RpcOpts): Promise<AdeUpdateProgressData> {
+        return client.wshRpcCall("adestartselfupdate", data, opts);
     }
 
     // command "adesuggestcommands" [call]
