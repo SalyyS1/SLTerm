@@ -815,3 +815,143 @@ func RemoveWorktree(ctx context.Context, dir, worktreePath string, force bool) e
 	_, err = runGit(ctx, root, args...)
 	return err
 }
+
+// BranchInfo represents a local Git branch from `git for-each-ref`.
+type BranchInfo struct {
+	Name      string `json:"name"`
+	Current   bool   `json:"current"`
+	ShortHash string `json:"shortHash"`
+	Subject   string `json:"subject"`
+}
+
+// ListBranches lists local branches sorted by most recent commit.
+func ListBranches(ctx context.Context, dir string) ([]BranchInfo, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	out, err := runGit(ctx, root, "for-each-ref", "--sort=-committerdate", "--format=%(HEAD)%09%(refname:short)%09%(objectname:short)%09%(subject)", "refs/heads")
+	if err != nil {
+		return nil, err
+	}
+	res := make([]BranchInfo, 0)
+	for _, ln := range strings.Split(out, "\n") {
+		ln = strings.TrimRight(ln, "\r")
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		parts := strings.SplitN(ln, "\t", 4)
+		if len(parts) < 3 {
+			continue
+		}
+		subj := ""
+		if len(parts) >= 4 {
+			subj = parts[3]
+		}
+		res = append(res, BranchInfo{
+			Name:      parts[1],
+			Current:   strings.TrimSpace(parts[0]) == "*",
+			ShortHash: parts[2],
+			Subject:   subj,
+		})
+	}
+	return res, nil
+}
+
+// CheckoutBranch switches to an existing branch (or creates a new branch when create=true).
+func CheckoutBranch(ctx context.Context, dir, branch string, create bool) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	b, err := ValidateBranchName(branch)
+	if err != nil {
+		return "", err
+	}
+	if create {
+		return runGit(ctx, root, "checkout", "-b", b)
+	}
+	return runGit(ctx, root, "checkout", b)
+}
+
+// StashEntry represents one entry from `git stash list`.
+type StashEntry struct {
+	Ref     string `json:"ref"`
+	RelDate string `json:"relDate"`
+	Message string `json:"message"`
+}
+
+var safeStashRefRe = regexp.MustCompile(`^stash@\{\d+\}$`)
+
+// ListStashes returns the repository's stash stack.
+func ListStashes(ctx context.Context, dir string) ([]StashEntry, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	out, err := runGit(ctx, root, "stash", "list", "--pretty=format:%gd%x1f%ar%x1f%gs")
+	if err != nil {
+		return nil, err
+	}
+	res := make([]StashEntry, 0)
+	for _, ln := range strings.Split(out, "\n") {
+		ln = strings.TrimRight(ln, "\r")
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		parts := strings.Split(ln, "\x1f")
+		if len(parts) < 3 {
+			continue
+		}
+		res = append(res, StashEntry{
+			Ref:     parts[0],
+			RelDate: parts[1],
+			Message: parts[2],
+		})
+	}
+	return res, nil
+}
+
+// StashPush saves uncommitted working-tree changes onto the stash stack.
+func StashPush(ctx context.Context, dir, message string, includeUntracked bool) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	args := []string{"stash", "push"}
+	if includeUntracked {
+		args = append(args, "-u")
+	}
+	if msg := strings.TrimSpace(message); msg != "" {
+		if strings.ContainsRune(msg, '\x00') {
+			return "", errors.New("stash message contains NUL byte")
+		}
+		args = append(args, "-m", msg)
+	}
+	return runGit(ctx, root, args...)
+}
+
+// StashPop restores and removes a validated stash ref (or the latest stash if ref is empty).
+func StashPop(ctx context.Context, dir, ref string) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	r := strings.TrimSpace(ref)
+	if r == "" {
+		return runGit(ctx, root, "stash", "pop")
+	}
+	if !safeStashRefRe.MatchString(r) {
+		return "", fmt.Errorf("invalid stash ref %q", ref)
+	}
+	return runGit(ctx, root, "stash", "pop", r)
+}
+
+// PruneWorktrees cleans up stale worktree administrative files for deleted worktree directories.
+func PruneWorktrees(ctx context.Context, dir string) (string, error) {
+	root, err := ResolveRepoRoot(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	return runGit(ctx, root, "worktree", "prune", "-v")
+}

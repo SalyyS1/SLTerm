@@ -188,3 +188,56 @@ func TestStatusStageDiffCommitWorktreeAndChangelist(t *testing.T) {
 		t.Fatalf("RemoveWorktree failed: %v", err)
 	}
 }
+
+func TestBranchesStashAndPruneWorktrees(t *testing.T) {
+	t.Setenv("SLTERM_CONFIG_HOME", t.TempDir())
+	repo := initTestRepo(t)
+	ctx := context.Background()
+
+	// Create and switch branch, rejecting flag injection.
+	if _, err := CheckoutBranch(ctx, repo, "--orphan", true); err == nil {
+		t.Fatal("expected flag injection branch checkout to fail")
+	}
+	if _, err := CheckoutBranch(ctx, repo, "feat/rem-aqua-ui", true); err != nil {
+		t.Fatalf("CheckoutBranch create failed: %v", err)
+	}
+	branches, err := ListBranches(ctx, repo)
+	if err != nil || len(branches) < 2 {
+		t.Fatalf("expected >=2 branches, got %+v err=%v", branches, err)
+	}
+	foundCurrent := false
+	for _, b := range branches {
+		if b.Name == "feat/rem-aqua-ui" && b.Current {
+			foundCurrent = true
+		}
+	}
+	if !foundCurrent {
+		t.Fatalf("expected feat/rem-aqua-ui to be current branch, got %+v", branches)
+	}
+
+	// Stash push, list, pop + invalid ref guard.
+	if err := os.WriteFile(filepath.Join(repo, "wip.txt"), []byte("wip change\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := StashPush(ctx, repo, "save wip", true); err != nil {
+		t.Fatalf("StashPush failed: %v", err)
+	}
+	stashes, err := ListStashes(ctx, repo)
+	if err != nil || len(stashes) != 1 || !strings.Contains(stashes[0].Message, "save wip") {
+		t.Fatalf("unexpected stashes: %+v err=%v", stashes, err)
+	}
+	if _, err := StashPop(ctx, repo, "--evil"); err == nil {
+		t.Fatal("expected invalid stash ref to be rejected")
+	}
+	if _, err := StashPop(ctx, repo, stashes[0].Ref); err != nil {
+		t.Fatalf("StashPop failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "wip.txt")); err != nil {
+		t.Fatalf("expected wip.txt restored after stash pop: %v", err)
+	}
+
+	// PruneWorktrees should succeed cleanly.
+	if _, err := PruneWorktrees(ctx, repo); err != nil {
+		t.Fatalf("PruneWorktrees failed: %v", err)
+	}
+}

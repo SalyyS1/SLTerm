@@ -1015,6 +1015,12 @@ func VcsAssignChangelistCommand(w *wshutil.WshRpc, data wshrpc.VcsChangelistAssi
 	return err
 }
 
+// command "vcscheckoutbranch", wshserver.VcsCheckoutBranchCommand
+func VcsCheckoutBranchCommand(w *wshutil.WshRpc, data wshrpc.VcsCheckoutBranchRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcscheckoutbranch", data, opts)
+	return resp, err
+}
+
 // command "vcscommit", wshserver.VcsCommitCommand
 func VcsCommitCommand(w *wshutil.WshRpc, data wshrpc.VcsCommitRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcscommit", data, opts)
@@ -1057,6 +1063,18 @@ func VcsGetStatusCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts 
 	return resp, err
 }
 
+// command "vcslistbranches", wshserver.VcsListBranchesCommand
+func VcsListBranchesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsBranchData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsBranchData](w, "vcslistbranches", data, opts)
+	return resp, err
+}
+
+// command "vcsliststashes", wshserver.VcsListStashesCommand
+func VcsListStashesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsStashEntryData, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsStashEntryData](w, "vcsliststashes", data, opts)
+	return resp, err
+}
+
 // command "vcslistworktrees", wshserver.VcsListWorktreesCommand
 func VcsListWorktreesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) ([]wshrpc.VcsWorktreeData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.VcsWorktreeData](w, "vcslistworktrees", data, opts)
@@ -1066,6 +1084,12 @@ func VcsListWorktreesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, o
 // command "vcsmergeworktree", wshserver.VcsMergeWorktreeCommand
 func VcsMergeWorktreeCommand(w *wshutil.WshRpc, data wshrpc.VcsMergeWorktreeRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcsmergeworktree", data, opts)
+	return resp, err
+}
+
+// command "vcspruneworktrees", wshserver.VcsPruneWorktreesCommand
+func VcsPruneWorktreesCommand(w *wshutil.WshRpc, data wshrpc.VcsDirRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcspruneworktrees", data, opts)
 	return resp, err
 }
 
@@ -1097,6 +1121,18 @@ func VcsShowCommitCommand(w *wshutil.WshRpc, data wshrpc.VcsShowCommitRequestDat
 func VcsStageCommand(w *wshutil.WshRpc, data wshrpc.VcsPathsRequestData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "vcsstage", data, opts)
 	return err
+}
+
+// command "vcsstashpop", wshserver.VcsStashPopCommand
+func VcsStashPopCommand(w *wshutil.WshRpc, data wshrpc.VcsStashPopRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcsstashpop", data, opts)
+	return resp, err
+}
+
+// command "vcsstashpush", wshserver.VcsStashPushCommand
+func VcsStashPushCommand(w *wshutil.WshRpc, data wshrpc.VcsStashPushRequestData, opts *wshrpc.RpcOpts) (*wshrpc.VcsActionResultData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.VcsActionResultData](w, "vcsstashpush", data, opts)
+	return resp, err
 }
 
 // command "vcsunstage", wshserver.VcsUnstageCommand

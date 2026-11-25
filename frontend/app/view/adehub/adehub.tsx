@@ -101,9 +101,9 @@ export class AdeHubViewModel implements ViewModel {
 
     async markActivityRead(): Promise<void> {
         try {
-            const feed = await RpcApi.AdeMarkActivityReadCommand(TabRpcClient);
-            globalStore.set(this.activityAtom, feed);
+            await RpcApi.AdeMarkActivityReadCommand(TabRpcClient);
             globalStore.set(this.noticeAtom, "Marked all activity notifications as read");
+            await this.refresh();
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
         }

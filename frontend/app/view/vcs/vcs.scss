@@ -32,14 +32,21 @@
     font-family: var(--fixed-font);
 }
 
-.vcs-branch-pill {
+.vcs-branch-pill,
+.vcs-branch-select {
     font-family: var(--fixed-font);
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 999px;
     background: var(--highlight-bg-color);
+    color: var(--rem-aqua, #5fd4f4);
     border: 1px solid var(--border-color);
     white-space: nowrap;
+}
+
+.vcs-branch-select {
+    cursor: pointer;
+    max-width: 190px;
 }
 
 .vcs-tabs {
@@ -258,11 +265,28 @@
 }
 
 .vcs-diff-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 6px 10px;
     border-bottom: 1px solid var(--border-color);
     font-family: var(--fixed-font);
     font-size: 11.5px;
     color: var(--secondary-text-color);
+}
+
+.vcs-diff-stats {
+    display: inline-flex;
+    gap: 6px;
+    font-weight: 700;
+
+    .add {
+        color: #5eead4;
+    }
+    .del {
+        color: #fb7185;
+    }
 }
 
 .vcs-diff-body {

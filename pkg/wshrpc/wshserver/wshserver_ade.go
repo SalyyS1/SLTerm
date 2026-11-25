@@ -203,6 +203,72 @@ func (ws *WshServer) VcsAssignChangelistCommand(ctx context.Context, data wshrpc
 	return vcs.AssignChangelist(root, data.Path, data.Changelist)
 }
 
+func (ws *WshServer) VcsListBranchesCommand(ctx context.Context, data wshrpc.VcsDirRequestData) ([]wshrpc.VcsBranchData, error) {
+	branches, err := vcs.ListBranches(ctx, data.Dir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wshrpc.VcsBranchData, 0, len(branches))
+	for _, b := range branches {
+		out = append(out, wshrpc.VcsBranchData{
+			Name:      b.Name,
+			Current:   b.Current,
+			ShortHash: b.ShortHash,
+			Subject:   b.Subject,
+		})
+	}
+	return out, nil
+}
+
+func (ws *WshServer) VcsCheckoutBranchCommand(ctx context.Context, data wshrpc.VcsCheckoutBranchRequestData) (*wshrpc.VcsActionResultData, error) {
+	out, err := vcs.CheckoutBranch(ctx, data.Dir, data.Branch, data.Create)
+	if err != nil {
+		return nil, err
+	}
+	agentwatch.DefaultHub().Record("worktree", "info", "Switched branch to "+data.Branch, data.Dir, "", data.Dir)
+	return &wshrpc.VcsActionResultData{Output: out}, nil
+}
+
+func (ws *WshServer) VcsListStashesCommand(ctx context.Context, data wshrpc.VcsDirRequestData) ([]wshrpc.VcsStashEntryData, error) {
+	stashes, err := vcs.ListStashes(ctx, data.Dir)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]wshrpc.VcsStashEntryData, 0, len(stashes))
+	for _, s := range stashes {
+		out = append(out, wshrpc.VcsStashEntryData{
+			Ref:     s.Ref,
+			RelDate: s.RelDate,
+			Message: s.Message,
+		})
+	}
+	return out, nil
+}
+
+func (ws *WshServer) VcsStashPushCommand(ctx context.Context, data wshrpc.VcsStashPushRequestData) (*wshrpc.VcsActionResultData, error) {
+	out, err := vcs.StashPush(ctx, data.Dir, data.Message, data.IncludeUntracked)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: out}, nil
+}
+
+func (ws *WshServer) VcsStashPopCommand(ctx context.Context, data wshrpc.VcsStashPopRequestData) (*wshrpc.VcsActionResultData, error) {
+	out, err := vcs.StashPop(ctx, data.Dir, data.Ref)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: out}, nil
+}
+
+func (ws *WshServer) VcsPruneWorktreesCommand(ctx context.Context, data wshrpc.VcsDirRequestData) (*wshrpc.VcsActionResultData, error) {
+	out, err := vcs.PruneWorktrees(ctx, data.Dir)
+	if err != nil {
+		return nil, err
+	}
+	return &wshrpc.VcsActionResultData{Output: out}, nil
+}
+
 func (ws *WshServer) AdeGetHubSnapshotCommand(ctx context.Context, data wshrpc.AdeHubRequestData) (*wshrpc.AdeHubSnapshotData, error) {
 	idx, err := agentsessions.ListSessions(data.Query, data.AgentFilter, data.Limit)
 	if err != nil {
@@ -476,7 +542,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.34.0"
+		cur = "0.35.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {

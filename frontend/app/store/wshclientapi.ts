@@ -847,6 +847,11 @@ class RpcApiType {
         return client.wshRpcCall("vcsassignchangelist", data, opts);
     }
 
+    // command "vcscheckoutbranch" [call]
+    VcsCheckoutBranchCommand(client: WshClient, data: VcsCheckoutBranchRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcscheckoutbranch", data, opts);
+    }
+
     // command "vcscommit" [call]
     VcsCommitCommand(client: WshClient, data: VcsCommitRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
         return client.wshRpcCall("vcscommit", data, opts);
@@ -882,6 +887,16 @@ class RpcApiType {
         return client.wshRpcCall("vcsgetstatus", data, opts);
     }
 
+    // command "vcslistbranches" [call]
+    VcsListBranchesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsBranchData[]> {
+        return client.wshRpcCall("vcslistbranches", data, opts);
+    }
+
+    // command "vcsliststashes" [call]
+    VcsListStashesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsStashEntryData[]> {
+        return client.wshRpcCall("vcsliststashes", data, opts);
+    }
+
     // command "vcslistworktrees" [call]
     VcsListWorktreesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsWorktreeData[]> {
         return client.wshRpcCall("vcslistworktrees", data, opts);
@@ -890,6 +905,11 @@ class RpcApiType {
     // command "vcsmergeworktree" [call]
     VcsMergeWorktreeCommand(client: WshClient, data: VcsMergeWorktreeRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
         return client.wshRpcCall("vcsmergeworktree", data, opts);
+    }
+
+    // command "vcspruneworktrees" [call]
+    VcsPruneWorktreesCommand(client: WshClient, data: VcsDirRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcspruneworktrees", data, opts);
     }
 
     // command "vcspull" [call]
@@ -915,6 +935,16 @@ class RpcApiType {
     // command "vcsstage" [call]
     VcsStageCommand(client: WshClient, data: VcsPathsRequestData, opts?: RpcOpts): Promise<void> {
         return client.wshRpcCall("vcsstage", data, opts);
+    }
+
+    // command "vcsstashpop" [call]
+    VcsStashPopCommand(client: WshClient, data: VcsStashPopRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcsstashpop", data, opts);
+    }
+
+    // command "vcsstashpush" [call]
+    VcsStashPushCommand(client: WshClient, data: VcsStashPushRequestData, opts?: RpcOpts): Promise<VcsActionResultData> {
+        return client.wshRpcCall("vcsstashpush", data, opts);
     }
 
     // command "vcsunstage" [call]

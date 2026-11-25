@@ -2064,11 +2064,26 @@ declare global {
         output: string;
     };
 
+    // wshrpc.VcsBranchData
+    type VcsBranchData = {
+        name: string;
+        current: boolean;
+        shortHash: string;
+        subject: string;
+    };
+
     // wshrpc.VcsChangelistAssignData
     type VcsChangelistAssignData = {
         dir: string;
         path: string;
         changelist: string;
+    };
+
+    // wshrpc.VcsCheckoutBranchRequestData
+    type VcsCheckoutBranchRequestData = {
+        dir: string;
+        branch: string;
+        create?: boolean;
     };
 
     // wshrpc.VcsCommitEntryData
@@ -2161,6 +2176,26 @@ declare global {
     type VcsShowCommitRequestData = {
         dir: string;
         hash: string;
+    };
+
+    // wshrpc.VcsStashEntryData
+    type VcsStashEntryData = {
+        ref: string;
+        relDate: string;
+        message: string;
+    };
+
+    // wshrpc.VcsStashPopRequestData
+    type VcsStashPopRequestData = {
+        dir: string;
+        ref?: string;
+    };
+
+    // wshrpc.VcsStashPushRequestData
+    type VcsStashPushRequestData = {
+        dir: string;
+        message?: string;
+        includeUntracked?: boolean;
     };
 
     // wshrpc.VcsStatusData

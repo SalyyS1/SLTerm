@@ -29,6 +29,8 @@ export class VcsViewModel implements ViewModel {
     activeTabAtom: PrimitiveAtom<VcsTab>;
     statusAtom: PrimitiveAtom<VcsStatusData | null>;
     worktreesAtom: PrimitiveAtom<VcsWorktreeData[]>;
+    branchesAtom: PrimitiveAtom<VcsBranchData[]>;
+    stashesAtom: PrimitiveAtom<VcsStashEntryData[]>;
     logAtom: PrimitiveAtom<VcsCommitEntryData[]>;
     selectedCommitAtom: PrimitiveAtom<string | null>;
     commitDiffAtom: PrimitiveAtom<string>;
@@ -50,6 +52,8 @@ export class VcsViewModel implements ViewModel {
         this.activeTabAtom = atom<VcsTab>("changes");
         this.statusAtom = atom(null) as PrimitiveAtom<VcsStatusData | null>;
         this.worktreesAtom = atom<VcsWorktreeData[]>([]);
+        this.branchesAtom = atom<VcsBranchData[]>([]);
+        this.stashesAtom = atom<VcsStashEntryData[]>([]);
         this.logAtom = atom<VcsCommitEntryData[]>([]);
         this.selectedCommitAtom = atom(null) as PrimitiveAtom<string | null>;
         this.commitDiffAtom = atom("");
@@ -68,14 +72,18 @@ export class VcsViewModel implements ViewModel {
         const dir = (dirOverride ?? globalStore.get(this.dirAtom)).trim() || ".";
         globalStore.set(this.loadingAtom, true);
         try {
-            const [st, wts, commits] = await Promise.all([
+            const [st, wts, commits, branches, stashes] = await Promise.all([
                 RpcApi.VcsGetStatusCommand(TabRpcClient, { dir }),
                 RpcApi.VcsListWorktreesCommand(TabRpcClient, { dir }),
                 RpcApi.VcsGetLogCommand(TabRpcClient, { dir, limit: 30 }).catch(() => [] as VcsCommitEntryData[]),
+                RpcApi.VcsListBranchesCommand(TabRpcClient, { dir }).catch(() => [] as VcsBranchData[]),
+                RpcApi.VcsListStashesCommand(TabRpcClient, { dir }).catch(() => [] as VcsStashEntryData[]),
             ]);
             globalStore.set(this.statusAtom, st);
             globalStore.set(this.worktreesAtom, wts ?? []);
             globalStore.set(this.logAtom, commits ?? []);
+            globalStore.set(this.branchesAtom, branches ?? []);
+            globalStore.set(this.stashesAtom, stashes ?? []);
             if (st?.repoRoot) {
                 globalStore.set(this.dirAtom, st.repoRoot);
             }
@@ -84,6 +92,56 @@ export class VcsViewModel implements ViewModel {
             globalStore.set(this.errorAtom, String(err));
         } finally {
             globalStore.set(this.loadingAtom, false);
+        }
+    }
+
+    async checkoutBranch(branch: string, create = false): Promise<boolean> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            await RpcApi.VcsCheckoutBranchCommand(TabRpcClient, { dir, branch, create });
+            globalStore.set(this.noticeAtom, `${create ? "Created & switched" : "Switched"} to branch ${branch}`);
+            await this.refresh(dir);
+            return true;
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+            return false;
+        }
+    }
+
+    async stashPush(message: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const res = await RpcApi.VcsStashPushCommand(TabRpcClient, {
+                dir,
+                message: message.trim() || undefined,
+                includeUntracked: true,
+            });
+            globalStore.set(this.noticeAtom, res?.output?.split("\n")[0] || "Stashed changes");
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async stashPop(ref?: string): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const res = await RpcApi.VcsStashPopCommand(TabRpcClient, { dir, ref });
+            globalStore.set(this.noticeAtom, res?.output?.split("\n")[0] || `Popped ${ref || "latest stash"}`);
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async pruneWorktrees(): Promise<void> {
+        const dir = globalStore.get(this.dirAtom);
+        try {
+            const res = await RpcApi.VcsPruneWorktreesCommand(TabRpcClient, { dir });
+            globalStore.set(this.noticeAtom, res?.output?.trim() || "Pruned stale worktree metadata");
+            await this.refresh(dir);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
         }
     }
 
@@ -261,6 +319,16 @@ export class VcsViewModel implements ViewModel {
     }
 }
 
+function diffStats(diff: string): { add: number; del: number } {
+    let add = 0;
+    let del = 0;
+    for (const line of diff.split("\n")) {
+        if (line.startsWith("+") && !line.startsWith("+++")) add++;
+        else if (line.startsWith("-") && !line.startsWith("---")) del++;
+    }
+    return { add, del };
+}
+
 function renderDiffLines(diff: string): React.ReactNode {
     if (!diff) {
         return <div className="vcs-empty">Select a changed file to inspect its unified diff.</div>;
@@ -283,6 +351,8 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const activeTab = useAtomValue(model.activeTabAtom);
     const status = useAtomValue(model.statusAtom);
     const worktrees = useAtomValue(model.worktreesAtom);
+    const branches = useAtomValue(model.branchesAtom);
+    const stashes = useAtomValue(model.stashesAtom);
     const commits = useAtomValue(model.logAtom);
     const selectedCommit = useAtomValue(model.selectedCommitAtom);
     const commitDiff = useAtomValue(model.commitDiffAtom);
@@ -298,6 +368,7 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const [wtPath, setWtPath] = React.useState("");
     const [clFilter, setClFilter] = React.useState("ALL");
     const [newClName, setNewClName] = React.useState("");
+    const [stashMsg, setStashMsg] = React.useState("");
 
     React.useEffect(() => {
         setDirInput(dir);
@@ -311,6 +382,7 @@ function VcsView({ model }: { model: VcsViewModel }) {
     const allUnstaged = (status?.changes ?? []).filter((c) => c.unstaged || c.untracked);
     const unstaged = clFilter === "ALL" ? allUnstaged : allUnstaged.filter((c) => (c.changelist || "Default") === clFilter);
     const changelists = status?.changelists && status.changelists.length > 0 ? status.changelists : ["Default"];
+    const dStats = diff ? diffStats(diff) : { add: 0, del: 0 };
 
     return (
         <div className="vcs-view">
@@ -325,15 +397,50 @@ function VcsView({ model }: { model: VcsViewModel }) {
                     }}
                     placeholder="Repository folder path (e.g. C:\work\my-app)"
                 />
-                {status && (
+                {status && branches.length > 0 ? (
+                    <select
+                        className="vcs-branch-select"
+                        value={status.branch}
+                        title="Switch local Git branch"
+                        onChange={(e) => {
+                            if (e.target.value && e.target.value !== status.branch) {
+                                void model.checkoutBranch(e.target.value, false);
+                            }
+                        }}
+                    >
+                        {branches.map((b) => (
+                            <option key={b.name} value={b.name}>
+                                ⎇ {b.name} ({b.shortHash})
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    status && (
+                        <span className="vcs-branch-pill">
+                            {status.branch}
+                            {status.headShort ? ` · ${status.headShort}` : ""}
+                        </span>
+                    )
+                )}
+                {status && (status.ahead > 0 || status.behind > 0 || status.isWorktree) && (
                     <span className="vcs-branch-pill">
-                        {status.branch}
-                        {status.headShort ? ` · ${status.headShort}` : ""}
-                        {status.isWorktree ? " · WT" : ""}
+                        {status.isWorktree ? "WT" : ""}
                         {status.ahead > 0 ? ` ↑${status.ahead}` : ""}
                         {status.behind > 0 ? ` ↓${status.behind}` : ""}
                     </span>
                 )}
+                <button
+                    className="vcs-btn"
+                    title="Create and switch to a new branch"
+                    onClick={() => {
+                        const name = window.prompt("New branch name (e.g. feat/rem-polish):");
+                        if (name && name.trim()) {
+                            void model.checkoutBranch(name.trim(), true);
+                        }
+                    }}
+                >
+                    + Branch
+                </button>
                 <button className="vcs-btn" onClick={() => model.pushOrPull("pull")} title="git pull">
                     Pull
                 </button>
@@ -489,6 +596,41 @@ function VcsView({ model }: { model: VcsViewModel }) {
                             ))
                         )}
 
+                        <div className="vcs-section-head">
+                            <span>Stashes ({stashes.length})</span>
+                            <button
+                                className="vcs-link"
+                                disabled={(status?.changes?.length ?? 0) === 0}
+                                onClick={async () => {
+                                    await model.stashPush(stashMsg);
+                                    setStashMsg("");
+                                }}
+                            >
+                                📦 Stash
+                            </button>
+                        </div>
+                        <input
+                            className="vcs-dir-input"
+                            value={stashMsg}
+                            onChange={(e) => setStashMsg(e.target.value)}
+                            placeholder="Optional stash note..."
+                        />
+                        {stashes.slice(0, 5).map((st) => (
+                            <div key={st.ref} className="vcs-file">
+                                <span className="vcs-sha">{st.ref}</span>
+                                <span className="vcs-filepath" title={`${st.message} (${st.relDate})`}>
+                                    {st.message}
+                                </span>
+                                <button
+                                    className="vcs-mini"
+                                    title={`Pop ${st.ref}`}
+                                    onClick={() => model.stashPop(st.ref)}
+                                >
+                                    ↩
+                                </button>
+                            </div>
+                        ))}
+
                         <div className="vcs-commit-box">
                             <input
                                 className="vcs-dir-input"
@@ -541,7 +683,14 @@ function VcsView({ model }: { model: VcsViewModel }) {
 
                     <div className="vcs-diff-pane">
                         <div className="vcs-diff-head">
-                            {selected ? `${selected.path} (${selected.staged ? "staged" : "working tree"})` : "Unified Diff"}
+                            <span>
+                                {selected ? `${selected.path} (${selected.staged ? "staged" : "working tree"})` : "Unified Diff"}
+                            </span>
+                            {(dStats.add > 0 || dStats.del > 0) && (
+                                <span className="vcs-diff-stats">
+                                    <span className="add">+{dStats.add}</span> <span className="del">-{dStats.del}</span>
+                                </span>
+                            )}
                         </div>
                         <div className="vcs-diff-body">{renderDiffLines(diff)}</div>
                     </div>
@@ -613,6 +762,13 @@ function VcsView({ model }: { model: VcsViewModel }) {
                             }}
                         >
                             + New Agent Worktree
+                        </button>
+                        <button
+                            className="vcs-btn"
+                            title="Run git worktree prune to remove stale worktree entries"
+                            onClick={() => model.pruneWorktrees()}
+                        >
+                            🧹 Prune Stale
                         </button>
                     </div>
 

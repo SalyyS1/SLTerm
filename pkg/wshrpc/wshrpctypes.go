@@ -229,6 +229,12 @@ type WshRpcInterface interface {
 	VcsGetLogCommand(ctx context.Context, data VcsLogRequestData) ([]VcsCommitEntryData, error)
 	VcsShowCommitCommand(ctx context.Context, data VcsShowCommitRequestData) (*VcsDiffData, error)
 	VcsAssignChangelistCommand(ctx context.Context, data VcsChangelistAssignData) error
+	VcsListBranchesCommand(ctx context.Context, data VcsDirRequestData) ([]VcsBranchData, error)
+	VcsCheckoutBranchCommand(ctx context.Context, data VcsCheckoutBranchRequestData) (*VcsActionResultData, error)
+	VcsListStashesCommand(ctx context.Context, data VcsDirRequestData) ([]VcsStashEntryData, error)
+	VcsStashPushCommand(ctx context.Context, data VcsStashPushRequestData) (*VcsActionResultData, error)
+	VcsStashPopCommand(ctx context.Context, data VcsStashPopRequestData) (*VcsActionResultData, error)
+	VcsPruneWorktreesCommand(ctx context.Context, data VcsDirRequestData) (*VcsActionResultData, error)
 	// ade hub (multi-agent sessions, installed CLI launcher, executable prompt notes, OTLP cost HUD, port radar & mini-kanban)
 	AdeGetHubSnapshotCommand(ctx context.Context, data AdeHubRequestData) (*AdeHubSnapshotData, error)
 	AdeSavePromptNoteCommand(ctx context.Context, data AdePromptNoteData) (*AdePromptNoteData, error)
@@ -1474,4 +1480,34 @@ type AdeActivityFeedData struct {
 	UnreadCount  int                    `json:"unreadCount"`
 	WaitingCount int                    `json:"waitingCount"`
 	Events       []AdeActivityEventData `json:"events"`
+}
+
+type VcsBranchData struct {
+	Name      string `json:"name"`
+	Current   bool   `json:"current"`
+	ShortHash string `json:"shortHash"`
+	Subject   string `json:"subject"`
+}
+
+type VcsCheckoutBranchRequestData struct {
+	Dir    string `json:"dir"`
+	Branch string `json:"branch"`
+	Create bool   `json:"create,omitempty"`
+}
+
+type VcsStashEntryData struct {
+	Ref     string `json:"ref"`
+	RelDate string `json:"relDate"`
+	Message string `json:"message"`
+}
+
+type VcsStashPushRequestData struct {
+	Dir              string `json:"dir"`
+	Message          string `json:"message,omitempty"`
+	IncludeUntracked bool   `json:"includeUntracked,omitempty"`
+}
+
+type VcsStashPopRequestData struct {
+	Dir string `json:"dir"`
+	Ref string `json:"ref,omitempty"`
 }
