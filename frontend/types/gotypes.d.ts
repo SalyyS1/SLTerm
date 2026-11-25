@@ -138,6 +138,26 @@ declare global {
         conn?: {[key: string]: number};
     };
 
+    // wshrpc.AdeActivityEventData
+    type AdeActivityEventData = {
+        id: string;
+        kind: string;
+        severity: string;
+        title: string;
+        detail?: string;
+        sessionId?: string;
+        cwd?: string;
+        createdMs: number;
+        read: boolean;
+    };
+
+    // wshrpc.AdeActivityFeedData
+    type AdeActivityFeedData = {
+        unreadCount: number;
+        waitingCount: number;
+        events: AdeActivityEventData[];
+    };
+
     // wshrpc.AdeBlockCostData
     type AdeBlockCostData = {
         blockId: string;

@@ -42,6 +42,7 @@ export class AdeHubViewModel implements ViewModel {
     tasksAtom: PrimitiveAtom<AdeTaskData[]>;
     workspacesAtom: PrimitiveAtom<AdeWorkspaceData[]>;
     runtimeAtom: PrimitiveAtom<AdeRuntimeStatsData | null>;
+    activityAtom: PrimitiveAtom<AdeActivityFeedData | null>;
     sshAuditAtom: PrimitiveAtom<AdeSSHAuditReportData | null>;
     projectAtom: PrimitiveAtom<AdeProjectReportData | null>;
     errorAtom: PrimitiveAtom<string | null>;
@@ -61,6 +62,7 @@ export class AdeHubViewModel implements ViewModel {
         this.tasksAtom = atom<AdeTaskData[]>([]);
         this.workspacesAtom = atom<AdeWorkspaceData[]>([]);
         this.runtimeAtom = atom(null) as PrimitiveAtom<AdeRuntimeStatsData | null>;
+        this.activityAtom = atom(null) as PrimitiveAtom<AdeActivityFeedData | null>;
         this.sshAuditAtom = atom(null) as PrimitiveAtom<AdeSSHAuditReportData | null>;
         this.projectAtom = atom(null) as PrimitiveAtom<AdeProjectReportData | null>;
         this.errorAtom = atom(null) as PrimitiveAtom<string | null>;
@@ -73,7 +75,7 @@ export class AdeHubViewModel implements ViewModel {
 
     async refresh(query = "", agentFilter = "all"): Promise<void> {
         try {
-            const [snap, ports, tasks, workspaces, runtime] = await Promise.all([
+            const [snap, ports, tasks, workspaces, runtime, activity] = await Promise.all([
                 RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, {
                     query,
                     agentFilter,
@@ -83,13 +85,25 @@ export class AdeHubViewModel implements ViewModel {
                 RpcApi.AdeListTasksCommand(TabRpcClient).catch(() => [] as AdeTaskData[]),
                 RpcApi.AdeListWorkspacesCommand(TabRpcClient).catch(() => [] as AdeWorkspaceData[]),
                 RpcApi.AdeGetRuntimeStatsCommand(TabRpcClient).catch(() => null),
+                RpcApi.AdeGetActivityCommand(TabRpcClient).catch(() => null),
             ]);
             globalStore.set(this.hubAtom, snap);
             globalStore.set(this.portsAtom, ports ?? []);
             globalStore.set(this.tasksAtom, tasks ?? []);
             globalStore.set(this.workspacesAtom, workspaces ?? []);
             globalStore.set(this.runtimeAtom, runtime);
+            globalStore.set(this.activityAtom, activity);
             globalStore.set(this.errorAtom, null);
+        } catch (err) {
+            globalStore.set(this.errorAtom, String(err));
+        }
+    }
+
+    async markActivityRead(): Promise<void> {
+        try {
+            const feed = await RpcApi.AdeMarkActivityReadCommand(TabRpcClient);
+            globalStore.set(this.activityAtom, feed);
+            globalStore.set(this.noticeAtom, "Marked all activity notifications as read");
         } catch (err) {
             globalStore.set(this.errorAtom, String(err));
         }
@@ -412,6 +426,7 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
     const tasks = useAtomValue(model.tasksAtom);
     const workspaces = useAtomValue(model.workspacesAtom);
     const runtime = useAtomValue(model.runtimeAtom);
+    const activity = useAtomValue(model.activityAtom);
     const sshAudit = useAtomValue(model.sshAuditAtom);
     const project = useAtomValue(model.projectAtom);
     const error = useAtomValue(model.errorAtom);
@@ -522,7 +537,8 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                     className={`adehub-tab ${activeTab === "runtime" ? "active" : ""}`}
                     onClick={() => globalStore.set(model.activeTabAtom, "runtime")}
                 >
-                    🛡 Runtime &amp; SSH ({runtime ? `${runtime.sidecarHeapMb.toFixed(1)} MB` : "…"})
+                    🛡 Activity &amp; Runtime ({runtime ? `${runtime.sidecarHeapMb.toFixed(1)} MB` : "…"}
+                    {(activity?.unreadCount ?? 0) > 0 ? ` · 🔔 ${activity?.unreadCount}` : ""})
                 </button>
             </div>
 
@@ -1118,6 +1134,80 @@ function AdeHubView({ model }: { model: AdeHubViewModel }) {
                                 ))}
                             </div>
                         )}
+
+                        <div className="adehub-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                            <div className="adehub-card-head" style={{ justifyContent: "space-between" }}>
+                                <div className="adehub-card-head">
+                                    <strong>🔔 ADE Activity Feed</strong>
+                                    <span className={`adehub-pill ${(activity?.unreadCount ?? 0) > 0 ? "waiting" : ""}`}>
+                                        {activity?.unreadCount ?? 0} unread
+                                    </span>
+                                    {(activity?.waitingCount ?? 0) > 0 && (
+                                        <span className="adehub-pill waiting">
+                                            {activity?.waitingCount} waiting approval
+                                        </span>
+                                    )}
+                                </div>
+                                {(activity?.unreadCount ?? 0) > 0 && (
+                                    <button className="adehub-btn" onClick={() => model.markActivityRead()}>
+                                        ✓ Mark all read
+                                    </button>
+                                )}
+                            </div>
+                            {(activity?.events ?? []).length === 0 ? (
+                                <div className="adehub-card-meta">
+                                    Watching Claude/Codex session transitions, worktree operations, and SSH security
+                                    audits.
+                                </div>
+                            ) : (
+                                <div className="adehub-list" style={{ marginTop: 6 }}>
+                                    {(activity?.events ?? []).slice(0, 12).map((ev) => (
+                                        <div key={ev.id} className="adehub-card">
+                                            <div className="adehub-card-main">
+                                                <div className="adehub-card-head">
+                                                    <span
+                                                        className={`adehub-dot ${
+                                                            ev.severity === "attention"
+                                                                ? "waiting_approval"
+                                                                : ev.read
+                                                                ? "idle"
+                                                                : "active"
+                                                        }`}
+                                                    />
+                                                    <span className="adehub-agent-tag">{ev.kind}</span>
+                                                    <strong>{ev.title}</strong>
+                                                </div>
+                                                {(ev.detail || ev.cwd) && (
+                                                    <div className="adehub-card-meta">
+                                                        {ev.detail}
+                                                        {ev.cwd ? ` · ${ev.cwd}` : ""}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {ev.sessionId && (
+                                                <div className="adehub-card-actions">
+                                                    <button
+                                                        className="adehub-btn primary"
+                                                        onClick={() => {
+                                                            const matched = (hub?.sessions ?? []).find(
+                                                                (s) => s.id === ev.sessionId
+                                                            );
+                                                            if (matched) {
+                                                                model.resumeSession(matched);
+                                                            } else {
+                                                                globalStore.set(model.activeTabAtom, "sessions");
+                                                            }
+                                                        }}
+                                                    >
+                                                        Resume
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         {sshAudit && (
                             <div

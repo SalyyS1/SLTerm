@@ -34,18 +34,21 @@ export const AdeStatusBar: React.FC = () => {
     const [costUsd, setCostUsd] = React.useState(0);
     const [sidecarMb, setSidecarMb] = React.useState<number | null>(null);
     const [liveAgents, setLiveAgents] = React.useState(0);
+    const [unreadEvents, setUnreadEvents] = React.useState(0);
+    const [waitingAgents, setWaitingAgents] = React.useState(0);
     const [updateVer, setUpdateVer] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         let mounted = true;
         const poll = async () => {
             try {
-                const [ports, tasks, hub, upd, rt] = await Promise.all([
+                const [ports, tasks, hub, upd, rt, act] = await Promise.all([
                     RpcApi.AdeListPortsCommand(TabRpcClient).catch(() => [] as AdePortData[]),
                     RpcApi.AdeListTasksCommand(TabRpcClient).catch(() => [] as AdeTaskData[]),
                     RpcApi.AdeGetHubSnapshotCommand(TabRpcClient, { limit: 1 }).catch(() => null),
                     RpcApi.AdeCheckUpdateCommand(TabRpcClient, { force: false }).catch(() => null),
                     RpcApi.AdeGetRuntimeStatsCommand(TabRpcClient).catch(() => null),
+                    RpcApi.AdeGetActivityCommand(TabRpcClient).catch(() => null),
                 ]);
                 if (!mounted) return;
                 setDevPorts((ports ?? []).filter((p) => p.isDevLikely).length);
@@ -55,6 +58,10 @@ export const AdeStatusBar: React.FC = () => {
                 if (rt) {
                     setSidecarMb(rt.sidecarHeapMb);
                     setLiveAgents(rt.activeAgents);
+                }
+                if (act) {
+                    setUnreadEvents(act.unreadCount ?? 0);
+                    setWaitingAgents(act.waitingCount ?? 0);
                 }
             } catch {
                 // ignore offline/startup hiccups
@@ -92,6 +99,17 @@ export const AdeStatusBar: React.FC = () => {
                     title="Active Kanban tasks in progress"
                 >
                     ⚡ Tasks: {activeTasks}
+                </button>
+                <button
+                    className={`ade-sb-pill ${waitingAgents > 0 ? "alert" : unreadEvents > 0 ? "pink" : ""}`}
+                    onClick={() => createBlock({ meta: { view: "adehub" } })}
+                    title={
+                        waitingAgents > 0
+                            ? `${waitingAgents} AI agent(s) waiting for your approval · ${unreadEvents} unread activity event(s)`
+                            : `${unreadEvents} unread ADE activity event(s)`
+                    }
+                >
+                    🔔 {waitingAgents > 0 ? `${waitingAgents} waiting` : unreadEvents}
                 </button>
                 <button
                     className="ade-sb-pill"

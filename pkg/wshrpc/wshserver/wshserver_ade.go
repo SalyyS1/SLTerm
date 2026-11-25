@@ -17,6 +17,7 @@ import (
 	"github.com/SalyyS1/SLTerm/pkg/adestats"
 	"github.com/SalyyS1/SLTerm/pkg/adeworkspace"
 	"github.com/SalyyS1/SLTerm/pkg/agentsessions"
+	"github.com/SalyyS1/SLTerm/pkg/agentwatch"
 	"github.com/SalyyS1/SLTerm/pkg/cmdguard"
 	"github.com/SalyyS1/SLTerm/pkg/otelcost"
 	"github.com/SalyyS1/SLTerm/pkg/portwatch"
@@ -133,6 +134,7 @@ func (ws *WshServer) VcsCreateWorktreeCommand(ctx context.Context, data wshrpc.V
 	if err != nil {
 		return nil, err
 	}
+	agentwatch.DefaultHub().Record("worktree", "info", "Created agent worktree "+wt.Branch, wt.Path, "", wt.Path)
 	return &wshrpc.VcsWorktreeData{
 		Path:          wt.Path,
 		Head:          wt.Head,
@@ -206,6 +208,7 @@ func (ws *WshServer) AdeGetHubSnapshotCommand(ctx context.Context, data wshrpc.A
 	if err != nil {
 		return nil, err
 	}
+	agentwatch.DefaultHub().ObserveSessions(idx.Sessions)
 	sessions := make([]wshrpc.AdeSessionData, 0, len(idx.Sessions))
 	for _, s := range idx.Sessions {
 		sessions = append(sessions, wshrpc.AdeSessionData{
@@ -473,7 +476,7 @@ func (ws *WshServer) AdeDeleteWorkspaceCommand(ctx context.Context, data wshrpc.
 func (ws *WshServer) AdeCheckUpdateCommand(ctx context.Context, data wshrpc.AdeCheckUpdateRequestData) (*wshrpc.AdeUpdateInfoData, error) {
 	cur := wavebase.WaveVersion
 	if cur == "" || cur == "0.0.0" {
-		cur = "0.33.0"
+		cur = "0.34.0"
 	}
 	info, err := updatecheck.CheckLatest(ctx, cur, data.Force)
 	if err != nil {
@@ -595,4 +598,35 @@ func (ws *WshServer) AdeEnsureWorktreeIncludeCommand(ctx context.Context, data w
 		return &wshrpc.VcsActionResultData{Output: "Created " + p}, nil
 	}
 	return &wshrpc.VcsActionResultData{Output: "Already exists: " + p}, nil
+}
+
+func (ws *WshServer) AdeGetActivityCommand(ctx context.Context) (*wshrpc.AdeActivityFeedData, error) {
+	if idx, err := agentsessions.ListSessions("", "all", 40); err == nil {
+		agentwatch.DefaultHub().ObserveSessions(idx.Sessions)
+	}
+	snap := agentwatch.DefaultHub().Snapshot()
+	evs := make([]wshrpc.AdeActivityEventData, 0, len(snap.Events))
+	for _, e := range snap.Events {
+		evs = append(evs, wshrpc.AdeActivityEventData{
+			ID:        e.ID,
+			Kind:      e.Kind,
+			Severity:  e.Severity,
+			Title:     e.Title,
+			Detail:    e.Detail,
+			SessionID: e.SessionID,
+			Cwd:       e.Cwd,
+			CreatedMs: e.CreatedMs,
+			Read:      e.Read,
+		})
+	}
+	return &wshrpc.AdeActivityFeedData{
+		UnreadCount:  snap.UnreadCount,
+		WaitingCount: snap.WaitingCount,
+		Events:       evs,
+	}, nil
+}
+
+func (ws *WshServer) AdeMarkActivityReadCommand(ctx context.Context) error {
+	agentwatch.DefaultHub().MarkAllRead()
+	return nil
 }

@@ -52,6 +52,11 @@ class RpcApiType {
         return client.wshRpcCall("adeforksession", data, opts);
     }
 
+    // command "adegetactivity" [call]
+    AdeGetActivityCommand(client: WshClient, opts?: RpcOpts): Promise<AdeActivityFeedData> {
+        return client.wshRpcCall("adegetactivity", null, opts);
+    }
+
     // command "adegethubsnapshot" [call]
     AdeGetHubSnapshotCommand(client: WshClient, data: AdeHubRequestData, opts?: RpcOpts): Promise<AdeHubSnapshotData> {
         return client.wshRpcCall("adegethubsnapshot", data, opts);
@@ -80,6 +85,11 @@ class RpcApiType {
     // command "adelistworkspaces" [call]
     AdeListWorkspacesCommand(client: WshClient, opts?: RpcOpts): Promise<AdeWorkspaceData[]> {
         return client.wshRpcCall("adelistworkspaces", null, opts);
+    }
+
+    // command "ademarkactivityread" [call]
+    AdeMarkActivityReadCommand(client: WshClient, opts?: RpcOpts): Promise<void> {
+        return client.wshRpcCall("ademarkactivityread", null, opts);
     }
 
     // command "ademovetask" [call]

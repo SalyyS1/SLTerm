@@ -69,6 +69,12 @@ func AdeForkSessionCommand(w *wshutil.WshRpc, data wshrpc.AdeForkSessionRequestD
 	return resp, err
 }
 
+// command "adegetactivity", wshserver.AdeGetActivityCommand
+func AdeGetActivityCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (*wshrpc.AdeActivityFeedData, error) {
+	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeActivityFeedData](w, "adegetactivity", nil, opts)
+	return resp, err
+}
+
 // command "adegethubsnapshot", wshserver.AdeGetHubSnapshotCommand
 func AdeGetHubSnapshotCommand(w *wshutil.WshRpc, data wshrpc.AdeHubRequestData, opts *wshrpc.RpcOpts) (*wshrpc.AdeHubSnapshotData, error) {
 	resp, err := sendRpcRequestCallHelper[*wshrpc.AdeHubSnapshotData](w, "adegethubsnapshot", data, opts)
@@ -103,6 +109,12 @@ func AdeListTasksCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdeT
 func AdeListWorkspacesCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.AdeWorkspaceData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.AdeWorkspaceData](w, "adelistworkspaces", nil, opts)
 	return resp, err
+}
+
+// command "ademarkactivityread", wshserver.AdeMarkActivityReadCommand
+func AdeMarkActivityReadCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "ademarkactivityread", nil, opts)
+	return err
 }
 
 // command "ademovetask", wshserver.AdeMoveTaskCommand
